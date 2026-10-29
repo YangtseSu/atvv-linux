@@ -17,7 +17,8 @@ hardware acceptance run.
   `modules-load.d/atvv-linux.conf` loads `uinput`.
 - ⬜ Optional minimal D-Bus policy only if a target distribution requires it;
   no broad `/etc/dbus-1/system.d` policy.
-- ⬜ Arch PKGBUILD, Debian/Fedora packaging, and a Nix flake/module.
+- ⬜ Arch PKGBUILD only. Debian, Fedora, Nix, and Flatpak are explicitly out of
+  scope.
 - ⬜ `cargo-deny` with `GPL-3.0-or-later`, MIT, Apache-2.0, BSD-2-Clause
   allowed; explicit rejection of `GPL-3.0-only` unless the project is
   deliberately relicensed.
@@ -60,7 +61,7 @@ acceptance commands from step 07.
 
 ## Exit criteria
 
-- ⬜ Packages install and `atvvd` starts as the user.
+- ⬜ The Arch package installs and `atvvd` starts as the user.
 - ⬜ `atvvctl doctor` reports all green on a real RC003.
 - ⬜ RC003 works after reboot, reconnect, and PipeWire restart.
 - ⬜ fcitx5-vinput receives text from voice input.
@@ -69,8 +70,7 @@ acceptance commands from step 07.
 
 ## Risks
 
-- Distro udev/D-Bus policy differences; test on at least Arch and one Debian
-  derivative.
+- Arch udev/D-Bus policy differences; only Arch is supported by this plan.
 - GPU/GUI packaging is separate; do not block the core release on it.
 - A package without a hardware acceptance record is not a support claim.
 

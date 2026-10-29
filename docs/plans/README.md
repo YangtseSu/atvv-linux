@@ -38,7 +38,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | B — M0 system foundation | 04–06 | PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | RC003 pairing, real CAPS, audio capture, reconnect |
 | D — Integration | 08 | fcitx5-vinput trigger/D-Bus and a proper MCP surface |
-| E — Release | 09 | packaging, permissions, CI, hardware acceptance |
+| E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
 
 M0 is steps 01–06. Steps 07–09 require a device or a release decision.
 
