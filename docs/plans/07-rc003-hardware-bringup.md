@@ -27,6 +27,8 @@ echo behavior; adjust only the profile and evidence-backed state handling.
 
 ## Design notes
 
+- Research: `docs/research/protocol-and-device.md` §2–§5 and §9; source
+  snapshots in `docs/research/reference-projects.md`.
 - BlueZ is the GATT provider. Do not open raw BLE sockets or add a kernel
   driver.
 - Use `[GATT] Cache=no` and `Channels=1` in documentation; do not enable

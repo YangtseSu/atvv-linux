@@ -34,6 +34,8 @@ keyboard.
 
 ## Design notes
 
+- Research: `docs/research/landscape.md` §3.2 and §5, and
+  `docs/research/protocol-and-device.md` §6.
 - uinput is used instead of `wtype` because compositor keybinds must fire. This
   is the same finding recorded by sayall.
 - The voice key is not in the button map; it drives ATVV. It is still grabbed so

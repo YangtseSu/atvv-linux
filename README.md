@@ -50,7 +50,7 @@ crates/atvv-audio/      native PipeWire Audio/Source and PCM queue
 crates/atvv-cli/        atvvctl diagnostics
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
-docs/research/          source notes and protocol facts
+docs/research/          landscape, protocol facts, reference snapshots
 docs/handoff.md         current state for the next session
 ```
 

@@ -29,6 +29,8 @@ device is required.
 
 ## Design notes
 
+- Research: `docs/research/landscape.md` §3.1 and §6, and
+  `docs/research/protocol-and-device.md` §7.
 - The transport trait returns notification streams and accepts writes. The
   daemon must not care whether the bytes came from BlueZ or a fixture.
 - The daemon owns timers: capability timeout, frame timeout, keepalive,

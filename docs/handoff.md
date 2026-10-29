@@ -6,7 +6,7 @@ Updated: 2026-10-30
 
 - Path: `~/projects/atvv-linux`
 - License: GPL-3.0-or-later
-- Git: local `main`; **not pushed**.
+- Git: local `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
 - Tests: `cargo test --workspace` → 36 passed (5 suites).
 
@@ -14,8 +14,9 @@ Updated: 2026-10-30
 
 1. `AGENTS.md` — hard rules and commands.
 2. `docs/plans/README.md` — canonical step index and M0 exit criteria.
-3. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
-4. The next step file before editing code.
+3. `docs/research/README.md` — evidence index and current deltas.
+4. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
+5. The next step file and its research links before editing code.
 
 This file is updated in place at the end of every step/session. Do not create
 per-session copies; `docs/plans/` remains the canonical plan.
@@ -45,6 +46,8 @@ acceptance part of step 09 are blocked on a device.
 
 ## Decisions
 
+- Research basis, reference snapshots, licenses, and open hardware questions:
+  `docs/research/`.
 - Userspace stack only: BlueZ + daemon + PipeWire + evdev/uinput.
 - ATVV v1.0+ only; v0.4 is out of scope.
 - Rust 2024; `atvv-protocol` is I/O-free.
@@ -75,6 +78,7 @@ Start **05 input-uinput**:
 
 ```bash
 cd ~/projects/atvv-linux
+cat docs/research/README.md
 cat docs/plans/05-input-uinput.md
 ```
 

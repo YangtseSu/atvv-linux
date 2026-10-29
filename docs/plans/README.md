@@ -9,6 +9,8 @@ Related: [`AGENTS.md`](../../AGENTS.md), [`docs/handoff.md`](../handoff.md),
 ## How these plans are used
 
 - One file per step: `NN-kebab-case-title.md`.
+- Read `docs/research/README.md` and the step's research links before editing;
+  research records evidence, `docs/plans` records the decision.
 - A step is worked on alone, top to bottom. Every `- ⬜` item is one unit of
   work.
 - Progress uses the same markers inside each step file:

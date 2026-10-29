@@ -33,6 +33,8 @@ hardware acceptance run.
 
 ## Design notes
 
+- Research: `docs/research/reference-projects.md` §3 and
+  `docs/research/landscape.md` §4.
 - No root daemon, no custom kernel/BlueZ/PipeWire build.
 - Do not add `EnableExperimental` or `audio` group membership by default.
 - The udev rule matches VID/PID and `MI RC*`, not only `*RC003*`; the actual

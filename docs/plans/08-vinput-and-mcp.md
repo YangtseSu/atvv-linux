@@ -30,6 +30,8 @@ without putting ASR inside the daemon.
 
 ## Design notes
 
+- Research: `docs/research/protocol-and-device.md` §8 and
+  `docs/research/landscape.md` §6.
 - The daemon exposes events and a source; it never performs ASR.
 - fcitx5-vinput is the preferred ASR/TTS surface for desktop use. The daemon
   must not duplicate its scene/LLM logic.

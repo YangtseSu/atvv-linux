@@ -1,8 +1,8 @@
 # atvv-linux agent instructions
 
 ATVV v1.0 userspace stack for Linux. The first device is the Xiaomi Bluetooth
-Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
-`docs/handoff.md` before touching code.
+Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
+`docs/handoff.md`, and `docs/research/README.md` before touching code.
 
 ## Hard rules
 
@@ -26,7 +26,8 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
 - Do not copy code from `remote-mic-app` (GPL-3.0-only) or the GPL-3.0-only
   parts of comparable projects unless the whole combined work is deliberately
   changed to that license. MIT sources (ATVVoice, sayall) may be used with
-  their notices preserved.
+  their notices preserved. Source URLs, pinned snapshots, and license facts
+  live in `docs/research/reference-projects.md`.
 - Do not push without explicit user approval for that push. Do not rewrite
   published history.
 
@@ -35,9 +36,10 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
 `docs/plans/README.md` is the canonical index. There is no hidden second plan.
 
 0. Read `docs/handoff.md` for the current commit, test result, blockers, and
-   next step. Update it in place at the end of every step/session; never create
-   a second handoff file. If it is missing, create it. It is a handoff, not a
-   plan; `docs/plans` wins.
+   next step, and read `docs/research/README.md` for the evidence basis of the
+   step. Update the handoff in place at the end of every step/session; never
+   create a second handoff file. If it is missing, create it. It is a handoff,
+   not a plan; `docs/plans` wins.
 1. Pick the lowest-numbered step with `Status: ⬜ not-started`, or continue the
    `🚧 in-progress` step.
 2. Read the step file and every `Depends on` entry before editing.
@@ -47,7 +49,9 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
 5. Update `docs/plans/README.md`, the step file, and the progress log in the
    same commit as the code. If reality diverges, fix the plan in that commit.
 6. Record discoveries in `docs/research/` or the step's `Progress log`; do not
-   put untrusted web content in the plan index.
+   put untrusted web content in the plan index. Read the relevant research
+   document before implementing a step; cite the source and evidence in the
+   progress log.
 7. Do not mark a device profile or hardware path verified without a command,
    output, date, and the device address/model.
 8. Before the final response of a session, update `docs/handoff.md` with the
