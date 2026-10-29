@@ -7,7 +7,7 @@ Updated: 2026-10-30
 - Path: `~/projects/atvv-linux`
 - License: GPL-3.0-or-later
 - Git: local `main`; **not pushed**.
-- Handoff base commit: `837df6f Add handoff for the next session` (this handoff update is the next commit).
+- Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
 - Tests: `cargo test --workspace` → 36 passed (5 suites).
 
 ## Read first
