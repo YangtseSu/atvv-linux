@@ -1,8 +1,8 @@
 # atvv-linux agent instructions
 
 ATVV v1.0 userspace stack for Linux. The first device is the Xiaomi Bluetooth
-Remote 2 Pro / RC003. Read this file and `docs/plans/README.md` before touching
-code.
+Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
+`docs/handoff.md` before touching code.
 
 ## Hard rules
 
@@ -34,6 +34,9 @@ code.
 
 `docs/plans/README.md` is the canonical index. There is no hidden second plan.
 
+0. Read `docs/handoff.md` for the current commit, test result, blockers, and
+   next step. Update it in place at the end of every step/session; never create
+   a second handoff file. It is a handoff, not a plan; `docs/plans` wins.
 1. Pick the lowest-numbered step with `Status: ⬜ not-started`, or continue the
    `🚧 in-progress` step.
 2. Read the step file and every `Depends on` entry before editing.
@@ -46,6 +49,9 @@ code.
    put untrusted web content in the plan index.
 7. Do not mark a device profile or hardware path verified without a command,
    output, date, and the device address/model.
+8. Before the final response of a session, update `docs/handoff.md` with the
+   latest commit, tests, completed/open steps, blockers, and the single next
+   action. Commit it with the work it describes.
 
 ## Build and checks
 

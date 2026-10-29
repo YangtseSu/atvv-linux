@@ -4,10 +4,10 @@ Updated: 2026-10-30
 
 ## Project
 
-- Path: `/home/yangtse/projects/atvv-linux`
+- Path: `~/projects/atvv-linux`
 - License: GPL-3.0-or-later
 - Git: local `main`; **not pushed**.
-- Handoff base commit: `df24201 Delegate PipeWire service restart to systemd` (this handoff is the next commit).
+- Handoff base commit: `837df6f Add handoff for the next session` (this handoff update is the next commit).
 - Tests: `cargo test --workspace` → 36 passed (5 suites).
 
 ## Read first
@@ -16,6 +16,9 @@ Updated: 2026-10-30
 2. `docs/plans/README.md` — canonical step index and M0 exit criteria.
 3. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
 4. The next step file before editing code.
+
+This file is updated in place at the end of every step/session. Do not create
+per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
