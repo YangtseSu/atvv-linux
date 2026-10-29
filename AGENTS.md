@@ -20,6 +20,9 @@ code.
 - No `unsafe` code. `atvv-protocol` is `#![forbid(unsafe_code)]`.
 - No root daemon. Use a systemd user service, udev `uaccess`, and the session
   D-Bus for control.
+- PipeWire service restart belongs to systemd, not `atvv-audio`. Keep
+  `PartOf=pipewire.service` and `Restart=always` in the unit; do not add
+  in-process service-restart monitors (ADR 0005).
 - Do not copy code from `remote-mic-app` (GPL-3.0-only) or the GPL-3.0-only
   parts of comparable projects unless the whole combined work is deliberately
   changed to that license. MIT sources (ATVVoice, sayall) may be used with

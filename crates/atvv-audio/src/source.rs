@@ -3,11 +3,9 @@
 //! PipeWire source thread and bounded PCM queue.
 
 use std::cell::Cell;
-use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -104,7 +102,6 @@ pub struct AudioSource {
     queue: PcmQueue,
     shutdown: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
-    monitor: Option<JoinHandle<()>>,
 }
 
 impl AudioSource {
@@ -115,29 +112,14 @@ impl AudioSource {
         let name = config.name.clone();
         let queue = PcmQueue::new(config.queue_capacity);
         let shutdown = Arc::new(AtomicBool::new(false));
-        let reconnect = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-
-        let monitor_reconnect = Arc::clone(&reconnect);
-        let monitor_shutdown = Arc::clone(&shutdown);
-        let monitor = thread::Builder::new()
-            .name("atvv-pipewire-monitor".to_string())
-            .spawn(move || monitor_pipewire(monitor_reconnect, monitor_shutdown))
-            .map_err(|error| AudioSourceError::Thread(error.to_string()))?;
 
         let thread_queue = queue.clone();
         let thread_shutdown = Arc::clone(&shutdown);
-        let thread = match thread::Builder::new()
+        let thread = thread::Builder::new()
             .name("atvv-pipewire".to_string())
-            .spawn(move || supervisor(config, thread_queue, thread_shutdown, reconnect, ready_tx))
-        {
-            Ok(thread) => thread,
-            Err(error) => {
-                shutdown.store(true, Ordering::Relaxed);
-                let _ = monitor.join();
-                return Err(AudioSourceError::Thread(error.to_string()));
-            }
-        };
+            .spawn(move || supervisor(config, thread_queue, thread_shutdown, ready_tx))
+            .map_err(|error| AudioSourceError::Thread(error.to_string()))?;
 
         match ready_rx.recv_timeout(READY_TIMEOUT) {
             Ok(Ok(())) => Ok(Self {
@@ -145,18 +127,14 @@ impl AudioSource {
                 queue,
                 shutdown,
                 thread: Some(thread),
-                monitor: Some(monitor),
             }),
             Ok(Err(error)) => {
-                shutdown.store(true, Ordering::Relaxed);
                 let _ = thread.join();
-                let _ = monitor.join();
                 Err(AudioSourceError::Startup(error))
             }
             Err(_) => {
                 shutdown.store(true, Ordering::Relaxed);
                 let _ = thread.join();
-                let _ = monitor.join();
                 Err(AudioSourceError::StartupTimeout)
             }
         }
@@ -181,9 +159,6 @@ impl AudioSource {
         self.shutdown.store(true, Ordering::Relaxed);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
-        }
-        if let Some(monitor) = self.monitor.take() {
-            let _ = monitor.join();
         }
     }
 }
@@ -210,7 +185,6 @@ fn supervisor(
     config: AudioSourceConfig,
     queue: PcmQueue,
     shutdown: Arc<AtomicBool>,
-    reconnect: Arc<AtomicBool>,
     ready: SyncSender<Result<(), String>>,
 ) {
     pw::init();
@@ -225,7 +199,6 @@ fn supervisor(
             &config,
             &queue,
             &shutdown,
-            &reconnect,
             if first { Some(&ready) } else { None },
         );
         match result {
@@ -247,68 +220,10 @@ fn supervisor(
     }
 }
 
-fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-fn monitor_pipewire(reconnect: Arc<AtomicBool>, shutdown: Arc<AtomicBool>) {
-    let Some(path) = pipewire_socket_path() else {
-        return;
-    };
-
-    let mut last_ino = std::fs::metadata(&path).ok().map(|metadata| metadata.ino());
-    let mut last_pid = pipewire_main_pid();
-    while !shutdown.load(Ordering::Relaxed) {
-        thread::sleep(Duration::from_millis(500));
-        let current_ino = std::fs::metadata(&path).ok().map(|metadata| metadata.ino());
-        if current_ino != last_ino {
-            last_ino = current_ino;
-            reconnect.store(true, Ordering::Relaxed);
-        }
-        if let Some(current_pid) = pipewire_main_pid() {
-            if last_pid.is_some_and(|pid| pid != current_pid) {
-                reconnect.store(true, Ordering::Relaxed);
-            }
-            last_pid = Some(current_pid);
-        }
-    }
-}
-
-fn pipewire_main_pid() -> Option<u32> {
-    let entries = std::fs::read_dir("/proc").ok()?;
-    for entry in entries.flatten() {
-        let Some(pid) = entry
-            .file_name()
-            .to_str()
-            .and_then(|name| name.parse().ok())
-        else {
-            continue;
-        };
-        let Ok(comm) = std::fs::read_to_string(entry.path().join("comm")) else {
-            continue;
-        };
-        if comm.trim() == "pipewire" {
-            return Some(pid);
-        }
-    }
-    None
-}
-
-fn pipewire_socket_path() -> Option<PathBuf> {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .map(|runtime| runtime.join("pipewire-0"))
-        .filter(|path| path.exists())
-}
-
 fn run_session(
     config: &AudioSourceConfig,
     queue: &PcmQueue,
     shutdown: &Arc<AtomicBool>,
-    reconnect: &Arc<AtomicBool>,
     ready: Option<&SyncSender<Result<(), String>>>,
 ) -> Result<(), String> {
     let mainloop = pw::main_loop::MainLoopRc::new(None).map_err(|error| error.to_string())?;
@@ -318,8 +233,8 @@ fn run_session(
         .connect_rc(None)
         .map_err(|error| error.to_string())?;
     let registry = core.get_registry_rc().map_err(|error| error.to_string())?;
+
     let failed = Rc::new(Cell::new(None::<String>));
-    let last_done = Arc::new(AtomicU64::new(now_millis()));
     let _core_listener = core
         .add_listener_local()
         .error({
@@ -329,10 +244,6 @@ fn run_session(
                 failed.set(Some(format!("core error {res}: {message}")));
                 mainloop.quit();
             }
-        })
-        .done({
-            let last_done = Arc::clone(&last_done);
-            move |_id, _seq| last_done.store(now_millis(), Ordering::Relaxed)
         })
         .register();
 
@@ -353,7 +264,6 @@ fn run_session(
 
     let stream = StreamBox::new(&core, &config.name, props).map_err(|error| error.to_string())?;
     let our_node_id = Rc::new(Cell::new(u32::MAX));
-    let queue = queue.clone();
 
     let _registry_listener = registry
         .add_listener_local()
@@ -368,6 +278,7 @@ fn run_session(
         })
         .register();
 
+    let queue = queue.clone();
     let _listener = stream
         .add_local_listener_with_user_data(())
         .state_changed({
@@ -449,22 +360,8 @@ fn run_session(
     let _timer = mainloop.loop_().add_timer({
         let mainloop = mainloop.clone();
         let shutdown = Arc::clone(shutdown);
-        let reconnect = Arc::clone(reconnect);
-        let core = core.clone();
-        let failed = Rc::clone(&failed);
-        let last_done = Arc::clone(&last_done);
         move |_| {
-            if shutdown.load(Ordering::Relaxed) || reconnect.swap(false, Ordering::Relaxed) {
-                mainloop.quit();
-                return;
-            }
-            if let Err(error) = core.sync(0) {
-                failed.set(Some(format!("core connection lost: {error}")));
-                mainloop.quit();
-                return;
-            }
-            if now_millis().saturating_sub(last_done.load(Ordering::Relaxed)) > 3_000 {
-                failed.set(Some("PipeWire core stopped responding".to_string()));
+            if shutdown.load(Ordering::Relaxed) {
                 mainloop.quit();
             }
         }

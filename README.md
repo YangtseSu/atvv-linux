@@ -17,7 +17,7 @@ Implemented:
   accumulation, device profiles, and a pure session state machine.
 - `atvv-audio`: native PipeWire `Audio/Source` with a bounded lock-free queue,
   synthetic-tone test, and node-removal recovery. Full PipeWire service restart
-  recovery is still open.
+  is delegated to the systemd unit (ADR 0005).
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
   simulation, and an audio-source smoke test.
 

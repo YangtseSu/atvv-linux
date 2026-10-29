@@ -12,7 +12,8 @@ hardware acceptance run.
 ## Deliverables
 
 - ⬜ systemd user service `atvvd.service`; `After=bluetooth.target
-  pipewire.service`, `Wants=pipewire.service`, `Restart=on-failure`.
+  pipewire.service`, `Wants=pipewire.service`, `PartOf=pipewire.service`,
+  `Restart=always`.
 - ⬜ udev rules using `TAG+="uaccess"` for `/dev/uinput` and RC003 event nodes;
   `modules-load.d/atvv-linux.conf` loads `uinput`.
 - ⬜ Optional minimal D-Bus policy only if a target distribution requires it;
