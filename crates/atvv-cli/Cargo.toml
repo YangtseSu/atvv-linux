@@ -1,0 +1,17 @@
+[package]
+name = "atvv-cli"
+description = "atvvctl: diagnostics for the ATVV Linux stack"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "atvvctl"
+path = "src/main.rs"
+
+[dependencies]
+atvv-protocol = { path = "../atvv-protocol" }
+clap.workspace = true

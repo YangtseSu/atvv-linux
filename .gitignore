@@ -1,0 +1,11 @@
+/target
+/dist/
+/build/
+*.log
+*.wav
+config.toml
+client_data*.json
+.env
+.idea/
+.vscode/
+*.swp
