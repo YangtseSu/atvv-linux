@@ -3,8 +3,8 @@
 Master index for the build-out of `atvv-linux`: an ATVV v1.0 userspace stack
 for Linux, with the Xiaomi Bluetooth Remote 2 Pro (RC003) as the first device.
 
-Related: [`AGENTS.md`](../../AGENTS.md), [`docs/decisions/`](../decisions/), and
-[`docs/research/`](../research/).
+Related: [`AGENTS.md`](../../AGENTS.md), [`docs/handoff.md`](../handoff.md),
+[`docs/decisions/`](../decisions/), and [`docs/research/`](../research/).
 
 ## How these plans are used
 

@@ -36,7 +36,8 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`, and
 
 0. Read `docs/handoff.md` for the current commit, test result, blockers, and
    next step. Update it in place at the end of every step/session; never create
-   a second handoff file. It is a handoff, not a plan; `docs/plans` wins.
+   a second handoff file. If it is missing, create it. It is a handoff, not a
+   plan; `docs/plans` wins.
 1. Pick the lowest-numbered step with `Status: ⬜ not-started`, or continue the
    `🚧 in-progress` step.
 2. Read the step file and every `Depends on` entry before editing.
