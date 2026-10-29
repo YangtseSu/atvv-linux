@@ -141,3 +141,7 @@ Observed on 2026-10-30:
   keepalive, the 300 ms post-stop discard, and the reconnect backoff. Raised
   the workspace MSRV to 1.87 for zbus 5. Verification above is hardware-free;
   no RC003 claim is made.
+- 2026-10-30 — CI failed at `libspa-sys` because the runner lacked
+  `libpipewire-0.3`. The workflow now installs `libpipewire-0.3-dev`,
+  `libspa-0.2-dev`, `libclang-dev`, and `dbus`; GitHub Actions `ci` for
+  `2c0c435` passed fmt, clippy, and the workspace tests.

@@ -91,6 +91,9 @@ step 09 are blocked on a device.
   `~/.config/atvv/daemon.toml`): optional `gain_db` (±24) and `input`.
   Missing file = defaults; invalid file is reported by `ReloadConfig` and
   `atvvctl doctor`.
+- CI installs `libpipewire-0.3-dev`, `libspa-0.2-dev`, `libclang-dev`, and
+  `dbus` on `ubuntu-latest`: the workspace builds a native PipeWire client and
+  `libspa-sys` runs bindgen.
 
 ## Verified
 
@@ -117,6 +120,9 @@ cargo test -p atvv-daemon
 - `pw-cli info atvv-miremote-rc003` → `Audio/Source`, 16 kHz, virtual.
   `pw-record --target atvv-miremote-rc003 --rate 16000 --channels 1 --format
   s16` → 1.70 s WAV; `sox ... stat` RMS amplitude 0.366.
+- GitHub Actions `ci` for `2c0c435` → success (fmt, clippy, workspace tests);
+  the runner installs `libpipewire-0.3-dev`, `libspa-0.2-dev`, `libclang-dev`,
+  and `dbus`.
 - `cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored`
   (step 05) → passed: uinput hold pressed and release lifted `KEY_LEFTALT`.
 - `atvvctl audio test --seconds 5` + `pw-record --target atvv-test` (step 04)
