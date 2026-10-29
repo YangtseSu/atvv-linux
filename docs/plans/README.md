@@ -37,7 +37,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | Phase | Steps | Milestone |
 |---|---|---|
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
-| B — M0 system foundation | 04–06 | PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
+| B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | RC003 pairing, real CAPS, audio capture, reconnect |
 | D — Integration | 08 | fcitx5-vinput trigger/D-Bus and a proper MCP surface |
 | E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
@@ -53,7 +53,7 @@ M0 is steps 01–06. Steps 07–09 require a device or a release decision.
 | 03 | A | [cli-diagnostics](03-cli-diagnostics.md) | ✅ done | 01, 02 |
 | 04 | B | [pipewire-source](04-pipewire-source.md) | ✅ done | 01 |
 | 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 |
-| 06 | B | [daemon-dbus](06-daemon-dbus.md) | ⬜ not-started | 01, 02, 04, 05 |
+| 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ⬜ not-started | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ⬜ not-started | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ⬜ not-started | all of 01–08 |
@@ -94,16 +94,19 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 - A PipeWire source can be created and recorded from without a remote (step 04).
 - A fake uinput remote exercises the input path without a physical device
   (step 05).
-- A mock BLE session drives the daemon D-Bus API, including a direct
+- ✅ A mock BLE session drives the daemon D-Bus API, including a direct
   `AUDIO_START` and an ignored stop echo (step 06).
 - No claim of RC003 hardware support is made before step 07.
 
 ## Current state — 2026-10-30
 
-Steps 01–05 are complete. The PipeWire source is verified for creation,
-recording, and node-removal recreation; full PipeWire service restart is owned
-by systemd (ADR 0005) and must be verified in step 06/09. The input path is
-verified with a fake uinput remote: discovery, `EVIOCGRAB`, gesture timing,
-and compositor-visible uinput keys. The workspace has 74 passing tests and one
-ignored kernel-uinput test. Steps 06–09 are planned and have no implementation
-yet.
+M0 (steps 01–06) is complete without hardware. The PipeWire source is verified
+for creation, recording, and node-removal recreation; full PipeWire service
+restart is owned by systemd (ADR 0005) and must be verified in step 09. The
+input path is verified with a fake uinput remote: discovery, `EVIOCGRAB`,
+gesture timing, and compositor-visible uinput keys. The daemon's mock
+transport drives the real `Session` over `org.atvv.Daemon`; D-Bus signals,
+introspection, start/stop, the ignored stop echo, and config reload are covered
+by an isolated-bus integration test. The workspace has 88 passing tests and one
+ignored kernel-uinput test. Steps 07–09 are planned; step 07 is blocked on an
+RC003 and the hardware acceptance part of step 09 depends on it.

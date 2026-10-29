@@ -1,0 +1,17 @@
+[Unit]
+Description=ATVV remote daemon
+Documentation=https://github.com/YangtseSu/atvv-linux
+# ADR 0005: systemd restarts the daemon with PipeWire, which rebuilds the
+# resident Audio/Source. The daemon does not monitor PipeWire restarts.
+PartOf=pipewire.service
+After=pipewire.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/atvvd
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

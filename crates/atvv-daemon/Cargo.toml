@@ -1,0 +1,28 @@
+[package]
+name = "atvv-daemon"
+description = "atvvd: ATVV session daemon and org.atvv.Daemon D-Bus API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "atvvd"
+path = "src/main.rs"
+
+[lib]
+name = "atvv_daemon"
+path = "src/lib.rs"
+
+[dependencies]
+atvv-audio = { path = "../atvv-audio" }
+atvv-input = { path = "../atvv-input" }
+atvv-protocol = { path = "../atvv-protocol" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+zbus.workspace = true

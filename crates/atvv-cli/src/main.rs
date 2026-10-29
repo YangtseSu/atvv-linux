@@ -3,11 +3,13 @@
 //! `atvvctl` — hardware-free diagnostics for the ATVV stack.
 
 use std::collections::BTreeSet;
-use std::process::ExitCode;
+use std::fs::OpenOptions;
+use std::process::{Command as ProcessCommand, ExitCode};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
+use atvv_daemon::Client;
 use atvv_input::{ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, RemoteEvent};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
@@ -53,6 +55,24 @@ enum Command {
         #[command(subcommand)]
         command: InputCommand,
     },
+    /// Show the running daemon's status from `org.atvv.Daemon`.
+    Status,
+    /// Control the remote microphone through the daemon.
+    Mic {
+        #[command(subcommand)]
+        command: MicCommand,
+    },
+    /// Re-read the daemon configuration.
+    Reload,
+    /// Check D-Bus, PipeWire, uinput, and config.
+    Doctor,
+}
+
+#[derive(Debug, Subcommand)]
+enum MicCommand {
+    Start,
+    Stop,
+    Toggle,
 }
 
 #[derive(Debug, Subcommand)]
@@ -117,7 +137,212 @@ fn run() -> Result<(), String> {
         Command::Input { command } => match command {
             InputCommand::FakeRemote { hold } => input_fake_remote(hold),
         },
+        Command::Status => status(),
+        Command::Mic { command } => mic(command),
+        Command::Reload => reload(),
+        Command::Doctor => doctor(),
     }
+}
+
+fn daemon_client() -> Result<Client, String> {
+    Client::connect()
+        .map_err(|error| format!("cannot connect to the session D-Bus: {error}\nis atvvd running?"))
+}
+
+fn status() -> Result<(), String> {
+    let client = daemon_client()?;
+    let value = client.status_json().map_err(|error| error.to_string())?;
+    let rendered = serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?;
+    println!("{rendered}");
+    Ok(())
+}
+
+fn mic(command: MicCommand) -> Result<(), String> {
+    let client = daemon_client()?;
+    match command {
+        MicCommand::Start => client.start_voice(),
+        MicCommand::Stop => client.stop_voice(),
+        MicCommand::Toggle => client.toggle_voice(),
+    }
+    .map_err(|error| error.to_string())?;
+    println!("ok");
+    Ok(())
+}
+
+fn reload() -> Result<(), String> {
+    let client = daemon_client()?;
+    client.reload().map_err(|error| error.to_string())?;
+    println!("reloaded");
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CheckState {
+    Ok,
+    Warn,
+    Fail,
+}
+
+impl CheckState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Warn => "warn",
+            Self::Fail => "fail",
+        }
+    }
+}
+
+struct Check {
+    name: &'static str,
+    state: CheckState,
+    detail: String,
+}
+
+impl Check {
+    fn new(name: &'static str, state: CheckState, detail: impl Into<String>) -> Self {
+        Self {
+            name,
+            state,
+            detail: detail.into(),
+        }
+    }
+}
+
+fn doctor() -> Result<(), String> {
+    let mut checks = Vec::new();
+    let status = match Client::connect() {
+        Ok(client) => match client.status() {
+            Ok(status) => {
+                checks.push(Check::new(
+                    "daemon",
+                    CheckState::Ok,
+                    format!(
+                        "state={} transport={}",
+                        status.state, status.device.transport
+                    ),
+                ));
+                Some(status)
+            }
+            Err(error) => {
+                checks.push(Check::new(
+                    "daemon",
+                    CheckState::Fail,
+                    format!("GetStatus failed: {error}"),
+                ));
+                None
+            }
+        },
+        Err(error) => {
+            checks.push(Check::new(
+                "daemon",
+                CheckState::Fail,
+                format!("session D-Bus unavailable: {error}"),
+            ));
+            None
+        }
+    };
+
+    if let Some(status) = &status {
+        if status.audio.available {
+            checks.push(Check::new(
+                "source",
+                CheckState::Ok,
+                format!(
+                    "{} available (queued {} samples)",
+                    status.audio.source, status.audio.queued_samples
+                ),
+            ));
+        } else {
+            checks.push(Check::new(
+                "source",
+                CheckState::Warn,
+                format!(
+                    "{} unavailable: {}",
+                    status.audio.source,
+                    status.audio.degraded.as_deref().unwrap_or("degraded")
+                ),
+            ));
+        }
+
+        match ProcessCommand::new("pw-cli")
+            .args(["info", &status.audio.source])
+            .output()
+        {
+            Ok(output) if output.status.success() => checks.push(Check::new(
+                "pipewire",
+                CheckState::Ok,
+                format!("node {} found", status.audio.source),
+            )),
+            Ok(_) => checks.push(Check::new(
+                "pipewire",
+                CheckState::Warn,
+                format!("node {} not found", status.audio.source),
+            )),
+            Err(error) => checks.push(Check::new(
+                "pipewire",
+                CheckState::Warn,
+                format!("pw-cli unavailable: {error}"),
+            )),
+        }
+    } else {
+        checks.push(Check::new(
+            "source",
+            CheckState::Warn,
+            "skipped: daemon unavailable",
+        ));
+        checks.push(Check::new(
+            "pipewire",
+            CheckState::Warn,
+            "skipped: daemon unavailable",
+        ));
+    }
+
+    match OpenOptions::new().write(true).open("/dev/uinput") {
+        Ok(_) => checks.push(Check::new(
+            "uinput",
+            CheckState::Ok,
+            "/dev/uinput is writable",
+        )),
+        Err(error) => checks.push(Check::new(
+            "uinput",
+            CheckState::Warn,
+            format!("/dev/uinput is not writable: {error}"),
+        )),
+    }
+
+    let config_path = atvv_daemon::config::default_path();
+    match atvv_daemon::config::load(&config_path, atvv_protocol::profile::RC003.gain_db) {
+        Ok(config) if config.existed => checks.push(Check::new(
+            "config",
+            CheckState::Ok,
+            format!(
+                "{} (gain {} dB, input {})",
+                config_path.display(),
+                config.gain_db,
+                config.input
+            ),
+        )),
+        Ok(_) => checks.push(Check::new(
+            "config",
+            CheckState::Warn,
+            format!("{} not found; defaults in use", config_path.display()),
+        )),
+        Err(error) => checks.push(Check::new("config", CheckState::Fail, error.to_string())),
+    }
+
+    for check in &checks {
+        println!(
+            "{:<10} {:<4} {}",
+            check.name,
+            check.state.label(),
+            check.detail
+        );
+    }
+    if checks.iter().any(|check| check.state == CheckState::Fail) {
+        return Err("one or more checks failed".to_string());
+    }
+    Ok(())
 }
 
 fn audio_test(seconds: u64) -> Result<(), String> {
@@ -465,7 +690,7 @@ fn parse_hex(input: &str) -> Result<Vec<u8>, String> {
         .filter(|character| !character.is_whitespace() && *character != ':' && *character != '-')
         .collect();
 
-    if digits.len() % 2 != 0 {
+    if !digits.len().is_multiple_of(2) {
         return Err("hex payload must contain an even number of digits".to_string());
     }
 

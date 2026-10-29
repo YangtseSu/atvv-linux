@@ -9,7 +9,7 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**M0 in progress — no real-device acceptance yet.**
+**M0 complete without hardware — no real-device acceptance yet.**
 
 Implemented:
 
@@ -21,14 +21,18 @@ Implemented:
 - `atvv-input`: profile-driven evdev discovery and `EVIOCGRAB`, the RC003
   gesture engine, and a uinput virtual keyboard. `atvvctl input fake-remote`
   exercises the whole path without hardware.
+- `atvv-daemon` / `atvvd`: session orchestration behind a `Transport` trait,
+  the mock BLE device, timers, PCM decoding, the resident PipeWire source, the
+  input layer, and a JSON view model over `org.atvv.Daemon`.
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
-  simulation, an audio-source smoke test, and the fake input remote.
+  simulation, an audio-source smoke test, the fake input remote, plus
+  `status`, `mic start|stop|toggle`, `reload`, and `doctor` over D-Bus.
 
 Not yet implemented:
 
 - BlueZ GATT session and pairing
-- D-Bus daemon
 - fcitx5-vinput / MCP integration
+- Arch packaging and installed systemd/udev integration
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). It has not been tested on hardware
@@ -43,6 +47,9 @@ cargo run -q -p atvv-cli -- caps decode 0B010002000078
 cargo run -q -p atvv-cli -- simulate miremote-rc003
 cargo run -q -p atvv-cli -- audio test --seconds 3
 cargo run -q -p atvv-cli -- input fake-remote
+dbus-run-session -- cargo run -q -p atvv-daemon -- --mock
+cargo run -q -p atvv-cli -- status
+cargo run -q -p atvv-cli -- doctor
 ```
 
 ## Layout
@@ -51,7 +58,9 @@ cargo run -q -p atvv-cli -- input fake-remote
 crates/atvv-protocol/   protocol, ADPCM, frames, profiles, session state
 crates/atvv-audio/      native PipeWire Audio/Source and PCM queue
 crates/atvv-input/      evdev discovery/grab, gestures, uinput keyboard
-crates/atvv-cli/        atvvctl diagnostics
+crates/atvv-daemon/     atvvd session daemon, mock transport, D-Bus API
+crates/atvv-cli/        atvvctl diagnostics and D-Bus control
+packaging/              systemd user unit (step 09 installs it)
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
 docs/research/          landscape, protocol facts, reference snapshots
