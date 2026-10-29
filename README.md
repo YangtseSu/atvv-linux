@@ -51,6 +51,7 @@ crates/atvv-cli/        atvvctl diagnostics
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
 docs/research/          source notes and protocol facts
+docs/handoff.md         current state for the next session
 ```
 
 ## Scope
