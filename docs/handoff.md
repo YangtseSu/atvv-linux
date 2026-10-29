@@ -4,9 +4,8 @@ Updated: 2026-10-30
 
 ## Project
 
-- Path: `~/projects/atvv-linux`
 - License: GPL-3.0-or-later
-- Git: local `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
+- Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
 - Tests: `cargo test --workspace` → 36 passed (5 suites).
 
@@ -77,7 +76,7 @@ cargo test --workspace
 Start **05 input-uinput**:
 
 ```bash
-cd ~/projects/atvv-linux
+# run from the repository root
 cat docs/research/README.md
 cat docs/plans/05-input-uinput.md
 ```

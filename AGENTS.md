@@ -28,6 +28,8 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
   changed to that license. MIT sources (ATVVoice, sayall) may be used with
   their notices preserved. Source URLs, pinned snapshots, and license facts
   live in `docs/research/reference-projects.md`.
+- Reference external projects by GitHub URL and pinned commit. Never record a
+  local clone path in this repository.
 - Do not push without explicit user approval for that push. Do not rewrite
   published history.
 

@@ -24,6 +24,8 @@ not a second plan and it does not override `docs/plans/`.
   here first.
 - Do not copy GPL-3.0-only code. See the license table in
   [`reference-projects.md`](reference-projects.md).
+- Reference external projects by GitHub URL and pinned commit. Do not record
+  local clone paths.
 
 ## Read map
 

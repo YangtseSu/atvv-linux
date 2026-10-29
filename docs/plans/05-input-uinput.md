@@ -37,7 +37,8 @@ keyboard.
 - Research: `docs/research/landscape.md` §3.2 and §5, and
   `docs/research/protocol-and-device.md` §6.
 - uinput is used instead of `wtype` because compositor keybinds must fire. This
-  is the same finding recorded by sayall.
+  is the same finding recorded by sayall-omarchy; see
+  `docs/research/reference-projects.md`.
 - The voice key is not in the button map; it drives ATVV. It is still grabbed so
   `KEY_F5` cannot reload a focused browser.
 - The virtual keyboard emits on a dedicated blocking thread; the async side

@@ -1,7 +1,8 @@
 # Reference projects and sources
 
-Pinned snapshots used for the research snapshot on 2026-10-29. URLs are stable;
-local clones are not required. Code reuse follows the license table below.
+Pinned snapshots used for the research snapshot on 2026-10-29. Every project
+is identified by its GitHub URL and pinned commit; no local clone path is part
+of this repository. Code reuse follows the license table below.
 
 ## 1. Snapshots
 
