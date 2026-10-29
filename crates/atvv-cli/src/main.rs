@@ -3,7 +3,9 @@
 //! `atvvctl` — hardware-free diagnostics for the ATVV stack.
 
 use std::process::ExitCode;
+use std::time::{Duration, Instant};
 
+use atvv_audio::{AudioSource, AudioSourceConfig};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
 use atvv_protocol::profile::{PROFILES, find};
@@ -37,6 +39,20 @@ enum Command {
     Simulate {
         #[arg(default_value = "miremote-rc003")]
         profile: String,
+    },
+    /// Exercise the native PipeWire source with a synthetic tone.
+    Audio {
+        #[command(subcommand)]
+        command: AudioCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AudioCommand {
+    /// Create a 16 kHz source and feed a 440 Hz tone.
+    Test {
+        #[arg(long, default_value_t = 3)]
+        seconds: u64,
     },
 }
 
@@ -77,7 +93,47 @@ fn run() -> Result<(), String> {
             CapsCommand::Decode { hex } => decode_caps(&hex),
         },
         Command::Simulate { profile } => simulate(&profile),
+        Command::Audio { command } => match command {
+            AudioCommand::Test { seconds } => audio_test(seconds),
+        },
     }
+}
+
+fn audio_test(seconds: u64) -> Result<(), String> {
+    let config = AudioSourceConfig {
+        name: "atvv-test".to_string(),
+        description: "ATVV test source".to_string(),
+        sample_rate: 16_000,
+        channels: 1,
+        queue_capacity: 16_000,
+    };
+    let mut source = AudioSource::start(config).map_err(|error| error.to_string())?;
+    println!(
+        "source: {} (16000 Hz mono s16le); recording for {seconds}s",
+        source.name()
+    );
+
+    let mut phase = 0.0_f64;
+    let step = std::f64::consts::TAU * 440.0 / 16_000.0;
+    let chunks = seconds.saturating_mul(100).max(1);
+    let start = Instant::now();
+
+    for _ in 0..chunks {
+        let mut buffer = [0_i16; 160];
+        for sample in &mut buffer {
+            phase += step;
+            if phase >= std::f64::consts::TAU {
+                phase -= std::f64::consts::TAU;
+            }
+            *sample = (phase.sin() * 0.2 * f64::from(i16::MAX)) as i16;
+        }
+        source.push(&buffer);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    source.stop();
+    println!("stopped after {:?}", start.elapsed());
+    Ok(())
 }
 
 fn list_profiles() {

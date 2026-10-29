@@ -15,13 +15,15 @@ Implemented:
 
 - `atvv-protocol`: v1.0 capability parsing, control events, ADPCM, frame
   accumulation, device profiles, and a pure session state machine.
-- `atvvctl`: profile inspection, CAPS decoding, and a hardware-free RC003
-  session simulation.
+- `atvv-audio`: native PipeWire `Audio/Source` with a bounded lock-free queue,
+  synthetic-tone test, and node-removal recovery. Full PipeWire service restart
+  recovery is still open.
+- `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
+  simulation, and an audio-source smoke test.
 
 Not yet implemented:
 
 - BlueZ GATT session and pairing
-- PipeWire source node
 - evdev/uinput input layer
 - D-Bus daemon
 - fcitx5-vinput / MCP integration
@@ -37,12 +39,14 @@ cargo test --workspace
 cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- caps decode 0B010002000078
 cargo run -q -p atvv-cli -- simulate miremote-rc003
+cargo run -q -p atvv-cli -- audio test --seconds 3
 ```
 
 ## Layout
 
 ```text
 crates/atvv-protocol/   protocol, ADPCM, frames, profiles, session state
+crates/atvv-audio/      native PipeWire Audio/Source and PCM queue
 crates/atvv-cli/        atvvctl diagnostics
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions

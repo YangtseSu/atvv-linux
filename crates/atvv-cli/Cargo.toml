@@ -13,5 +13,6 @@ name = "atvvctl"
 path = "src/main.rs"
 
 [dependencies]
+atvv-audio = { path = "../atvv-audio" }
 atvv-protocol = { path = "../atvv-protocol" }
 clap.workspace = true

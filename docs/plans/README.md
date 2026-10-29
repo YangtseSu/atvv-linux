@@ -49,7 +49,7 @@ M0 is steps 01–06. Steps 07–09 require a device or a release decision.
 | 01 | A | [protocol-core](01-protocol-core.md) | ✅ done | — |
 | 02 | A | [session-state-machine](02-session-state-machine.md) | ✅ done | 01 |
 | 03 | A | [cli-diagnostics](03-cli-diagnostics.md) | ✅ done | 01, 02 |
-| 04 | B | [pipewire-source](04-pipewire-source.md) | ⬜ not-started | 01 |
+| 04 | B | [pipewire-source](04-pipewire-source.md) | 🚧 in-progress | 01 |
 | 05 | B | [input-uinput](05-input-uinput.md) | ⬜ not-started | 01 |
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ⬜ not-started | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ⬜ not-started | 01, 02, 04, 06 |
@@ -96,8 +96,9 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
   `AUDIO_START` and an ignored stop echo (step 06).
 - No claim of RC003 hardware support is made before step 07.
 
-## Current state — 2026-10-29
+## Current state — 2026-10-30
 
-Steps 01–03 are complete. The workspace has 33 passing tests, and `atvvctl`
-smoke checks are recorded in the step files. Steps 04–09 are planned and have
-no implementation yet.
+Steps 01–03 are complete; step 04 is implemented and verified for source
+creation, recording, and node-removal recreation, with full PipeWire service
+restart still open. The workspace has 36 passing tests. Steps 05–09 are planned
+and have no implementation yet.
