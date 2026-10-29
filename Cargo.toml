@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/atvv-protocol",
     "crates/atvv-audio",
+    "crates/atvv-input",
     "crates/atvv-cli",
 ]
 
@@ -19,6 +20,7 @@ thiserror = "2.0"
 clap = { version = "4.5", features = ["derive"] }
 pipewire = "0.10"
 crossbeam-queue = "0.3"
+evdev = "0.13"
 
 [profile.dev]
 debug = "line-tables-only"

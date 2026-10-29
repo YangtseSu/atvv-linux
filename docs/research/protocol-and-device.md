@@ -188,13 +188,22 @@ audio.position   = [ MONO ]
 - Grab only the keyboard/consumer evdev node. Do not grab mouse/absolute nodes;
   an air-mouse or gyro can break.
 - Re-emit every unmapped key after `EVIOCGRAB`; otherwise the user loses keys.
-- RC003 voice is `KEY_F5`; the TV key is `KEY_GRAVE`. The voice key is grabbed
-  so F5 cannot reload a browser, but it drives ATVV, not the normal action map.
+- RC003 key map from field reports
+  (`fan-tastic-z/sayall-omarchy@4d10971`, `sayall-hid/src/device.rs`): voice
+  `KEY_F5`, TV `KEY_GRAVE`, power `KEY_POWER`, OK `KEY_ENTER`/`KEY_KPENTER`,
+  back `KEY_BACK`/`KEY_ESC`, directions `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/
+  `KEY_RIGHT`, home `KEY_HOMEPAGE` (AC Home, not `KEY_HOME`), menu `KEY_MENU`,
+  volume `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN`. The voice key is grabbed so F5 cannot
+  reload a browser, but it drives ATVV, not the normal action map.
 - uinput must register every keycode the action map can emit. Tap is a press
   frame plus release frame; hold-to-talk needs separate press/release.
 - RC003 timing constants from field reports: double window 300 ms, long press
   550 ms, repeat start 350 ms, stable release 600 ms, suppression 180 ms.
   Profile overrides are allowed; step 07 confirms them.
+- The stable-release latch exists because the remote emits spurious
+  release/press cycles roughly 449 ms apart while a key is held. A release
+  resolves only after the 600 ms window; a press inside the window cancels it
+  and restores the original press time (`sayall-core/src/gesture.rs`).
 - Do not map power directly to `KEY_POWER` unless the desktop policy is known;
   logind can consume it. Prefer an explicit action.
 - Permissions: `/dev/uinput` and the remote event node need udev

@@ -53,7 +53,7 @@ implementation direction:
   removal. A full PipeWire service restart is owned by the systemd unit
   (`PartOf=pipewire.service`, `Restart=always`), not by an in-process monitor
   (ADR 0005).
-- **M0 state.** Steps 01–04 are complete; 05–09 are planned. No hardware claim
+- **M0 state.** Steps 01–05 are complete; 06–09 are planned. No hardware claim
   is made.
 
 ## Open questions

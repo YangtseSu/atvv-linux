@@ -18,13 +18,15 @@ Implemented:
 - `atvv-audio`: native PipeWire `Audio/Source` with a bounded lock-free queue,
   synthetic-tone test, and node-removal recovery. Full PipeWire service restart
   is delegated to the systemd unit (ADR 0005).
+- `atvv-input`: profile-driven evdev discovery and `EVIOCGRAB`, the RC003
+  gesture engine, and a uinput virtual keyboard. `atvvctl input fake-remote`
+  exercises the whole path without hardware.
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
-  simulation, and an audio-source smoke test.
+  simulation, an audio-source smoke test, and the fake input remote.
 
 Not yet implemented:
 
 - BlueZ GATT session and pairing
-- evdev/uinput input layer
 - D-Bus daemon
 - fcitx5-vinput / MCP integration
 
@@ -40,6 +42,7 @@ cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- caps decode 0B010002000078
 cargo run -q -p atvv-cli -- simulate miremote-rc003
 cargo run -q -p atvv-cli -- audio test --seconds 3
+cargo run -q -p atvv-cli -- input fake-remote
 ```
 
 ## Layout
@@ -47,6 +50,7 @@ cargo run -q -p atvv-cli -- audio test --seconds 3
 ```text
 crates/atvv-protocol/   protocol, ADPCM, frames, profiles, session state
 crates/atvv-audio/      native PipeWire Audio/Source and PCM queue
+crates/atvv-input/      evdev discovery/grab, gestures, uinput keyboard
 crates/atvv-cli/        atvvctl diagnostics
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions

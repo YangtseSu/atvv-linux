@@ -52,7 +52,7 @@ M0 is steps 01–06. Steps 07–09 require a device or a release decision.
 | 02 | A | [session-state-machine](02-session-state-machine.md) | ✅ done | 01 |
 | 03 | A | [cli-diagnostics](03-cli-diagnostics.md) | ✅ done | 01, 02 |
 | 04 | B | [pipewire-source](04-pipewire-source.md) | ✅ done | 01 |
-| 05 | B | [input-uinput](05-input-uinput.md) | ⬜ not-started | 01 |
+| 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 |
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ⬜ not-started | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ⬜ not-started | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ⬜ not-started | 03, 06, 07 |
@@ -100,7 +100,10 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 ## Current state — 2026-10-30
 
-Steps 01–04 are complete. The PipeWire source is verified for creation,
+Steps 01–05 are complete. The PipeWire source is verified for creation,
 recording, and node-removal recreation; full PipeWire service restart is owned
-by systemd (ADR 0005) and must be verified in step 06/09. The workspace has 36
-passing tests. Steps 05–09 are planned and have no implementation yet.
+by systemd (ADR 0005) and must be verified in step 06/09. The input path is
+verified with a fake uinput remote: discovery, `EVIOCGRAB`, gesture timing,
+and compositor-visible uinput keys. The workspace has 74 passing tests and one
+ignored kernel-uinput test. Steps 06–09 are planned and have no implementation
+yet.

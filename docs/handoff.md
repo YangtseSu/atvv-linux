@@ -7,7 +7,8 @@ Updated: 2026-10-30
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 36 passed (5 suites).
+- Tests: `cargo test --workspace` → 74 passed (7 test binaries), 1 ignored
+  kernel-uinput test.
 
 ## Read first
 
@@ -31,10 +32,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
 - **04 PipeWire source**: native `Audio/Source`, bounded lock-free queue,
   synthetic-tone test, node-removal recovery. Service restart is delegated to
   systemd; the unit is not implemented yet.
+- **05 input/uinput**: `atvv-input` with profile key maps, pointer-safe evdev
+  discovery, `EVIOCGRAB`, the RC003 gesture FSM (600 ms latch), action grammar,
+  uinput virtual keyboard, and `atvvctl input fake-remote`.
 
 ## Not implemented
 
-- **05 input/uinput**: evdev, grab, gestures, uinput, fake remote.
 - **06 daemon/D-Bus**: `atvvd`, mock BLE, D-Bus API, systemd unit.
 - **07 RC003 hardware**: real pairing/GATT/CAPS/audio/reconnect.
 - **08 fcitx5-vinput/MCP**: trigger key, D-Bus bridge, MCP.
@@ -55,7 +58,13 @@ acceptance part of step 09 are blocked on a device.
   `Restart=always`), not to `atvv-audio`.
 - ASR is external; no unofficial cloud protocol in the core.
 - Device facts live in `DeviceProfile`; RC003 profile id is
-  `miremote-rc003`.
+  `miremote-rc003`. Button keys and gesture timing are profile fields.
+- Input actions use the documented grammar; power defaults to `none` so logind
+  policy is not chosen implicitly.
+- The fake remote profile (`test-fake-remote`, VID `0x1209`, PID `0x0002`) is
+  test-only and never part of `PROFILES`.
+- The local `/dev/uinput` smoke used the `input` group; udev `uaccess` policy
+  belongs to step 09.
 
 ## Verified
 
@@ -65,6 +74,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+- `cargo test --workspace` → 74 passed, 1 ignored.
+- `cargo run -q -p atvv-cli -- input fake-remote` → grabbed only the fake node,
+  recognized 12/12 logical buttons, emitted voice press/release, exit 0.
+- `libinput debug-events --device /dev/input/event26` (during `--hold`) saw
+  `atvv-virtual-keyboard` as `cap:k` and `KEY_UP` press/release every ~1 s.
+- `cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored`
+  → passed: uinput hold pressed and release lifted `KEY_LEFTALT`.
 - `atvvctl audio test --seconds 5` + `pw-record --target atvv-test` captured
   16 kHz mono s16le with amplitude ≈ 0.2 (tone present).
 - `pw-cli destroy <node>` recreated the source.
@@ -73,16 +89,18 @@ cargo test --workspace
 
 ## Next step
 
-Start **05 input-uinput**:
+Start **06 daemon-dbus**:
 
 ```bash
 # run from the repository root
 cat docs/research/README.md
-cat docs/plans/05-input-uinput.md
+cat docs/plans/06-daemon-dbus.md
 ```
 
-Deliver a fake uinput remote, evdev discovery/grab, key map, gesture FSM, and
-uinput emission. Test with `evtest`/`libinput`; do not grab a real keyboard.
+Deliver `atvvd`, a mock BLE transport driving the existing `Session`, the
+D-Bus API on `org.atvv.Daemon`, a systemd user unit, and integration of
+`atvv-audio` plus `atvv-input` events. The mock must not become a second session
+implementation.
 
 ## Commands
 
@@ -93,6 +111,9 @@ cargo test --workspace
 cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- simulate miremote-rc003
 cargo run -q -p atvv-cli -- audio test --seconds 3
+cargo run -q -p atvv-cli -- input fake-remote
+cargo run -q -p atvv-cli -- input fake-remote --hold 30
+cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored
 ```
 
 ## Rules

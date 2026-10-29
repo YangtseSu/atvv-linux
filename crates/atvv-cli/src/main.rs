@@ -2,13 +2,16 @@
 
 //! `atvvctl` — hardware-free diagnostics for the ATVV stack.
 
+use std::collections::BTreeSet;
 use std::process::ExitCode;
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
+use atvv_input::{ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, RemoteEvent};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
-use atvv_protocol::profile::{PROFILES, find};
+use atvv_protocol::profile::{PROFILES, RemoteButton, find};
 use atvv_protocol::session::Session;
 use clap::{Parser, Subcommand};
 
@@ -44,6 +47,21 @@ enum Command {
     Audio {
         #[command(subcommand)]
         command: AudioCommand,
+    },
+    /// Exercise the evdev/uinput input path with a fake remote.
+    Input {
+        #[command(subcommand)]
+        command: InputCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum InputCommand {
+    /// Create and grab a fake uinput remote, then exercise all 12 buttons.
+    FakeRemote {
+        /// Keep both fake devices open so evtest/libinput can inspect them.
+        #[arg(long, default_value_t = 0)]
+        hold: u64,
     },
 }
 
@@ -96,6 +114,9 @@ fn run() -> Result<(), String> {
         Command::Audio { command } => match command {
             AudioCommand::Test { seconds } => audio_test(seconds),
         },
+        Command::Input { command } => match command {
+            InputCommand::FakeRemote { hold } => input_fake_remote(hold),
+        },
     }
 }
 
@@ -133,6 +154,155 @@ fn audio_test(seconds: u64) -> Result<(), String> {
 
     source.stop();
     println!("stopped after {:?}", start.elapsed());
+    Ok(())
+}
+
+fn input_fake_remote(hold_seconds: u64) -> Result<(), String> {
+    let mut fake = FakeRemote::open().map_err(|error| {
+        format!(
+            "cannot create the fake remote: {error}\n\
+             /dev/uinput must exist and be writable; the udev rule is step 09"
+        )
+    })?;
+    let fake_path = fake.node_path().to_path_buf();
+    println!(
+        "fake remote: {} ({})",
+        fake_path.display(),
+        FAKE_REMOTE.bluetooth_names[0]
+    );
+
+    let runtime = InputRuntime::start(FAKE_REMOTE, ActionMap::defaults())
+        .map_err(|error| error.to_string())?;
+    for message in runtime.degraded() {
+        println!("degraded: {message}");
+    }
+    for skipped in runtime.skipped() {
+        println!(
+            "skipped: {} ({}) — {}",
+            skipped.path.display(),
+            skipped.name,
+            skipped.reason
+        );
+    }
+    println!("grabbed:");
+    for path in runtime.grabbed() {
+        println!("  {}", path.display());
+        if path != &fake_path {
+            return Err(format!(
+                "refusing to continue: grabbed {}, not the fake remote",
+                path.display()
+            ));
+        }
+    }
+    if runtime.grabbed().len() != 1 {
+        return Err(format!(
+            "expected exactly one grabbed node, got {}",
+            runtime.grabbed().len()
+        ));
+    }
+    match runtime.keyboard_path() {
+        Some(path) => println!("virtual keyboard: {}", path.display()),
+        None => println!("virtual keyboard: unavailable"),
+    }
+
+    for button in RemoteButton::LOGICAL {
+        fake.tap(button)
+            .map_err(|error| format!("fake remote {button}: {error}"))?;
+    }
+    fake.press(RemoteButton::Voice)
+        .map_err(|error| format!("fake remote voice: {error}"))?;
+    fake.release(RemoteButton::Voice)
+        .map_err(|error| format!("fake remote voice: {error}"))?;
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut seen = BTreeSet::new();
+    let mut voice = Vec::new();
+    let mut dispatch_errors = BTreeSet::new();
+    while (seen.len() < RemoteButton::LOGICAL.len() || voice.len() < 2) && Instant::now() < deadline
+    {
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        match runtime.recv_timeout(timeout) {
+            Ok(RemoteEvent::Button {
+                button,
+                gesture,
+                action,
+                error,
+            }) => {
+                if matches!(gesture, Gesture::SingleClick(_) | Gesture::RepeatTick(_))
+                    && seen.insert(button)
+                {
+                    let action = action
+                        .as_ref()
+                        .map_or_else(|| "unmapped".to_string(), ToString::to_string);
+                    println!("button: {button:<12} {gesture:?} -> {action}");
+                }
+                if let Some(error) = error {
+                    dispatch_errors.insert(format!("{button}: {error}"));
+                }
+            }
+            Ok(RemoteEvent::Voice { pressed }) => {
+                println!("voice: {}", if pressed { "press" } else { "release" });
+                voice.push(pressed);
+            }
+            Ok(RemoteEvent::Degraded { message }) => println!("degraded: {message}"),
+            Ok(RemoteEvent::DeviceLost { path, error }) => {
+                return Err(format!("lost {}: {error}", path.display()));
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    println!(
+        "recognized {}/{} logical buttons",
+        seen.len(),
+        RemoteButton::LOGICAL.len()
+    );
+    let missing: Vec<_> = RemoteButton::LOGICAL
+        .into_iter()
+        .filter(|button| !seen.contains(button))
+        .collect();
+    for button in &missing {
+        println!("missing: {button}");
+    }
+    for error in &dispatch_errors {
+        println!("dispatch error: {error}");
+    }
+    if voice != [true, false] {
+        println!("voice edges: {voice:?} (expected [true, false])");
+    }
+    if !missing.is_empty() {
+        return Err(format!(
+            "{} logical buttons were not recognized",
+            missing.len()
+        ));
+    }
+    if voice != [true, false] {
+        return Err("the voice key did not produce a clean press/release pair".to_string());
+    }
+    if !dispatch_errors.is_empty() {
+        return Err("one or more mapped keys could not be emitted".to_string());
+    }
+
+    if hold_seconds > 0 {
+        println!(
+            "holding both devices open for {hold_seconds}s; tapping Up every second\n  \
+             evtest {}\n  evtest {}\n  libinput debug-events",
+            fake_path.display(),
+            runtime.keyboard_path().map_or_else(
+                || "<unavailable>".to_string(),
+                |path| path.display().to_string()
+            )
+        );
+        let deadline = Instant::now() + Duration::from_secs(hold_seconds);
+        while Instant::now() < deadline {
+            fake.tap(RemoteButton::Up)
+                .map_err(|error| format!("fake remote up: {error}"))?;
+            std::thread::sleep(Duration::from_millis(1000));
+            while runtime.try_recv().is_ok() {}
+        }
+    }
+
     Ok(())
 }
 
@@ -189,8 +359,21 @@ fn show_profile(id: &str) -> Result<(), String> {
     println!("post_stop_discard_ms: {}", profile.post_stop_discard_ms);
     println!("sample_rate: {} Hz", profile.sample_rate);
     println!("gain_db: {} dB", profile.gain_db);
-    println!("voice_key: {}", profile.voice_key);
-    println!("tv_key: {}", profile.tv_key);
+    println!("buttons:");
+    for mapping in profile.button_keys {
+        println!("  {:<12} {}", mapping.button, mapping.key);
+    }
+    let timing = profile.gesture_timing;
+    println!(
+        "gesture_ms: double={} long={} repeat_start={} latch={} suppression={} repeat={} back_repeat={}",
+        timing.double_click_ms,
+        timing.long_press_ms,
+        timing.repeat_start_ms,
+        timing.stable_release_ms,
+        timing.suppression_ms,
+        timing.repeat_interval_ms,
+        timing.back_repeat_interval_ms,
+    );
     Ok(())
 }
 

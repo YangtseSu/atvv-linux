@@ -1,0 +1,14 @@
+[package]
+name = "atvv-input"
+description = "evdev discovery, gestures, and uinput emission for ATVV remotes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+atvv-protocol = { path = "../atvv-protocol" }
+evdev.workspace = true
+thiserror.workspace = true
