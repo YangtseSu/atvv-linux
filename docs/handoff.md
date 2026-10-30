@@ -65,14 +65,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
   started `/usr/bin/atvvd`, `atvvctl doctor` was all green, and the end-to-end
   fcitx text commit was operator-confirmed. Completed record:
   `docs/acceptance/rc003-2026-10-30.md`.
-- **0.1.0-4 package (installed and active)**: a deterministic source tarball
-  from `d6a09b0` (sha256
-  `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`) and
-  `makepkg -f` produced `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package.
-  The package is installed on 2026-10-31; the enabled user unit runs
-  `/usr/bin/atvvd` and accepts the live `trigger_key = "DICTATE"` config.
-  Its build predates the provider-contract output, so the installed source
-  does not yet advertise `atvv.*`.
+- **0.1.0-5 package (installed and active)**: the step-12 tree produced
+  `atvv-linux 0.1.0-5` (5.9 MiB; package sha256
+  `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`).
+  It is installed on 2026-10-31; the enabled user unit runs
+  `/usr/bin/atvvd`, the live source advertises
+  `atvv.contract_version="1"`, `atvv.profile="miremote-rc003"`, and
+  `atvv.recording_keys="DICTATE,VOICECOMMAND,ASSISTANT"`, and
+  `atvvctl doctor` reports `properties ok` and `contract ok`. The previous
+  `0.1.0-4` package predated the contract output.
 - **11 evdevil input backend (complete)**: `atvv-input` now uses `evdevil`
   0.5.0 (`Key`, `Evdev`, `EventReader`, `UinputDevice`) instead of `evdev`
   0.13.2; 0BSD added to `deny.toml`; discovery skips unreadable/vanished
@@ -278,20 +279,23 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `timeout 3 pw-cat --record --target atvv-miremote-rc003 --rate 16000
   --channels 1 --format s16` produced a 96,246-byte WAV. The installed
   `0.1.0-4` unit was stopped for the check and restarted afterwards.
+- 2026-10-31 after installing `0.1.0-5`: `pacman -Q atvv-linux` =
+  `0.1.0-5`; the user unit is active and connected over `bluez`; `atvvctl
+  doctor` is all green including `properties` and `contract`; `atvvctl
+  contract` prints the declared keys and `DICTATE`; `pw-cli info
+  atvv-miremote-rc003` shows all three `atvv.*` properties.
 - 2026-10-31 `makepkg -f` from the step-12 tree (`dadc23b`) →
   `atvv-linux 0.1.0-5` (5.9 MiB) plus a debug package; package sha256
   `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`.
-  Root install is pending the operator.
+  Installed on 2026-10-31; the unit restarted and reports the contract.
 
 ## Next step
 
 **Step 12 is complete.** The provider contract is available through
 `atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
 `atvvctl doctor`, and the `atvv-mcp` `contract` tool. Browser and IM recipes
-are documented. `atvv-linux 0.1.0-5` was built from the step-12 tree
-(sha256 `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`);
-the installed `0.1.0-4` package predates the output, so installing `0.1.0-5`
-is required to expose `atvv.*` on the resident source.
+are documented. `atvv-linux 0.1.0-5` is installed and active; the resident
+source advertises the contract and `atvvctl doctor` is all green.
 
 **Step 10 vinput-zero-config remains** (in progress, upstream-bound): ATVV is
 the provider and vinput is the consumer. The primary path is the resident
@@ -303,14 +307,9 @@ ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). The upstream issue
 and PR are not submitted. `vinput = "trigger"` stays the default;
 `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: the operator installs the built package, then proceeds
-with the step 10 upstream issue/PR and the real vinput auto-bind check.
-
-```sh
-sudo pacman -U packaging/arch/atvv-linux-0.1.0-5-x86_64.pkg.tar.zst
-systemctl --user restart atvvd
-atvvctl doctor
-```
+Immediate action: proceed with the step 10 upstream issue/PR and the real
+vinput auto-bind check. The fork `YangtseSu/fcitx5-vinput` exists but has no
+code changes; no upstream issue or PR has been submitted.
 
 ## Commands
 
