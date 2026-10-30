@@ -142,7 +142,9 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   from `atvv-daemon/src/cli.rs`.
 - CI runs fmt, clippy, workspace tests, cargo-deny, and REUSE. Dependabot
   checks Cargo and GitHub Actions daily and opens grouped minor/patch PRs;
-  it does not auto-merge.
+  it does not auto-merge. The runner is pinned to `ubuntu-26.04` with
+  `actions/checkout@v7` and `fsfe/reuse-action@v6` (Node 24); the Dependabot
+  actions PR is superseded.
 - `deny.toml` allows GPL-3.0-or-later, MIT, Apache-2.0 (including the LLVM
   exception), BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, and Zlib.
   GPL-3.0-only is deliberately absent. Step 11 added 0BSD for `evdevil`
