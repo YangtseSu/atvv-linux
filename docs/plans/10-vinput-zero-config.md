@@ -61,8 +61,7 @@ setter called by ATVV (ADR 0007).
   (`0=Alt_R`) that is `1=Dictate`.
 - ⬜ Document the one-time consumer setup: select the source with
   `vinput device use atvv-miremote-rc003` and append `Dictate` at the next
-  free index without replacing the user's trigger. This is vinput's own configuration; `atvvd`
-  must not write it.
+  free index without replacing the user's trigger.
 - ⬜ Do not add an ATVV-side device push. Drop the `SetCaptureDevice` call from
   `atvvd` and the `vinput_device = "auto" | "none"` policy; source selection
   belongs to the consumer (ADR 0007).
