@@ -137,9 +137,12 @@ GitHub Actions daily.
 Step 10 is blocked on operator approval and upstream review. ATVV is the
 provider: it exposes the resident `Audio/Source` and the standard `Dictate`
 key. vinput is the consumer and owns source selection and trigger binding.
-Local consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three
-stacked branches (auto selection, recording-key metadata, and `device use`
-binding); they are not pushed or submitted. The manual `device use` plus
+Issues
+[#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
+[#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. Local
+consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three stacked
+issue-named branches (auto selection, recording-key metadata, and `device use`
+binding); nothing is pushed and no PR exists. The manual `device use` plus
 `Dictate` path is verified; automatic binding and the post-merge real check
 remain. The primary upstream request is a
 consumer-side capture-device auto-selection/priority list plus auto-binding of

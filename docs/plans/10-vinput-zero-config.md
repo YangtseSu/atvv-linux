@@ -34,18 +34,20 @@ setter called by ATVV (ADR 0007).
   consumer-side path and is now implemented in the local vinput patches.
 - Local consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three
   stacked branches, all based on upstream `bd7dd43`:
-  - `feat/auto-capture-device` (`f0b04d5`): `auto` and comma-separated
+  - `feat/issue-491-auto-capture-device` (`42ccc26`): `auto` and comma-separated
     wildcard priority lists; exact names win; unmatched patterns use the
     system default; CLI/GUI Auto.
-  - `feat/recording-keys-metadata` (`8f621ab`): read `atvv.recording_keys`
+  - `feat/issue-492-recording-keys-metadata` (`3e3ebdf`): read `atvv.recording_keys`
     from node info (not the registry global) and map canonical names to
     fcitx names.
-  - `feat/bind-recording-keys` (`d2fc40b`): on `device use`, append missing
+  - `feat/issue-492-bind-recording-keys` (`c8e51b2`): on `device use`, append missing
     keys through fcitx's controller, preserving entries and using the next
     free indices; no direct file write and no D-Bus activation; fallback
     prints the exact entries.
-  The branches are local-only: nothing is pushed, and no upstream issue or PR
-  exists.
+  Upstream issues
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. The
+  branches are local-only: nothing is pushed and no PR exists.
 - The opt-in `vinput = "dbus"` fallback still has the addon
   `mostRecentInputContext` focus gap. That fallback is not part of the primary
   path and is deferred; see Deferred below.
@@ -66,12 +68,15 @@ setter called by ATVV (ADR 0007).
   `vinput_device = "auto" | "none"` policy are absent; ADR 0007 records the
   decision. Source selection belongs to the consumer.
 - ⬜ Upstream issue/PR A: consumer-side capture-device auto-selection and
-  priority list. Code is ready on `feat/auto-capture-device`; not pushed and
-  no upstream issue/PR exists.
+  priority list. Issue
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) is open; code
+  is ready on `feat/issue-491-auto-capture-device`; not pushed and no PR
+  exists.
 - ⬜ Upstream issue/PR B: read `atvv.recording_keys` and append missing trigger
-  keys on `device use`. Code is ready on the stacked
-  `feat/recording-keys-metadata` and `feat/bind-recording-keys` branches; not
-  pushed and no upstream issue/PR exists.
+  keys on `device use`. Issue
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) is open; code
+  is ready on the stacked `feat/issue-492-recording-keys-metadata` and
+  `feat/issue-492-bind-recording-keys` branches; not pushed and no PR exists.
 - ✅ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
   explicit fallback. Do not make D-Bus the zero-config default.
 - ✅ Generic provider diagnostics: `atvvctl status.contract`,
@@ -271,3 +276,11 @@ Recorded 2026-10-31:
   on operator approval (push, issues, draft PRs) and upstream review/merge.
   The D-Bus focus fallback and the generic capture-device setter are explicitly
   deferred rather than left as vague risks.
+
+- 2026-10-31 — upstream issues
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) (auto
+  selection) and
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) (recording-key
+  binding) created. Branches renamed to the issue-based names and commit
+  messages updated with the issue numbers. Nothing is pushed and no PR exists;
+  the remaining gate is operator approval for push and draft PRs.

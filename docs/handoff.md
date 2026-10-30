@@ -309,15 +309,15 @@ PipeWire source plus the standard `Dictate` key; the one-time
 `vinput device use` and `Dictate` at the next free index (default install:
 `1=Dictate`) setup is correct layering. A consumer-side
 auto-selection/auto-bind feature would remove the manual entries; the
-ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). The upstream issue
-and PR are not submitted. `vinput = "trigger"` stays the default;
+ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). Issues #491 and #492
+are open; no PR is submitted. `vinput = "trigger"` stays the default;
 `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: approve pushing the three local vinput branches and
-creating the two issues plus three draft PRs. The fork
-`YangtseSu/fcitx5-vinput` has the patches locally; nothing has been pushed and
-no upstream issue or PR has been submitted. After upstream review/merge,
-rebuild vinput and record the real auto-bind acceptance.
+Immediate action: approve pushing the three local vinput branches and creating
+the three draft PRs. Issues #491 and #492 are already open; the fork
+`YangtseSu/fcitx5-vinput` has the patches locally, but nothing has been pushed
+and no PR exists. After upstream review/merge, rebuild vinput and record the
+real auto-bind acceptance.
 
 ## Commands
 
