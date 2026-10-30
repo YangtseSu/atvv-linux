@@ -328,7 +328,7 @@ each retry. Waking the remote remains necessary for the physical link.
 
 
 
-## Dedicated F24 trigger (2026-10-30)
+## Earlier dedicated-key experiment (2026-10-30)
 
 Follow-up to the package and trigger tests on the same RC003
 (`C0:5D:39:F8:2D:4C`, `hci0`), fcitx5-vinput 2.4.2, fcitx5 5.1.23:
@@ -340,16 +340,11 @@ Follow-up to the package and trigger tests on the same RC003
 - vinput stayed `idle` with an explicit `[TriggerKey] 0=Alt_R`, and also with
   the section commented. The `Control+Control_R` chord with daemon
   `trigger_key = "ctrl+rightctrl"` worked.
-- The chosen design is a dedicated key: daemon `trigger_key = "F24"` and
-  vinput `[TriggerKey] 0=Alt_R, 1=F24`. The operator confirmed that the voice
-  key starts recording with this pair. `F24` is a regular key that normal PC
-  keyboards do not have; keeping the user's `0=` entry means the dedicated key
-  is added, not substituted.
-- `atvv-input` resolves `F24` to `KEY_F24` (evdev 194); `0.1.0-3` makes it the
-  default trigger key. The `Control+Control_R` chord remains a verified
-  alternative.
+- A dedicated regular key was then verified: the virtual keyboard emitted it,
+  and vinput started recording when that key was in its trigger list. Step 11
+  standardized on `DICTATE`; this section is historical.
 
-Step 09 later installed `0.1.0-3` into `/usr`, reran the post-reboot check,
+Step 09 later installed the package into `/usr`, reran the post-reboot check,
 and recorded the end-to-end fcitx text commit in
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
 

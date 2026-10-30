@@ -41,8 +41,7 @@ edge is the control signal; both the microphone gate and the synthetic
    active key. Device-selection policy and trigger binding belong in the
    consumer.
 5. Diagnostics are generic, not per-application: `atvvctl status`, `doctor`,
-   and a planned `contract` output. There is no `atvvctl vinput` and no
-   WeChat/Telegram/Codex/OMP-specific check. Per-consumer recipes live under
+   and a planned `contract` output. Per-consumer recipes live under
    `docs/integrations/`.
 
 ## Consequences

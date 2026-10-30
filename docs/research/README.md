@@ -83,7 +83,7 @@ implementation direction:
   `KEY_DICTATE`; the fork experiment was abandoned. Step 11 migrated
   `atvv-input` to `evdevil` 0.5.0, which includes the three consumer keys and
   the required evdev/uinput surface. The daemon default trigger is now
-  `DICTATE`; `F24` remains configurable. The evdev names used by the daemon
+  `DICTATE`. The evdev names used by the daemon
   (`VOICECOMMAND`, `ASSISTANT`, `DICTATE`) and the fcitx5-vinput names
   (`VoiceCommand`, `Assistant`, `Dictate`) remain distinct. See
   [`consumer-keys.md`](consumer-keys.md) and
@@ -100,8 +100,7 @@ implementation direction:
   and [`../integrations/provider-contract.md`](../integrations/provider-contract.md):
   PipeWire source, declared recording keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`), generic control/status, and consumer-owned configuration.
-  `F24` is not a fallback; `VOICECOMMAND`/`ASSISTANT` are. Per-application
-  diagnostics are out of scope.
+  Per-application diagnostics are out of scope.
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens
   `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input

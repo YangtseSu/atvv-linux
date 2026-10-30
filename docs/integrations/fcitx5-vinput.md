@@ -69,8 +69,7 @@ key edge opens the microphone; a software start cannot produce frames.
    overwritten. Restart fcitx5 after editing.
 
    `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks if the IME
-   cannot bind the dictation key. `F24` was a temporary experiment and is not
-   a documented fallback.
+   cannot bind the dictation key.
 
    The source advertises the declared keys as `atvv.recording_keys`; the
    upstream vinput request is to append the mapped set automatically when the
@@ -99,10 +98,8 @@ trigger_key = "DICTATE"
 ```
 
 `trigger_key` accepts a single key (`DICTATE`, `VOICECOMMAND`, `ASSISTANT`)
-or a raw key/chord (`F24`, `F18`, `ctrl+rightctrl`). `VOICECOMMAND` and
-`ASSISTANT` are the supported fallbacks; `F24`/`F18` are raw escape hatches,
-not documented fallbacks. Modifiers are pressed in order and released in
-reverse. The target IME and any compositor keybind must use the same key or
+or a `+` chord (`ctrl+rightctrl`). Modifiers are pressed in order and released
+in reverse. The target IME and any compositor keybind must use the same key or
 chord.
 
 The names are layer-specific and are not interchangeable:
@@ -114,14 +111,12 @@ The names are layer-specific and are not interchangeable:
 | Dictation | `DICTATE` (`KEY_DICTATE`, `0x24a`) | `Dictate` |
 
 `DICTATE` is the default active key; `VOICECOMMAND` and `ASSISTANT` are the
-supported fallbacks. `F24` was a temporary experiment and is not a fallback.
-Bind the declared set in the consumer and emit one active key; do not emit all
-three simultaneously.
+supported fallbacks. Bind the declared set in the consumer and emit one active
+key; do not emit all three simultaneously.
 
 A bare modifier is accepted by fcitx in principle, but a synthetic `Alt_R`
 from the ATVV virtual keyboard did not trigger fcitx5-vinput 2.4.2 on
-2026-10-30. The earlier `F24` experiment and the `Control+Control_R` chord
-did work; `F24` is not a recommended fallback.
+2026-10-30. The `Control+Control_R` chord did work.
 
 `vinput` and `trigger_key` are read at daemon start; `ReloadConfig` applies
 `gain_db` and `input` only. Restart `atvvd` after changing the vinput mode.
@@ -143,11 +138,10 @@ active input context.
   On a default install the existing entry is `0=Alt_R`, so the new entry is
   `1=Dictate`; a customized list uses its next free index. A fully commented
   `[TriggerKey]` section means no trigger. The 2026-10-30 real RC003 run used
-  `Dictate` with `trigger_key = "DICTATE"`; that operator config already had
-  two entries, so the recorded index was `2=` (fcitx `Key(Dictate)`, vinput
+  `Dictate` with `trigger_key = "DICTATE"` (fcitx `Key(Dictate)`, vinput
   `target.object=atvv-miremote-rc003`, `rate=16000 channels=1 fmt=259`). The
   `Control+Control_R` chord with `trigger_key = "ctrl+rightctrl"` was verified
-  earlier; `F24` was a temporary experiment, not a fallback.
+  earlier.
 - Hold to talk. The RC003 gates microphone data on the physical key: audio
   flows only while the key is held. A short tap produces a normal key tap for
   fcitx (which may toggle its recording state), but the remote stops sending
@@ -237,8 +231,7 @@ trigger_key = "DICTATE"
 Restart `fcitx5` and `atvvd` after changing them. `VOICECOMMAND` and
 `ASSISTANT` are the supported fallbacks; the `Control+Control_R` chord with
 `trigger_key = "ctrl+rightctrl"` is another verified path. A GNOME custom
-shortcut cannot bind a bare modifier key. `F24` was a temporary experiment and
-is not a recommended fallback.
+shortcut cannot bind a bare modifier key.
 
 ## Why not open the mic from the source link?
 

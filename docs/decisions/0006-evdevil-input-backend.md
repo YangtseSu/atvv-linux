@@ -35,25 +35,19 @@ is 0BSD.
 - Keep `atvv-input`'s public behaviour and its `#![forbid(unsafe_code)]`
   boundary. The migration is an implementation change, not a protocol or
   device-profile change.
-- Keep the daemon `trigger_key` vocabulary (`F24`, `VOICECOMMAND`,
-  `ASSISTANT`, `DICTATE`) and the fcitx5-vinput names (`VoiceCommand`,
-  `Assistant`, `Dictate`) distinct. The daemon resolves evdev names; vinput
-  configuration uses fcitx names.
+- Keep the daemon `trigger_key` vocabulary (`VOICECOMMAND`, `ASSISTANT`,
+  `DICTATE`) and the fcitx5-vinput names (`VoiceCommand`, `Assistant`,
+  `Dictate`) distinct. The daemon resolves evdev names; vinput configuration
+  uses fcitx names.
 - Treat context-dependent mapping of the three consumer keys as future work.
   The research and options are recorded in
   [`docs/research/consumer-keys.md`](../research/consumer-keys.md).
 
 Follow-up (2026-10-30): after the migration, step 11 changed the daemon's
-default synthetic trigger from `F24` to `DICTATE` by user direction. This is
-a policy choice, not an evdevil requirement; `F24` remains an explicit
-`trigger_key`. The real-device run is recorded in
+default synthetic trigger to `DICTATE` by user direction. This is a policy
+choice, not an evdevil requirement. The declared recording keys are
+`DICTATE`, `VOICECOMMAND`, and `ASSISTANT`. The real-device run is recorded in
 [step 11](../plans/11-input-evdevil.md).
-
-Follow-up (2026-10-31): `F24` is not a documented fallback. The declared
-recording keys are `DICTATE`, `VOICECOMMAND`, and `ASSISTANT`; `F24` remains
-only a raw configurable key for experiments. See
-[ADR 0007](0007-integration-direction.md) and the
-[provider contract](../integrations/provider-contract.md).
 
 ## Consequences
 

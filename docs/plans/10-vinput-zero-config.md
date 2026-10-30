@@ -33,14 +33,14 @@ setter called by ATVV (ADR 0007).
   config change live without a direct file write; that is an optional
   consumer-side management path, not part of the primary flow.
 - A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2 on 2026-10-30.
-  A dedicated regular key `F24` did, with the user's existing `0=` entry kept.
+  A dedicated consumer key did, with the user's existing `0=` entry kept.
   The `Control+Control_R` chord also worked.
 - Step 11 changed the daemon default to `DEFAULT_TRIGGER_KEY = "DICTATE"`;
   vinput keeps the user's entries and adds `Dictate` at the next free index.
   On a default vinput install (`[TriggerKey] 0=Alt_R`) that is `1=Dictate`.
-  `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks; `F24` was a
-  temporary experiment, not a fallback. The live installed `0.1.0-3` unit
-  still reads `trigger_key = "ASSISTANT"` until the new build is installed.
+  `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks. The live
+  installed `0.1.0-3` unit still reads `trigger_key = "ASSISTANT"` until the
+  new build is installed.
 - External `StartRecording` (D-Bus fallback only) reaches the daemon
   correctly, but the addon resolves its target input context from
   `last_active_ic_`, which is not updated on focus-in. A mouse-only focus
@@ -55,8 +55,7 @@ setter called by ATVV (ADR 0007).
 
 - ✅ Recording-key support: `DICTATE` is the default active key;
   `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks, all resolved by
-  `atvv-input`. `F24` was a temporary experiment and remains only a raw
-  configurable key, not a fallback. Never assume a user shortcut.
+  `atvv-input`. Never assume a user shortcut.
 - ⬜ Keep the user's existing `[TriggerKey]` entries: document `Dictate` at
   the next free index; never replace the user's entry. On a default install
   (`0=Alt_R`) that is `1=Dictate`.
@@ -84,10 +83,9 @@ setter called by ATVV (ADR 0007).
 - ⬜ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
   explicit fallback for environments where the virtual keyboard cannot reach
   the IME. Do not make D-Bus the zero-config default.
-- ⬜ Add generic provider diagnostics, not per-app commands. Extend
-  `atvvctl status`/`doctor` with the declared `atvv.recording_keys`, the
-  active key, and the source/consumer state. Do not add `atvvctl vinput` or
-  WeChat/Telegram/Codex/OMP-specific checks; the broader contract is step 12.
+- ⬜ Add generic provider diagnostics: extend `atvvctl status`/`doctor` with
+  the declared `atvv.recording_keys`, the active key, and the source/consumer
+  state. Step 12 owns the cross-consumer contract output.
 - ⬜ Tests: ATVV never writes vinput's `config.json`/`vinput.conf`; the
   provider diagnostics report the declared keys; the D-Bus fallback still
   starts/stops; the source name and `DICTATE` mapping are stable.
@@ -102,8 +100,7 @@ setter called by ATVV (ADR 0007).
 - The dedicated-key rule: add the declared keys to vinput's trigger list
   without replacing the user's key. The default active key is the dictation
   consumer key (`Dictate`); `VOICECOMMAND` and `ASSISTANT` are the supported
-  fallbacks. `F24` is not a fallback; it was a temporary experiment and
-  remains only a raw configurable key.
+  fallbacks.
 - Do not assume `Alt_R` or any user default. Changing shortcuts is normal; a
   bare synthetic modifier is not a reliable trigger for vinput 2.4.2.
 - The three consumer keys reach the tested GNOME 49/fcitx5 5.1.23 input
@@ -146,8 +143,8 @@ vinput device list
 vinput device use atvv-miremote-rc003
 # add Dictate at the next free index while fcitx5 is stopped
 # (default install: 0=Alt_R, so 1=Dictate)
-# real device, done 2026-10-30; the operator's config had two entries, so:
-# daemon trigger_key=DICTATE; vinput [TriggerKey] 2=Dictate; voice press records
+# real device, done 2026-10-30:
+# daemon trigger_key=DICTATE; vinput [TriggerKey] Dictate; voice press records
 vinput daemon status                   # recording on voice press
 journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 # if a consumer-side auto-selection feature lands:
@@ -156,8 +153,7 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 
 - `DICTATE` real-device path verified 2026-10-30 after step 11: fcitx
   received `Key(Dictate)` and vinput recorded from the ATVV source. The
-  `Control+Control_R` chord was an earlier verified alternative. `F24` was a
-  temporary experiment, not a fallback.
+  `Control+Control_R` chord was an earlier verified alternative.
 - The manual one-time setup is the expected path until vinput selects the
   source itself; ATVV must not perform that selection.
 
@@ -202,15 +198,9 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 - 2026-10-30 — step planned after the zero-config review; no implementation.
 - 2026-10-30 — revised after review: the daemon must not assume `Alt_R` or any
   user trigger key.
-- 2026-10-30 — `F24` dedicated-key path verified on the real RC003: daemon
-  `trigger_key = "F24"`, vinput `[TriggerKey] 0=Alt_R, 1=F24`. The default
-  trigger was `F24` at that point; the user's existing entry was preserved.
 - 2026-10-30 — step 11 changed the code default to `DICTATE`; vinput keeps
-  `0=Alt_R`, `1=Assistant` and adds `2=Dictate`. The same real press drove
-  fcitx `Key(Dictate)` and vinput recording at 16 kHz. The `2=` is the
-  operator's next free index because that live config already had entries 0
-  and 1; a default vinput install has only `0=Alt_R`, so the next free index
-  is `1=Dictate`.
+  the user's entries and adds `Dictate`. The same real press drove fcitx
+  `Key(Dictate)` and vinput recording at 16 kHz.
 - 2026-10-30 — upstream source review (`xifan2333/fcitx5-vinput` `bd7dd4365`,
   installed 2.4.2). The upstream scope is PR A (capture-device
   `GetCaptureDevice`/`SetCaptureDevice` plus CLI live apply) and PR B (addon
@@ -232,8 +222,6 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   [`../integrations/provider-contract.md`](../integrations/provider-contract.md).
   The source advertises `atvv.contract_version=1`, `atvv.profile`, and
   `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`; consumers auto-bind
-  the declared set and the provider emits one active key. `VOICECOMMAND` and
-  `ASSISTANT` are the fallbacks; `F24` is not. Examples use the default
-  vinput install index (`0=Alt_R`, so `1=Dictate`), not the operator's `2=`.
-  Per-app diagnostics are rejected; `atvvctl vinput` is dropped in favor of
-  generic contract output (step 12).
+  the declared set and the provider emits one active key. Examples use the
+  default vinput install index (`0=Alt_R`, so `1=Dictate`). Generic contract
+  output is step 12.

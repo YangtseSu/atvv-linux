@@ -80,10 +80,6 @@ The remote's voice control is a dictation function, so the trigger and the
 device function coincide instead of using a spare function key. The vinput
 entry is `Dictate`; users keep their own `[TriggerKey]` entries.
 
-`F24` remains an explicit `trigger_key` alternative. It is not a consumer key
-and is still useful for IMEs or compositors that cannot bind these codes. Do
-not treat `F24` as the default or as a device fact.
-
 Real-device evidence (2026-10-30, `C0:5D:39:F8:2D:4C`): the daemon's evdevil
 virtual keyboard emitted `KEY_DICTATE`; fcitx5 5.1.23 received `Key(Dictate)`
 (keycode 594), and fcitx5-vinput recorded from `atvv-miremote-rc003` at

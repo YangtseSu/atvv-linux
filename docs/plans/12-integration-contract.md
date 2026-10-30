@@ -52,16 +52,15 @@ per-application branches or per-application diagnostics.
 ## Design notes
 
 - The declared set is `DICTATE`, `VOICECOMMAND`, `ASSISTANT` in that order.
-  `DICTATE` is the default active key; the other two are fallbacks. `F24` is
-  not part of the contract.
+  `DICTATE` is the default active key; the other two are fallbacks.
 - Consumers bind the declared set and preserve the user's own shortcuts. The
   provider emits one active key; never emit all three simultaneously (chord
   parsing and duplicate actions).
 - Automatic adaptation to an arbitrary application's shortcut is not possible
   from the provider. The user either sets the consumer shortcut to a declared
   key or sets `trigger_key` to the consumer's shortcut. Document both.
-- No per-application diagnostics. No `atvvctl vinput`, WeChat, Telegram,
-  Codex, or OMP commands. Generic contract output plus per-consumer docs.
+- No per-application diagnostics. Provide generic `atvvctl`/MCP contract
+  output plus per-consumer docs.
 - Contract changes are versioned with `atvv.contract_version`; removing or
   changing a key requires an ADR.
 

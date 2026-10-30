@@ -1,8 +1,6 @@
 # Provider contract
 
-Status: design goal, 2026-10-31. This is the generic interface consumers should
-use. Per-application setup belongs in the documents listed at the end; the
-provider does not add per-application branches.
+Status: source metadata implemented 2026-10-31; this is the current guidance.
 
 ## Goal
 
@@ -65,8 +63,6 @@ declared set; the provider emits one active key per press.
   active key; the other bindings are inert until the active key changes.
 - Do not emit all three simultaneously. Consumers may parse the extra keys as
   a chord or trigger duplicate actions.
-- `F24` is not part of this contract. It was a temporary experiment and
-  remains only a raw configurable key, not a fallback.
 
 ### Discovery
 
@@ -154,10 +150,10 @@ Generic only:
   config).
 - `atvvctl contract` — the machine-readable provider contract (planned).
 
-There is no `atvvctl vinput` and no WeChat/Telegram/Codex/OMP-specific
-diagnostic. If a consumer cannot see the source or its shortcut does not
-match, the fix belongs in that consumer's configuration or in the provider
-contract, not in an application-specific branch.
+Per-consumer setup belongs in the documents above. If a consumer cannot see
+the source or its shortcut does not match, the fix belongs in that consumer's
+configuration or in the provider contract, not in an application-specific
+branch.
 
 ## Versioning
 

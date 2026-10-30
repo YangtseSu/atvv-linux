@@ -53,23 +53,21 @@ Target consumers include fcitx5-vinput, browser AI chat pages, coding agents
   selects the source; consumers that cannot are told by the docs to match
   their shortcut to one of those keys.
 - The declared recording keys are `DICTATE`, `VOICECOMMAND`, and
-  `ASSISTANT`. `DICTATE` is the default active key. `VOICECOMMAND` and
-  `ASSISTANT` are the fallbacks. `F24` is **not** a fallback; it was a
-  temporary experiment and remains only a raw configurable key. Bind the
-  declared set in the consumer and emit one active key; do not emit all three
-  simultaneously (chord parsing and duplicate actions).
+  `ASSISTANT`. `DICTATE` is the default active key; the other two are the
+  supported fallbacks. Bind the declared set in the consumer and emit one
+  active key; do not emit all three simultaneously (chord parsing and
+  duplicate actions).
 - Automatic adaptation to an arbitrary application's own shortcut is not
   possible from the provider side. The supported path is: the consumer binds
   a declared key, or the user sets `trigger_key` to the application's
   shortcut. Document that instead of adding per-application detection.
-- Do not add per-application diagnostics. There is no `atvvctl vinput`, and
-  there will be no WeChat/Telegram/Codex/OMP-specific checks. Provide generic
-  `atvvctl status`/`doctor`/contract output plus per-consumer docs under
+- Do not add per-application diagnostics. Provide generic `atvvctl
+  status`/`doctor`/contract output plus per-consumer docs under
   `docs/integrations/`.
 - Documentation examples use the consumer's default install, not the
   developer's customized file. fcitx5-vinput's default `[TriggerKey]` is
   `0=Alt_R`; adding `Dictate` is `1=Dictate`. A customized list uses the next
-  free index; never hardcode `2=` from a local test configuration.
+  free index.
 
 See [`docs/integrations/provider-contract.md`](docs/integrations/provider-contract.md)
 and [ADR 0007](docs/decisions/0007-integration-direction.md).

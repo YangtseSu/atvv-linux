@@ -78,10 +78,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and emit; fake remote and
   both ignored uinput tests pass. The daemon default trigger is now `DICTATE`
   (vinput `Dictate` at the next free index; default install `1=Dictate`).
-  `F24` was a temporary experiment, not a fallback. A real RC003 press emitted
-  `KEY_DICTATE`, streamed 104 frames / 24,960 samples, and made
-  fcitx5-vinput record from `atvv-miremote-rc003` at 16 kHz. See
-  `docs/plans/11-input-evdevil.md`.
+  A real RC003 press emitted `KEY_DICTATE`, streamed 104 frames / 24,960
+  samples, and made fcitx5-vinput record from `atvv-miremote-rc003` at 16 kHz.
+  See `docs/plans/11-input-evdevil.md`.
 
 ## Not implemented
 
@@ -171,8 +170,7 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   next free index (default install `1=Dictate`); the names
   `VOICECOMMAND`/`ASSISTANT`/`DICTATE` (daemon) and
   `VoiceCommand`/`Assistant`/`Dictate` (fcitx) stay distinct.
-  `VOICECOMMAND` and `ASSISTANT` are the fallbacks; `F24` was a temporary
-  experiment, not a fallback.
+  `VOICECOMMAND` and `ASSISTANT` are the fallbacks.
 - fcitx5-vinput rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit;
   edit it while fcitx5 is stopped.
 - vinput integration direction: ATVV is the lower layer and exposes a
@@ -222,7 +220,7 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   removed.
 - `makepkg -f` in `packaging/arch` → `atvv-linux 0.1.0-1` (5.8 MiB) plus a
   debug package; after the connect fix, rebuilt `atvv-linux 0.1.0-2`, and
-  after the F24 change, `atvv-linux 0.1.0-3`.
+  after the trigger-key change, `atvv-linux 0.1.0-3`.
 - 2026-10-30 `makepkg -f` with the step-11 source at `d6a09b0` →
   `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package; source checksum
   `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`.
@@ -246,13 +244,6 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `daemon`, `source`, and `pipewire` ok; the daemon stays active and logs
   `reconnect failed: connect timed out after 10s` per retry. The remote must
   be woken for the physical link.
-- Dedicated `F24` trigger (2026-10-30): daemon `trigger_key = "F24"`, vinput
-  `[TriggerKey] 0=Alt_R, 1=F24`; the operator confirmed the voice key starts
-  recording. A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2;
-  the `Control+Control_R` chord remains an alternative. `0.1.0-3` shipped
-  `DEFAULT_TRIGGER_KEY = "F24"`. Step 11 later changed the code default to
-  `DICTATE`; `F24` remains an explicit `trigger_key`, not a documented
-  fallback.
 - Step 11 real RC003 run (2026-10-30, `C0:5D:39:F8:2D:4C`): workspace
   `atvvd` with `trigger_key = "DICTATE"` grabbed `/dev/input/event25`, created
   `atvv-virtual-keyboard` with `KEY_DICTATE` (code 586), and a physical press

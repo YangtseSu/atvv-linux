@@ -143,8 +143,8 @@ the declared recording keys; until it exists, the one-time
 `1=Dictate`) is the correct layered setup.
 The earlier ATVV-side `SetCaptureDevice` push and the `vinput_device` policy
 are dropped (ADR 0007). D-Bus mode remains an opt-in fallback, not the
-zero-config default. The daemon trigger default is `DICTATE` (`KEY_DICTATE`),
-not `F24`; `F24` remains an explicit alternative. Evidence:
+zero-config default. The daemon trigger default is `DICTATE` (`KEY_DICTATE`);
+the declared set is `DICTATE`, `VOICECOMMAND`, `ASSISTANT`. Evidence:
 [`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md) and
 [ADR 0007](../decisions/0007-integration-direction.md).
 

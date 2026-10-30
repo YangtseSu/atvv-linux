@@ -14,9 +14,9 @@ migration makes `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolvable and
 emittable, and preserves discovery, grabbing, event delivery, gesture
 recognition, lost-node handling, and the synthetic trigger.
 
-The default synthetic trigger moved from `F24` to the dictation consumer key
-(`DICTATE`, evdev `0x24a`) by user direction on 2026-10-30. `F24` remains
-available as an explicit `trigger_key`; vinput keeps the user's own entries.
+The default synthetic trigger is the dictation consumer key (`DICTATE`, evdev
+`0x24a`), by user direction on 2026-10-30. vinput keeps the user's own
+entries.
 
 The decision and evidence are in
 [ADR 0006](../decisions/0006-evdevil-input-backend.md) and
@@ -56,10 +56,8 @@ The decision and evidence are in
   resolve to the expected codes, and that the uinput writer can emit them.
 - ✅ Document the fcitx5-vinput names (`VoiceCommand`, `Assistant`, `Dictate`)
   and the evdev/daemon names side by side.
-- ✅ Change `DEFAULT_TRIGGER_KEY` from `F24` to `DICTATE`; keep `F24`
-  configurable. vinput keeps the user's entries and adds `Dictate` at the next
-  free index; the live test config already had two entries, so the recorded
-  index was `2=`.
+- ✅ Change `DEFAULT_TRIGGER_KEY` to `DICTATE`. vinput keeps the user's
+  entries and adds `Dictate` at the next free index.
 - ✅ Update the plan index, research index, and handoff in the same commit.
 
 ## Verification
@@ -152,11 +150,9 @@ installed `0.1.0-3` unit was stopped for the run and restarted afterwards.
   `EventReader`, `UinputDevice`, sysfs node lookup, 0BSD allow-list, notices,
   and consumer-key regression tests. Workspace checks and both ignored uinput
   tests pass.
-- 2026-10-30 — user direction: the default trigger changes from `F24` to
-  `DICTATE`; vinput keeps `0=Alt_R` and `1=Assistant` and adds `2=Dictate`
-  (that live config already had two entries; a default install uses
-  `1=Dictate`). The daemon default is now `DEFAULT_TRIGGER_KEY = "DICTATE"`;
-  `F24` remains configurable, not a documented fallback.
+- 2026-10-30 — user direction: the default trigger is `DICTATE`; vinput keeps
+  the user's entries and adds `Dictate` at the next free index. The daemon
+  default is now `DEFAULT_TRIGGER_KEY = "DICTATE"`.
 - 2026-10-30 — real RC003 run: evdevil grabbed `/dev/input/event25`, emitted
   `KEY_DICTATE`, streamed 104 frames / 24,960 samples on a press, and
   fcitx5-vinput recorded from `atvv-miremote-rc003` at 16 kHz on the same
