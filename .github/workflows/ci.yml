@@ -19,10 +19,13 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libpipewire-0.3-dev libspa-0.2-dev libclang-dev dbus libdbus-1-dev pkg-config
+          sudo apt-get install -y \
+            libpipewire-0.3-dev libspa-0.2-dev libclang-dev dbus libdbus-1-dev \
+            pkg-config libgtk-4-dev libadwaita-1-dev librsvg2-dev xvfb
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: xvfb-run -a cargo test -p atvv-gui --test ui
 
   compliance:
     runs-on: ubuntu-26.04

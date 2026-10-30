@@ -9,12 +9,12 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–09 and 11–13 are complete.** The installed package is
+**Steps 01–09 and 11–14 are complete.** The installed package is
 `atvv-linux 0.1.0-5`, the user unit runs, and `atvvctl doctor` reports green
-on a real RC003. The step-13 tree builds as `atvv-linux 0.1.0-6`; install it
-to get `atvvctl config`, `capture`, and `map`. Step 10 (vinput zero-config)
-depends on an upstream consumer change; step 14 (GTK4 configuration app) is
-next.
+on a real RC003. The step-14 tree builds as `atvv-linux 0.1.0-7` with the
+optional `atvv-linux-gui` package; install it to get `atvv-config` plus the
+step-13 `atvvctl config`, `capture`, and `map` commands. Step 10 (vinput
+zero-config) depends on an upstream consumer change.
 
 The RC003 path and the fcitx5-vinput source path have both run on real system
 services.
@@ -48,6 +48,10 @@ Implemented:
   get|set`, `capture`, `map test`, `pair`, `record`, `monitor`, and `doctor`.
 - `atvv-mcp`: stdio MCP server with `status`, `contract`, `voice_start`,
   `voice_stop`, `voice_toggle`, `list_devices`, and `reload`.
+- `atvv-gui` / `atvv-config`: GTK4 + libadwaita configuration app with a
+  clickable remote diagram, per-slot action editor, keyboard and remote key
+  learning, test mode, and a script policy. It is a D-Bus client only; see
+  [`docs/gui.md`](docs/gui.md).
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run
@@ -60,7 +64,8 @@ installed-unit PipeWire restart).
 
 Requirements: Arch Linux, a systemd user session, PipeWire, BlueZ, and (for
 voice-key integration) fcitx5-vinput. The daemon is a user service; never run
-it as root.
+it as root. `atvv-linux-gui` additionally needs GTK4, libadwaita, and
+librsvg.
 
 ```sh
 git clone https://github.com/YangtseSu/atvv-linux.git
@@ -135,6 +140,7 @@ cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
 cargo run -q -p atvv-cli -- record --wav /tmp/rc003.wav --seconds 10
 cargo run -q -p atvv-cli -- monitor
 cargo run -q -p atvv-mcp
+cargo run -q -p atvv-gui
 ```
 
 ## Layout
@@ -148,7 +154,8 @@ crates/atvv-bluez/      BlueZ GATT transport and pairing agent
 crates/atvv-daemon/     atvvd session daemon, mock transport, D-Bus API
 crates/atvv-cli/        atvvctl diagnostics and D-Bus control
 crates/atvv-mcp/        stdio MCP server for agents
-packaging/              systemd user unit (step 09 installs it)
+crates/atvv-gui/        GTK4/libadwaita configuration app (atvv-config)
+packaging/              systemd user unit, GUI desktop metadata (step 09)
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
 docs/research/          landscape, protocol facts, reference snapshots

@@ -139,6 +139,16 @@ impl DaemonInterface {
         wait(result)
     }
 
+    /// Run one checked action once; used by the GUI test mode.
+    fn run_action(&self, action: &str) -> zbus::fdo::Result<()> {
+        let (reply, result) = mpsc::channel();
+        self.send(Command::RunAction {
+            action: action.to_string(),
+            reply,
+        })?;
+        wait(result)
+    }
+
     #[zbus(signal)]
     async fn state_changed(emitter: &SignalEmitter<'_>, state: &str) -> zbus::Result<()>;
 
@@ -275,6 +285,7 @@ pub trait DaemonApi {
     fn stop_voice(&self) -> zbus::Result<()>;
     fn toggle_voice(&self) -> zbus::Result<()>;
     fn reload_config(&self) -> zbus::Result<()>;
+    fn run_action(&self, action: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn state_changed(&self, state: &str) -> zbus::Result<()>;
@@ -362,6 +373,10 @@ impl Client {
 
     pub fn reload(&self) -> Result<(), ClientError> {
         Ok(self.proxy()?.reload_config()?)
+    }
+
+    pub fn run_action(&self, action: &str) -> Result<(), ClientError> {
+        Ok(self.proxy()?.run_action(action)?)
     }
 }
 

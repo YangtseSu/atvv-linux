@@ -1,9 +1,10 @@
 # Configuration
 
 `daemon.toml` is the single configuration file for `atvvd`. It is parsed and
-validated by the `atvv-config` crate; the daemon, `atvvctl`, and the future GUI
-never grow a second parser. The file is optional: a missing file means profile
-defaults.
+validated by the `atvv-config` crate; the daemon, `atvvctl`, and the GUI never
+grow a second parser. The GUI (`atvv-config`, see [gui.md](gui.md)) edits the
+document through `GetConfig`/`SetConfig` and never writes this file. The file
+is optional: a missing file means profile defaults.
 
 Location: `$XDG_CONFIG_HOME/atvv/daemon.toml`, or `~/.config/atvv/daemon.toml`.
 

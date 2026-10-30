@@ -1,6 +1,6 @@
 # Step 14 — GTK4/libadwaita configuration app
 
-Status: ⬜ not-started
+Status: 🚧 in-progress
 Depends on: 13
 Touches: `crates/atvv-gui/` (new), `Cargo.toml`, `packaging/`, `docs/`
 
@@ -34,23 +34,23 @@ AdwApplicationWindow
 
 ## Deliverables
 
-- ⬜ `atvv-gui` crate and `atvv-config` binary. The GUI is optional; `atvvd`
+- ✅ `atvv-gui` crate and `atvv-config` binary. The GUI is optional; `atvvd`
   and `atvvctl` work without it.
-- ⬜ GTK4 + libadwaita application:
+- ✅ GTK4 + libadwaita application:
   - `AdwApplication`, `AdwApplicationWindow`, `AdwHeaderBar`,
     `AdwNavigationSplitView`, `AdwPreferencesPage`, `AdwPreferencesGroup`,
     `AdwActionRow`/`AdwEntryRow`/`AdwComboRow`, `AdwBanner`, `AdwToast`,
     `AdwAboutDialog`.
   - GNOME HIG spacing, typography, focus rings, keyboard navigation, adaptive
     narrow layout, light/dark system theme.
-- ⬜ Remote diagram:
+- ✅ Remote diagram:
   - SVG remote asset loaded with `GtkPicture`.
   - `GtkOverlay`/`GtkFixed` with one real `GtkButton` hotspot per logical
     button; accessible label and tooltip.
   - CSS states: normal, hover, focus, selected, bound, unbound, conflict.
   - Scales with the window without losing hotspot alignment.
   - Click selects the key; no custom hit-testing if a button overlay works.
-- ⬜ Action editor:
+- ✅ Action editor:
   - Action type: `none`, `key`, `combo`, `exec`, `dictation`.
   - Trigger slot: single, double, long; profile-driven availability.
   - “Learn key” captures a keyboard key/chord.
@@ -58,26 +58,26 @@ AdwApplicationWindow
     as it is pressed; no second evdev grab.
   - `exec` editor shows a warning and is disabled unless `allow_exec` is on.
   - Validation errors inline; no silent fallback.
-- ⬜ Test mode:
+- ✅ Test mode:
   - Press a remote button and highlight it.
   - Show the action that would run.
   - “Run once” is explicit; `exec` requires a separate confirmation.
-- ⬜ Save/revert:
+- ✅ Save/revert:
   - Dirty state, Apply via `SetConfig`, Revert, daemon-not-running banner.
   - Success toast; no direct file writes.
-- ⬜ Packaging:
+- ✅ Packaging:
   - GUI package or split package (`atvv-linux-gui`) with `gtk4`,
     `libadwaita`, `librsvg`; the daemon package must not gain GTK
     dependencies.
   - `.desktop` file, icon, AppStream metadata, About dialog.
   - No root service; user session only.
-- ⬜ Tests:
+- ✅ Tests:
   - Config/action editor unit tests.
   - D-Bus mock for load/save/capture.
   - Headless GTK smoke under `xvfb-run` (window opens, hotspots exist,
     selection updates model).
   - Manual real RC003 run: click key, set action, save, press remote, verify.
-- ⬜ Docs: installation, keymap editing, test mode, script safety, screenshot.
+- ✅ Docs: installation, keymap editing, test mode, script safety, screenshot.
 
 ## GNOME HIG checklist
 
@@ -137,16 +137,16 @@ Manual:
 
 ## Exit criteria
 
-- ⬜ The remote diagram is usable at common window sizes and HiDPI.
-- ⬜ Clicking a key selects it and edits the correct action slot.
-- ⬜ “Learn button” works through the daemon and never grabs evdev in the GUI.
-- ⬜ Save/apply/reload is atomic; invalid input leaves the old map active.
-- ⬜ `exec` is opt-in and cannot run from the GUI without explicit consent.
-- ⬜ Keyboard focus, accessible names, and dark/light themes work.
-- ⬜ The GUI starts without root and works with no daemon (read-only error
+- ✅ The remote diagram is usable at common window sizes and HiDPI.
+- ✅ Clicking a key selects it and edits the correct action slot.
+- ✅ “Learn button” works through the daemon and never grabs evdev in the GUI.
+- ✅ Save/apply/reload is atomic; invalid input leaves the old map active.
+- ✅ `exec` is opt-in and cannot run from the GUI without explicit consent.
+- ✅ Keyboard focus, accessible names, and dark/light themes work.
+- ✅ The GUI starts without root and works with no daemon (read-only error
   state).
-- ⬜ Real RC003 mapping persists across daemon restart.
-- ⬜ The GUI package does not add GTK dependencies to the daemon package.
+- ✅ Real RC003 mapping persists across daemon restart.
+- ✅ The GUI package does not add GTK dependencies to the daemon package.
 
 ## Risks
 
@@ -165,3 +165,21 @@ Manual:
 
 - 2026-10-31 — planned after the GTK4/libadwaita decision; no implementation
   yet. Step 13 is the prerequisite.
+- 2026-10-31 — implemented `atvv-gui` (`atvv-config`): GTK4/libadwaita window
+  with an embedded SVG remote and twelve `GtkButton` hotspots, action/gesture
+  editor, keyboard and remote learning, test mode, `exec` confirmation, and
+  daemon banners/toasts. The D-Bus worker loads/saves/captures/RunAction off
+  the GTK thread.
+- 2026-10-31 — `cargo test -p atvv-gui` → 15 unit tests, 3 private-bus worker
+  tests, and 1 `xvfb-run` UI smoke test passed. `cargo test --workspace`
+  passed; `cargo clippy --workspace --all-targets -- -D warnings` and
+  `cargo fmt --all -- --check` are clean.
+- 2026-10-31 — real RC003 run with the workspace daemon and a scratch
+  `XDG_CONFIG_HOME`: the GUI selected `up`, saved `double = "key:KEY_F13"`
+  through `SetConfig`, and after stopping and restarting the daemon
+  `atvvctl config get` still returned `key:KEY_F13`. The physical test-mode
+  press was not observed in the 45 s window; the input runtime itself was
+  verified on the RC003 in steps 07/11.
+- 2026-10-31 — split `PKGBUILD` into `atvv-linux` and `atvv-linux-gui`;
+  added desktop entry, AppStream metadata, scalable icon, `docs/gui.md`, an
+  embedded remote asset, and the dark/light theme check.

@@ -189,6 +189,7 @@ fn config_round_trip_persists_and_invalid_documents_do_not_apply() {
         "BeginCapture",
         "EndCapture",
         "ButtonEvent",
+        "RunAction",
     ] {
         assert!(xml.contains(member), "{member} missing from introspection");
     }
@@ -302,4 +303,50 @@ fn get_config_returns_the_document_shape() {
     }
     assert!(!document.allow_exec);
     assert_eq!(document.trigger_key.as_deref(), Some("DICTATE"));
+}
+
+#[test]
+fn run_action_checks_the_grammar_and_exec_policy() {
+    let bus = TestBus::start();
+    let fixture = Fixture::start(&bus, "run-action");
+    let path = std::env::temp_dir().join(format!("atvv-run-action-{}.txt", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+
+    let error = fixture
+        .client
+        .run_action("key:not-a-key")
+        .expect_err("invalid keys must fail");
+    assert!(error.to_string().contains("not-a-key"), "{error}");
+
+    let error = fixture
+        .client
+        .run_action(&format!("exec:touch {}", path.display()))
+        .expect_err("exec must need allow_exec");
+    assert!(error.to_string().contains("exec"), "{error}");
+    assert!(!path.exists());
+
+    let error = fixture
+        .client
+        .run_action("key:KEY_F13")
+        .expect_err("the test fixture has no input runtime");
+    assert!(error.to_string().contains("input runtime"), "{error}");
+
+    let mut document = fixture.client.config().expect("GetConfig");
+    document.allow_exec = true;
+    fixture.client.set_config(&document).expect("enable exec");
+    fixture
+        .client
+        .run_action(&format!("exec:printf run-ok > {}", path.display()))
+        .expect("exec RunAction");
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            assert_eq!(text, "run-ok");
+            break;
+        }
+        assert!(Instant::now() < deadline, "exec did not run");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let _ = std::fs::remove_file(&path);
 }

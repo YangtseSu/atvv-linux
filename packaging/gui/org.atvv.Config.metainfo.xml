@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.atvv.Config</id>
+  <name>ATVV Remote</name>
+  <summary>Configure ATVV Bluetooth remote key mappings</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      ATVV Remote configures the button map of an ATVV v1.0 Bluetooth voice
+      remote. Click a key in the diagram, choose a gesture, and bind a key,
+      chord, dictation action, or command. Test mode highlights physical
+      presses and runs one action on request.
+    </p>
+    <p>
+      The app is a D-Bus client for atvvd. It does not grab input devices,
+      touch Bluetooth or PipeWire directly, or edit the configuration file.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.atvv.Config.desktop</launchable>
+  <provides>
+    <binary>atvv-config</binary>
+  </provides>
+  <categories>
+    <category>Settings</category>
+  </categories>
+  <url type="homepage">https://github.com/YangtseSu/atvv-linux</url>
+  <url type="bugtracker">https://github.com/YangtseSu/atvv-linux/issues</url>
+  <developer id="github.com.yangtsesu">
+    <name>Yangtse Su</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-31"/>
+  </releases>
+</component>

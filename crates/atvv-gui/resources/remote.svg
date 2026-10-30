@@ -1,0 +1,58 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 720" width="320" height="720">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#44484f"/>
+      <stop offset="1" stop-color="#2b2e33"/>
+    </linearGradient>
+    <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#636a74"/>
+      <stop offset="1" stop-color="#4b5159"/>
+    </linearGradient>
+  </defs>
+
+  <!-- body -->
+  <rect x="45" y="22" width="230" height="676" rx="38" fill="url(#body)" stroke="#6d737c" stroke-width="2"/>
+  <rect x="58" y="36" width="204" height="648" rx="28" fill="none" stroke="#22252a" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- TV -->
+  <rect x="64" y="44" width="52" height="48" rx="15" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <rect x="77" y="56" width="26" height="17" rx="2.5" fill="none" stroke="#dfe3e9" stroke-width="2"/>
+  <path d="M84 79 L86 73 M96 79 L94 73" fill="none" stroke="#dfe3e9" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- power -->
+  <rect x="204" y="44" width="52" height="48" rx="15" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <circle cx="230" cy="70" r="10" fill="none" stroke="#e9a19c" stroke-width="2.4"/>
+  <path d="M230 58 L230 69" stroke="#e9a19c" stroke-width="2.4" stroke-linecap="round"/>
+
+  <!-- D-pad -->
+  <circle cx="160" cy="300" r="96" fill="#35393f" stroke="#6d737c" stroke-width="2"/>
+  <circle cx="160" cy="300" r="66" fill="#2c2f34" stroke="#4b5159" stroke-width="1.5"/>
+  <path d="M160 219 L149 237 L171 237 Z" fill="#b8bec8"/>
+  <path d="M160 381 L149 363 L171 363 Z" fill="#b8bec8"/>
+  <path d="M79 300 L97 289 L97 311 Z" fill="#b8bec8"/>
+  <path d="M241 300 L223 289 L223 311 Z" fill="#b8bec8"/>
+  <circle cx="160" cy="300" r="42" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <circle cx="160" cy="300" r="19" fill="none" stroke="#dfe3e9" stroke-width="2"/>
+
+  <!-- back, home, menu -->
+  <rect x="72" y="444" width="52" height="52" rx="16" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <path d="M96 458 L84 470 L96 482 M84 470 L104 470" fill="none" stroke="#dfe3e9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="134" y="444" width="52" height="52" rx="16" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <path d="M160 458 L146 470 L150 470 L150 482 L170 482 L170 470 L174 470 Z" fill="none" stroke="#dfe3e9" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <rect x="196" y="444" width="52" height="52" rx="16" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <path d="M208 460 L236 460 M208 470 L236 470 M208 480 L236 480" fill="none" stroke="#dfe3e9" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- volume rocker -->
+  <rect x="54" y="536" width="42" height="118" rx="15" fill="url(#key)" stroke="#7d848e" stroke-width="1.5"/>
+  <path d="M54 595 L96 595" stroke="#3a3e45" stroke-width="1.5"/>
+  <path d="M67 562 L83 562 M75 554 L75 570" stroke="#dfe3e9" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M67 618 L83 618" stroke="#dfe3e9" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- voice key -->
+  <circle cx="160" cy="598" r="48" fill="#a94f4c" stroke="#d08b87" stroke-width="2"/>
+  <rect x="152" y="576" width="16" height="28" rx="8" fill="#f4dcd9"/>
+  <path d="M145 600 A15 15 0 0 0 175 600 M160 615 L160 623 M151 623 L169 623" fill="none" stroke="#f4dcd9" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

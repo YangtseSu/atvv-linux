@@ -8,3 +8,8 @@ path = ["**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Yangtse Su"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["packaging/gui/org.atvv.Config.metainfo.xml"]
+SPDX-FileCopyrightText = "2026 Yangtse Su"
+SPDX-License-Identifier = "CC0-1.0"

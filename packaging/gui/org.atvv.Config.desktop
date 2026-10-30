@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=ATVV Remote
+Comment=Configure ATVV remote button mappings
+Exec=atvv-config
+Icon=org.atvv.Config
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=remote;voice;atvv;bluetooth;keymap;
+StartupNotify=true

@@ -9,6 +9,7 @@ members = [
     "crates/atvv-daemon",
     "crates/atvv-cli",
     "crates/atvv-mcp",
+    "crates/atvv-gui",
 ]
 
 [workspace.package]

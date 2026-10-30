@@ -41,7 +41,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
-| F — Configuration | 13–14 | 13 **done**: persistent keymap, live config API, capture; 14 planned: GTK4/libadwaita GNOME-HIG app |
+| F — Configuration | 13–14 | 13 **done**: persistent keymap, live config API, capture; 14 **in progress**: GTK4/libadwaita GNOME-HIG app implemented, physical test-mode press pending |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -64,7 +64,7 @@ on approval/upstream; steps 11–13 are complete.
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 |
-| 14 | F | [config-gui](14-config-gui.md) | ⬜ not-started | 13 |
+| 14 | F | [config-gui](14-config-gui.md) | 🚧 in-progress | 13 |
 
 ## Architecture contract
 
@@ -119,7 +119,8 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 ## Current state — 2026-10-31
 
-Steps 01–09 and 11–13 are complete. Step 07 ran on a real RC003
+Steps 01–09 and 11–14 are implemented; step 14 awaits a recorded physical
+test-mode press. Step 07 ran on a real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire
@@ -190,9 +191,21 @@ of the three keys is deferred.
 Step 13 is complete: `atvv-config` is the single schema parser; per-button
 mappings, gesture overrides, `exec:` opt-in, and live D-Bus
 `GetConfig`/`SetConfig`/capture are implemented and verified with the fake
-remote. Step 14 (GTK4/libadwaita app) is next. Step 10 remains blocked on
-upstream review. The GUI decision is recorded in
-[ADR 0008](../decisions/0008-gui-toolkit.md).
+remote.
+
+Step 14 is implemented: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
+client with an embedded SVG remote diagram, twelve accessible hotspots, a
+per-slot action editor, keyboard and remote learning, test mode with an
+explicit Run once, `exec` confirmation, banners/toasts, and a daemon-unavailable
+state. `RunAction` was added to `org.atvv.Daemon` for test mode. The worker
+tests use a private bus and the real daemon service; a headless `xvfb-run`
+test drives the window. A real RC003 run saved a mapping through the GUI and
+verified it after a daemon restart. The physical test-mode press is still
+open. Packaging is a split `atvv-linux-gui` package with desktop entry,
+AppStream metadata, icon, and GTK runtime dependencies kept out of
+`atvv-linux`. The GUI decision is recorded in
+[ADR 0008](../decisions/0008-gui-toolkit.md). Step 10 remains blocked on
+upstream review.
 
 ## Backlog after 14
 

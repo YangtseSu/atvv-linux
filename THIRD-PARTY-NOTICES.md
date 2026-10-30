@@ -36,6 +36,8 @@ and must be refreshed when `Cargo.lock` changes.
 | `bluer` | 0.17.4 | BSD-2-Clause | https://github.com/bluez/bluer |
 | `bumpalo` | 3.20.3 | MIT OR Apache-2.0 | https://github.com/fitzgen/bumpalo |
 | `bytes` | 1.12.1 | MIT | https://github.com/tokio-rs/bytes |
+| `cairo-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `cairo-sys-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `cc` | 1.10.0 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | `cexpr` | 0.6.0 | Apache-2.0/MIT | https://github.com/jethrogb/rust-cexpr |
 | `cfg-expr` | 0.20.10 | MIT OR Apache-2.0 | https://github.com/EmbarkStudios/cfg-expr |
@@ -72,6 +74,7 @@ and must be refreshed when `Cargo.lock` changes.
 | `event-listener` | 5.4.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener |
 | `event-listener-strategy` | 0.5.4 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener-strategy |
 | `fastrand` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/fastrand |
+| `field-offset` | 0.3.6 | MIT OR Apache-2.0 | https://github.com/Diggsey/rust-field-offset |
 | `find-msvc-tools` | 0.1.15 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | `fnv` | 1.0.7 | Apache-2.0 / MIT | https://github.com/servo/rust-fnv |
 | `futures` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
@@ -84,8 +87,25 @@ and must be refreshed when `Cargo.lock` changes.
 | `futures-sink` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-task` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
+| `gdk-pixbuf` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gdk-pixbuf-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gdk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gdk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
 | `getrandom` | 0.4.3 | MIT OR Apache-2.0 | https://github.com/rust-random/getrandom |
+| `gio` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gio-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib-macros` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `glob` | 0.3.4 | MIT OR Apache-2.0 | https://github.com/rust-lang/glob |
+| `gobject-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `graphene-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `graphene-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gsk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gsk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4-macros` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
 | `hashbrown` | 0.17.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | `heck` | 0.5.0 | MIT OR Apache-2.0 | https://github.com/withoutboats/heck |
 | `hermit-abi` | 0.5.3 | MIT OR Apache-2.0 | https://github.com/hermit-os/hermit-rs |
@@ -97,6 +117,8 @@ and must be refreshed when `Cargo.lock` changes.
 | `itoa` | 1.0.18 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
 | `js-sys` | 0.3.106 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys |
 | `lazy_static` | 1.5.1 | MIT OR Apache-2.0 | https://github.com/rust-lang-nursery/lazy-static.rs |
+| `libadwaita` | 0.8.1 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
+| `libadwaita-sys` | 0.8.1 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
 | `libc` | 0.2.191 | MIT OR Apache-2.0 | https://github.com/rust-lang/libc |
 | `libdbus-sys` | 0.2.7 | Apache-2.0/MIT | https://github.com/diwic/dbus-rs |
 | `libloading` | 0.8.9 | ISC | https://github.com/nagisa/rust_libloading/ |
@@ -117,6 +139,8 @@ and must be refreshed when `Cargo.lock` changes.
 | `once_cell` | 1.21.4 | MIT OR Apache-2.0 | https://github.com/matklad/once_cell |
 | `once_cell_polyfill` | 1.70.2 | MIT OR Apache-2.0 | https://github.com/polyfill-rs/once_cell_polyfill |
 | `ordered-stream` | 0.2.0 | MIT OR Apache-2.0 | https://github.com/danieldg/ordered-stream |
+| `pango` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `pango-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `parking` | 2.2.1 | Apache-2.0 OR MIT | https://github.com/smol-rs/parking |
 | `pin-project` | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
 | `pin-project-internal` | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
@@ -135,8 +159,10 @@ and must be refreshed when `Cargo.lock` changes.
 | `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | `roff` | 1.1.1 | MIT OR Apache-2.0 | https://github.com/rust-cli/roff-rs |
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT | https://github.com/rust-lang/rustc-hash |
+| `rustc_version` | 0.4.1 | MIT OR Apache-2.0 | https://github.com/djc/rustc-version-rs |
 | `rustix` | 1.1.6 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/rustix |
 | `rustversion` | 1.0.23 | MIT OR Apache-2.0 | https://github.com/dtolnay/rustversion |
+| `semver` | 1.0.28 | MIT OR Apache-2.0 | https://github.com/dtolnay/semver |
 | `serde` | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
 | `serde_core` | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
 | `serde_derive` | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |

@@ -44,6 +44,11 @@ pub enum Command {
         json: String,
         reply: Sender<Result<(), String>>,
     },
+    /// Run one checked action once (GUI test mode).
+    RunAction {
+        action: String,
+        reply: Sender<Result<(), String>>,
+    },
     Shutdown,
 }
 
@@ -644,9 +649,55 @@ impl Daemon {
                 }
                 let _ = reply.send(result);
             }
+            Command::RunAction { action, reply } => {
+                let result = self.run_action(&action);
+                let failed = result.as_ref().err().cloned();
+                if let Some(error) = failed {
+                    self.last_error = Some(format!("run action: {error}"));
+                    self.trace(format!("run action failed: {error}"));
+                }
+                let _ = reply.send(result);
+            }
         }
         self.publish_status();
         false
+    }
+
+    /// Execute one already-checked action for the GUI's test mode.
+    ///
+    /// Key and chord actions use the running input runtime, `exec` enters the
+    /// serial command worker, and dictation drives the ATVV session. The GUI
+    /// never emits keys or runs commands itself.
+    fn run_action(&mut self, raw: &str) -> Result<(), String> {
+        let action = atvv_config::parse_checked_action(raw, self.config.allow_exec)
+            .map_err(|error| error.to_string())?;
+        self.trace(format!("run action {action}"));
+        match action {
+            Action::None => Ok(()),
+            Action::Key { .. } | Action::Combo { .. } => self
+                .input
+                .as_ref()
+                .ok_or_else(|| "the input runtime is not available".to_string())?
+                .tap_action(&action),
+            Action::Exec { command } => {
+                self.run_exec(&command);
+                Ok(())
+            }
+            Action::Dictation(mode) => {
+                match mode {
+                    DictationMode::Start => self.request_voice(true),
+                    DictationMode::Stop => self.request_voice(false),
+                    DictationMode::Toggle => {
+                        let active = matches!(
+                            self.session.state(),
+                            SessionState::Opening | SessionState::Streaming
+                        );
+                        self.request_voice(!active);
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 
     fn request_voice(&mut self, start: bool) {

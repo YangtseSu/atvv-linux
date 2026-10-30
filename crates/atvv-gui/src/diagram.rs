@@ -1,0 +1,328 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Remote diagram: the SVG picture plus one real `GtkButton` per hotspot.
+//!
+//! Hotspot positions are fractions of the SVG view box, so the buttons and the
+//! picture share one coordinate system. `GtkAspectFrame` keeps the picture at
+//! the view-box ratio; a size change only recomputes the scaled rectangles.
+
+use std::collections::BTreeMap;
+
+use atvv_protocol::profile::RemoteButton;
+use gtk::prelude::*;
+use gtk::{gdk, glib};
+
+use crate::model::button_label;
+
+const VIEWBOX_WIDTH: f64 = 320.0;
+const VIEWBOX_HEIGHT: f64 = 720.0;
+
+#[derive(Debug, Clone, Copy)]
+struct Hotspot {
+    button: RemoteButton,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+const HOTSPOTS: [Hotspot; 12] = [
+    Hotspot {
+        button: RemoteButton::Power,
+        x: 0.6375,
+        y: 0.061111,
+        width: 0.1625,
+        height: 0.066667,
+    },
+    Hotspot {
+        button: RemoteButton::Tv,
+        x: 0.2,
+        y: 0.061111,
+        width: 0.1625,
+        height: 0.066667,
+    },
+    Hotspot {
+        button: RemoteButton::Up,
+        x: 0.40625,
+        y: 0.270833,
+        width: 0.1875,
+        height: 0.083333,
+    },
+    Hotspot {
+        button: RemoteButton::Down,
+        x: 0.40625,
+        y: 0.479167,
+        width: 0.1875,
+        height: 0.083333,
+    },
+    Hotspot {
+        button: RemoteButton::Left,
+        x: 0.2,
+        y: 0.375,
+        width: 0.1875,
+        height: 0.083333,
+    },
+    Hotspot {
+        button: RemoteButton::Right,
+        x: 0.6125,
+        y: 0.375,
+        width: 0.1875,
+        height: 0.083333,
+    },
+    Hotspot {
+        button: RemoteButton::Ok,
+        x: 0.40625,
+        y: 0.375,
+        width: 0.1875,
+        height: 0.083333,
+    },
+    Hotspot {
+        button: RemoteButton::Back,
+        x: 0.225,
+        y: 0.616667,
+        width: 0.1625,
+        height: 0.072222,
+    },
+    Hotspot {
+        button: RemoteButton::Home,
+        x: 0.41875,
+        y: 0.616667,
+        width: 0.1625,
+        height: 0.072222,
+    },
+    Hotspot {
+        button: RemoteButton::Menu,
+        x: 0.6125,
+        y: 0.616667,
+        width: 0.1625,
+        height: 0.072222,
+    },
+    Hotspot {
+        button: RemoteButton::VolumeUp,
+        x: 0.16875,
+        y: 0.744444,
+        width: 0.13125,
+        height: 0.080556,
+    },
+    Hotspot {
+        button: RemoteButton::VolumeDown,
+        x: 0.16875,
+        y: 0.827778,
+        width: 0.13125,
+        height: 0.080556,
+    },
+];
+
+const HOTSPOT_CSS: [&str; 12] = [
+    "hotspot-power",
+    "hotspot-tv",
+    "hotspot-up",
+    "hotspot-down",
+    "hotspot-left",
+    "hotspot-right",
+    "hotspot-ok",
+    "hotspot-back",
+    "hotspot-home",
+    "hotspot-menu",
+    "hotspot-volume-up",
+    "hotspot-volume-down",
+];
+
+/// Callback type for a hotspot click.
+pub type SelectHandler = Box<dyn Fn(RemoteButton)>;
+
+pub struct RemoteDiagram {
+    root: gtk::AspectFrame,
+    fixed: gtk::Fixed,
+    buttons: BTreeMap<RemoteButton, gtk::Button>,
+}
+
+impl RemoteDiagram {
+    #[must_use]
+    pub fn new() -> Self {
+        let root = gtk::AspectFrame::builder()
+            .ratio((VIEWBOX_WIDTH / VIEWBOX_HEIGHT) as f32)
+            .obey_child(false)
+            .hexpand(true)
+            .vexpand(true)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .width_request(220)
+            .build();
+
+        let overlay = gtk::Overlay::new();
+        overlay.set_hexpand(true);
+        overlay.set_vexpand(true);
+
+        let canvas = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        canvas.add_css_class("remote-canvas");
+        canvas.set_hexpand(true);
+        canvas.set_vexpand(true);
+
+        match texture() {
+            Some(texture) => {
+                let picture = gtk::Picture::for_paintable(&texture);
+                picture.set_content_fit(gtk::ContentFit::Contain);
+                picture.set_can_shrink(true);
+                picture.set_hexpand(true);
+                picture.set_vexpand(true);
+                canvas.append(&picture);
+            }
+            None => {
+                let label = gtk::Label::new(Some("Remote diagram unavailable"));
+                label.add_css_class("dim-label");
+                label.set_hexpand(true);
+                label.set_vexpand(true);
+                canvas.append(&label);
+            }
+        }
+        overlay.set_child(Some(&canvas));
+
+        let fixed = gtk::Fixed::new();
+        fixed.set_hexpand(true);
+        fixed.set_vexpand(true);
+        overlay.add_overlay(&fixed);
+        root.set_child(Some(&overlay));
+
+        let mut buttons = BTreeMap::new();
+        for (index, hotspot) in HOTSPOTS.iter().enumerate() {
+            let label = button_label(hotspot.button);
+            let button = gtk::Button::builder()
+                .has_frame(false)
+                .focusable(true)
+                .tooltip_text(format!("{label}: click to edit"))
+                .build();
+            button.add_css_class("remote-hotspot");
+            button.add_css_class(HOTSPOT_CSS[index]);
+            button.set_widget_name(&format!("hotspot-{}", hotspot.button.name()));
+            button.update_property(&[gtk::accessible::Property::Label(&format!("{label} key"))]);
+            fixed.put(&button, 0.0, 0.0);
+            buttons.insert(hotspot.button, button);
+        }
+
+        let layout_buttons = buttons.clone();
+        let update = move |fixed: &gtk::Fixed| {
+            let width = f64::from(fixed.width());
+            let height = f64::from(fixed.height());
+            if width <= 0.0 || height <= 0.0 {
+                return;
+            }
+            for hotspot in HOTSPOTS {
+                let Some(button) = layout_buttons.get(&hotspot.button) else {
+                    continue;
+                };
+                let x = (hotspot.x * width).round();
+                let y = (hotspot.y * height).round();
+                let w = (hotspot.width * width).round().max(18.0);
+                let h = (hotspot.height * height).round().max(18.0);
+                button.set_size_request(w as i32, h as i32);
+                fixed.move_(button, x, y);
+            }
+        };
+        let update = std::rc::Rc::new(update);
+        for property in ["width", "height"] {
+            let update = update.clone();
+            fixed.connect_notify_local(Some(property), move |fixed, _| {
+                update(fixed);
+            });
+        }
+        let update_map = update.clone();
+        fixed.connect_map(move |fixed| update_map(fixed));
+
+        Self {
+            root,
+            fixed,
+            buttons,
+        }
+    }
+
+    #[must_use]
+    pub fn root(&self) -> &gtk::AspectFrame {
+        &self.root
+    }
+
+    #[must_use]
+    pub fn fixed(&self) -> &gtk::Fixed {
+        &self.fixed
+    }
+
+    #[must_use]
+    pub fn button(&self, button: RemoteButton) -> Option<&gtk::Button> {
+        self.buttons.get(&button)
+    }
+
+    /// Connect every hotspot; the handler runs on the GTK main thread.
+    pub fn connect_selected<F: Fn(RemoteButton) + 'static>(&self, handler: F) {
+        let handler = std::rc::Rc::new(handler);
+        for (button, widget) in &self.buttons {
+            let handler = handler.clone();
+            let button = *button;
+            widget.connect_clicked(move |_| handler(button));
+        }
+    }
+
+    /// Refresh the visual state classes from the model.
+    pub fn refresh(&self, model: &crate::model::GuiModel, pressed: Option<RemoteButton>) {
+        let conflicts = model.conflicts();
+        for (button, widget) in &self.buttons {
+            for class in ["selected", "bound", "unbound", "conflict", "pressed"] {
+                widget.remove_css_class(class);
+            }
+            if *button == model.selected {
+                widget.add_css_class("selected");
+            }
+            if conflicts.contains(button) {
+                widget.add_css_class("conflict");
+            } else if model.is_bound(*button) {
+                widget.add_css_class("bound");
+            } else {
+                widget.add_css_class("unbound");
+            }
+            if pressed == Some(*button) {
+                widget.add_css_class("pressed");
+            }
+            widget.update_property(&[gtk::accessible::Property::Label(&format!(
+                "{} key{}",
+                button_label(*button),
+                if conflicts.contains(button) {
+                    ", conflicting action"
+                } else {
+                    ""
+                }
+            ))]);
+        }
+    }
+}
+
+impl Default for RemoteDiagram {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Decode the embedded SVG through GDK's texture loader.
+fn texture() -> Option<gdk::Texture> {
+    let bytes = glib::Bytes::from_static(include_bytes!("../resources/remote.svg"));
+    gdk::Texture::from_bytes(&bytes).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hotspots_cover_every_logical_button_inside_the_view_box() {
+        let mut seen = std::collections::BTreeSet::new();
+        for hotspot in HOTSPOTS {
+            assert!(seen.insert(hotspot.button), "duplicate {}", hotspot.button);
+            assert!((0.0..=1.0).contains(&hotspot.x));
+            assert!((0.0..=1.0).contains(&hotspot.y));
+            assert!(hotspot.x + hotspot.width <= 1.0 + f64::EPSILON);
+            assert!(hotspot.y + hotspot.height <= 1.0 + f64::EPSILON);
+        }
+        for button in RemoteButton::LOGICAL {
+            assert!(seen.contains(&button), "{button} has no hotspot");
+        }
+        assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
+    }
+}

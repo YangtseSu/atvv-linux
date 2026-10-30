@@ -1,0 +1,30 @@
+[package]
+name = "atvv-gui"
+description = "Org.atvv.Config: GTK4/libadwaita configuration app for atvv-linux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "atvv-config"
+path = "src/main.rs"
+
+[lib]
+name = "atvv_gui"
+path = "src/lib.rs"
+
+[dependencies]
+atvv-config = { path = "../atvv-config" }
+atvv-input = { path = "../atvv-input" }
+atvv-protocol = { path = "../atvv-protocol" }
+gtk = { package = "gtk4", version = "0.10", features = ["v4_10"] }
+libadwaita = { version = "0.8", features = ["v1_5"] }
+serde.workspace = true
+serde_json.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+atvv-daemon = { path = "../atvv-daemon" }

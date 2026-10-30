@@ -7,9 +7,9 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 144 passed, 3 ignored tests (two
-  kernel-uinput input tests and one fake-remote live-map test; all three pass
-  with `/dev/uinput` access).
+- Tests: `cargo test --workspace` → 164 passed, 4 ignored tests (two
+  kernel-uinput input tests, one fake-remote live-map test, and the new
+  real-device GUI test; the first three pass with `/dev/uinput` access).
 
 ## Read first
 
@@ -113,6 +113,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   refuses to run as root. The fake-remote test changed `up` to `KEY_F13` live
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
+- **14 configuration GUI (implemented; physical test-mode press pending)**:
+  `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
+  embedded SVG remote diagram, twelve accessible `GtkButton` hotspots, the
+  single/double/long action editor, keyboard and remote learning, test mode,
+  `exec` confirmation, banners/toasts, and a daemon-unavailable state.
+  `RunAction` was added to `org.atvv.Daemon` for test mode. Split packaging is
+  implemented (`atvv-linux-gui` with desktop entry, AppStream metadata, icon,
+  and GTK runtime dependencies). Worker tests run against the real daemon
+  service on a private bus; a headless `xvfb-run` test drives the window; a
+  real RC003 run saved `key:KEY_F13` for `up/double` through the GUI and the
+  mapping survived a daemon restart. See `docs/gui.md` and
+  `docs/plans/14-config-gui.md`.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -137,9 +149,10 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **14 GTK4 configuration GUI (planned)**: `atvv-gui`/`atvv-config`, remote
-  diagram with clickable hotspots, action editor, live key learning, test
-  mode, and GNOME HIG. Depends on step 13.
+- **14 GTK4 configuration GUI (in progress)**: all deliverables are
+  implemented. The only open item is a recorded physical test-mode press on
+  the real RC003; the daemon's input runtime itself is verified by steps 07
+  and 11. The `atvv-linux-gui` package is not built/installed yet.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -178,6 +191,13 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   addresses; `StartVoice`, `StopVoice`, `ToggleVoice`, `ReloadConfig`;
   signals `StateChanged(s)`, `VoiceStarted()`, `VoiceStopped()`, and
   `ButtonEvent(s,s,b)`. Protocol structs do not cross D-Bus.
+- GUI: `atvv-gui` is a separate GTK4/libadwaita D-Bus client (`atvv-config`,
+  `org.atvv.Config`). It uses `GetConfig`/`SetConfig`,
+  `BeginCapture`/`EndCapture`, and `RunAction`; it never writes
+  `daemon.toml`, grabs evdev, or touches BlueZ/PipeWire. `RunAction` parses a
+  checked action and runs key/chord through the input runtime, `exec` through
+  the serial worker, and dictation through the session. The daemon package
+  stays GTK-free; `atvv-linux-gui` is a split package.
 - Config: `$XDG_CONFIG_HOME/atvv/daemon.toml`; missing file = defaults;
   invalid file is reported by `ReloadConfig` and `atvvctl doctor`.
   `atvv-config` is the only parser. A slot that is absent means "profile
@@ -373,17 +393,20 @@ active; the step-13 tree is built as `atvv-linux 0.1.0-6` in
 `packaging/arch/` but is not installed. Install it with `pacman -U` when the
 new commands should be available system-wide.
 
-**Step 14 GTK4/libadwaita GUI is next.** It depends on step 13 and reads
-`docs/plans/14-config-gui.md`; the toolkit decision is ADR 0008. The GUI is a
-separate D-Bus client: it must use `GetConfig`/`SetConfig` and
-`BeginCapture`/`EndCapture`, never write `daemon.toml` or grab evdev.
+**Step 14 GTK4/libadwaita GUI is implemented and awaiting the physical
+test-mode press.** Build and install `atvv-linux 0.1.0-7` plus
+`atvv-linux-gui`, then record one real RC003 press in Test mode. The GUI is a
+separate D-Bus client: it uses `GetConfig`/`SetConfig`,
+`BeginCapture`/`EndCapture`, and `RunAction`; it never writes `daemon.toml` or
+grabs evdev. See `docs/gui.md`.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: start step 14. In parallel, wait for upstream review on PR
+Immediate action: record the physical test-mode press, then mark step 14 done
+and install the split package. In parallel, wait for upstream review on PR
 #493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
 vinput, and record the real auto-bind acceptance.
 
@@ -421,6 +444,10 @@ cargo run -q -p atvv-cli -- capture --timeout 10
 cargo run -q -p atvv-cli -- map test --button up --trigger single
 cargo run -q -p atvv-cli -- map test --action "combo:ctrl+alt+v"
 cargo run -q -p atvv-cli -- doctor
+cargo test -p atvv-gui
+xvfb-run -a cargo test -p atvv-gui --test ui
+cargo test -p atvv-gui --test real_run -- --ignored
+cargo run -q -p atvv-gui
 cargo run -q -p atvv-cli -- pair C0:5D:39:F8:2D:4C
 cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
 cargo run -q -p atvv-daemon -- --verbose   # device from daemon.toml

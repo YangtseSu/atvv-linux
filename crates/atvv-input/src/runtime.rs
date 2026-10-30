@@ -477,6 +477,20 @@ impl InputRuntime {
     pub fn try_recv(&self) -> Result<RemoteEvent, mpsc::TryRecvError> {
         self.events.try_recv()
     }
+
+    /// Emit one mapped key or chord once; used by the test-mode `RunAction`.
+    ///
+    /// `none`, `exec:`, and `dictation:` are not key programs and are
+    /// rejected here; the daemon handles those actions itself.
+    pub fn tap_action(&self, action: &Action) -> Result<(), String> {
+        let program = KeyResolver
+            .program(action)
+            .map_err(|error| error.to_string())?;
+        match &self.vkbd {
+            Some(keyboard) => keyboard.tap(&program).map_err(|error| error.to_string()),
+            None => Err("the virtual keyboard is unavailable".to_string()),
+        }
+    }
 }
 
 impl Drop for InputRuntime {
