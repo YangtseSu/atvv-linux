@@ -231,7 +231,8 @@ impl AppWindow {
         sidebar_content.set_margin_end(18);
         sidebar_content.append(diagram.root());
         let legend = gtk::Label::new(Some(
-            "Click a key to edit it. Dashed: no action. Amber: conflicting action.",
+            "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
+             The top-right voice key drives the microphone and is not remappable.",
         ));
         legend.add_css_class("caption");
         legend.add_css_class("dim-label");

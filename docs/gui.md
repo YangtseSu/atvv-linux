@@ -25,9 +25,12 @@ scriptable surface.
 
 ## Window
 
-- **Remote diagram**: one real button per logical key. Click a key to edit it;
-  the outline shows bound (solid), unbound (dashed), and conflicting (amber)
-  mappings. The selected key uses the system accent color.
+- **Remote diagram**: one real button per logical key, drawn as the RC003
+  layout: power and voice at the top, a circular D-pad, back/home/menu on the
+  left, and the volume rocker plus TV on the right. The top-right voice key is
+  not remappable. Click a key to edit it; the outline shows bound (solid),
+  unbound (dashed), and conflicting (amber) mappings. The selected key uses
+  the system accent color.
 - **Selected key**: shows the current key and gesture. *Learn…* starts the
   daemon's capture mode and selects the physical remote key that is pressed.
 - **Action**: type, value, and dictation controls for the selected slot.

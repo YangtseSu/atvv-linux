@@ -11,7 +11,7 @@ license=('GPL-3.0-or-later')
 depends=('pipewire' 'bluez' 'dbus')
 makedepends=('clang' 'pkgconf' 'rust' 'dbus' 'gtk4' 'libadwaita')
 source=("$pkgbase-$pkgver.tar.gz")
-sha256sums=('712e678203e294e98c71bbfd6816d72409f30ff7f050bf57f897533da57469a0')
+sha256sums=('04ef3e3f5eb40a1927ba4fab5fc676079d13d46eba087c6de5496438b9ea4105')
 
 prepare() {
   cd "$pkgbase-$pkgver"

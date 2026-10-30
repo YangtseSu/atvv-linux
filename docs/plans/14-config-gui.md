@@ -195,3 +195,9 @@ Manual:
 - 2026-10-31 — a second real Test-mode window (45 s) again saw no physical
   press; the remote was idle. Save/persistence and the daemon capture API are
   verified, but step 14 stays in progress until one press is recorded.
+- 2026-10-31 — replaced the placeholder diagram with an original vector
+  illustration of the real RC003 layout: power and voice at the top, the
+  circular D-pad, back/home/menu on the left, and the volume rocker plus TV on
+  the right. The voice key is drawn but is not a hotspot. Hotspot coordinates
+  were moved to match; the UI smoke test, screenshot, icon, and legend were
+  refreshed.

@@ -129,7 +129,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   active.
 - **14 configuration GUI (implemented; physical test-mode press pending)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
-  embedded SVG remote diagram, twelve accessible `GtkButton` hotspots, the
+  embedded SVG remote diagram matching the RC003 layout (power/voice at the
+  top, circular D-pad, back/home/menu left, volume/TV right; the voice key is
+  not a hotspot), twelve accessible `GtkButton` hotspots, the
   single/double/long action editor, keyboard and remote learning, test mode,
   `exec` confirmation, banners/toasts, and a daemon-unavailable state.
   `RunAction` was added to `org.atvv.Daemon` for test mode. Split packaging is
