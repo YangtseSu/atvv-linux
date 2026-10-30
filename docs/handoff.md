@@ -114,16 +114,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
 - **0.1.0-7 packages (built, staged, not installed)**: the step-14 tree
-  (`a835c07`) produced the split `atvv-linux 0.1.0-7` (6.2 MiB; package
-  sha256 `7b4d8e50ed0c453fe416f5561d058db8ca29fa5307a99a2af93cd41df6063db0`)
+  (`9f26f68`) produced the split `atvv-linux 0.1.0-7` (6.2 MiB; package
+  sha256 `6429d0658fe41acaa345af7221e3f6f1b921302cc97933da4521c31d29e01699`)
   and `atvv-linux-gui 0.1.0-7` (1.3 MiB; package sha256
-  `54e0d573569817106ed27652dcdf5db4425862e112a1d66ec8e180ec2bd5f666`) from
+  `5e1c5834e4c71bcf406a33b0814ecb66a92f3c762a83bfd27af881348b0b0691`) from
   source tarball sha256
-  `712e678203e294e98c71bbfd6816d72409f30ff7f050bf57f897533da57469a0`.
+  `04ef3e3f5eb40a1927ba4fab5fc676079d13d46eba087c6de5496438b9ea4105`.
   The base package keeps `pipewire`/`bluez`/`dbus` dependencies and the GUI
   package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux`. The packaged
   `atvv-config` launches under Xvfb with the packaged `atvvd --mock` and
-  renders the embedded diagram. `namcap` reports only the expected implicit
+  renders the embedded diagram, which now mirrors the real RC003 layout
+  (power/voice top, circular D-pad, back/home/menu left, volume/TV right).
+  `namcap` reports only the expected implicit
   libraries and runtime-service notes. `pacman -U` needs the operator's
   password, so the packages are not installed; `atvv-linux 0.1.0-6` remains
   active.

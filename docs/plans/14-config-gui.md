@@ -184,8 +184,8 @@ Manual:
   added desktop entry, AppStream metadata, scalable icon, `docs/gui.md`, an
   embedded remote asset, and the dark/light theme check.
 - 2026-10-31 — `makepkg -f` produced `atvv-linux 0.1.0-7` (6.2 MiB, sha256
-  `7b4d8e50…6063db0`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
-  `54e0d573…d5f666`) from source tarball `712e6782…7469a0`. The base package
+  `6429d065…e01699`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
+  `5e1c5834…b0691`) from source tarball `04ef3e3f…ea4105`. The base package
   still depends only on `pipewire`, `bluez`, and `dbus`; the GUI package adds
   `gtk4`, `libadwaita`, `librsvg`, and `atvv-linux`. Extracted packages were
   run under Xvfb with `atvvd --mock`; the packaged `atvv-config` renders the
@@ -201,3 +201,6 @@ Manual:
   the right. The voice key is drawn but is not a hotspot. Hotspot coordinates
   were moved to match; the UI smoke test, screenshot, icon, and legend were
   refreshed.
+- 2026-10-31 — rebuilt `0.1.0-7` after the diagram fix; the staged package
+  now renders the RC003 layout. The third physical Test-mode window (45 s)
+  also saw no key event; the operator was not at the remote.
