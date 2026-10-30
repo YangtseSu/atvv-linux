@@ -313,11 +313,9 @@ ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). Issues #491 and #492
 are open; no PR is submitted. `vinput = "trigger"` stays the default;
 `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: approve pushing the three local vinput branches and creating
-the three draft PRs. Issues #491 and #492 are already open; the fork
-`YangtseSu/fcitx5-vinput` has the patches locally, but nothing has been pushed
-and no PR exists. After upstream review/merge, rebuild vinput and record the
-real auto-bind acceptance.
+Immediate action: wait for upstream review on PR #493; after it merges, rebase
+PR #494 onto `main`, then PR #495, rebuild vinput, and record the real
+auto-bind acceptance. No local publication work remains.
 
 ## Commands
 

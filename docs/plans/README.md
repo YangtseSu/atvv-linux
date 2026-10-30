@@ -142,9 +142,12 @@ Issues
 [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. Local
 consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three stacked
 issue-named branches (auto selection, recording-key metadata, and `device use`
-binding); nothing is pushed and no PR exists. The manual `device use` plus
-`Dictate` path is verified; automatic binding and the post-merge real check
-remain. The primary upstream request is a
+binding); the branches are pushed and
+[PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready, with
+[PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
+[PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) as drafts. The
+manual `device use` plus `Dictate` path is verified; automatic binding and the
+post-merge real check remain. The primary upstream request is a
 consumer-side capture-device auto-selection/priority list plus auto-binding of
 the declared recording keys; until it exists, the one-time
 `vinput device use` plus `Dictate` at the next free index (default

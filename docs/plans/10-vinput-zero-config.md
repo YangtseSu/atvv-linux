@@ -47,7 +47,14 @@ setter called by ATVV (ADR 0007).
   Upstream issues
   [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
   [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. The
-  branches are local-only: nothing is pushed and no PR exists.
+  branches are pushed to the fork:
+  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready
+  (auto selection);
+  [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
+  [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) are drafts
+  (metadata and binding). All three target `main` because a fork branch cannot
+  be a base in the upstream repository; the follow-ups rebase after their
+  parent merges.
 - The opt-in `vinput = "dbus"` fallback still has the addon
   `mostRecentInputContext` focus gap. That fallback is not part of the primary
   path and is deferred; see Deferred below.
@@ -69,14 +76,13 @@ setter called by ATVV (ADR 0007).
   decision. Source selection belongs to the consumer.
 - ⬜ Upstream issue/PR A: consumer-side capture-device auto-selection and
   priority list. Issue
-  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) is open; code
-  is ready on `feat/issue-491-auto-capture-device`; not pushed and no PR
-  exists.
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) is open;
+  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready.
 - ⬜ Upstream issue/PR B: read `atvv.recording_keys` and append missing trigger
   keys on `device use`. Issue
-  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) is open; code
-  is ready on the stacked `feat/issue-492-recording-keys-metadata` and
-  `feat/issue-492-bind-recording-keys` branches; not pushed and no PR exists.
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) is open;
+  [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
+  [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) are drafts.
 - ✅ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
   explicit fallback. Do not make D-Bus the zero-config default.
 - ✅ Generic provider diagnostics: `atvvctl status.contract`,
@@ -284,3 +290,11 @@ Recorded 2026-10-31:
   binding) created. Branches renamed to the issue-based names and commit
   messages updated with the issue numbers. Nothing is pushed and no PR exists;
   the remaining gate is operator approval for push and draft PRs.
+
+- 2026-10-31 — branches pushed to the fork; PRs opened:
+  [#493](https://github.com/xifan2333/fcitx5-vinput/pull/493) (ready, auto
+  selection), [#494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
+  [#495](https://github.com/xifan2333/fcitx5-vinput/pull/495) (draft, metadata
+  and binding). All PRs target `main`; the follow-ups will be rebased onto
+  `main` after their parent merges. Remaining work is upstream review/merge,
+  a vinput rebuild, and the real auto-bind acceptance.
