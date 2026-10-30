@@ -18,12 +18,14 @@ pub const MAX_GAIN_DB: i8 = 24;
 
 /// fcitx5-vinput trigger key used while the voice key is held.
 ///
-/// Dedicated ATVV trigger key. `F24` is a regular key that normal PC
-/// keyboards do not have, so it does not collide with a user shortcut and is
-/// not a bare modifier. fcitx5-vinput should keep the user's own
-/// `[TriggerKey]` entries and add `1=F24`; the 2026-10-30 run verified this
-/// path. The target IME must be configured to the same key.
-pub const DEFAULT_TRIGGER_KEY: &str = "F24";
+/// The dictation consumer key (`KEY_DICTATE`, evdev `0x24a`). It is the
+/// device function the remote's voice control represents, so the synthetic
+/// trigger carries the meaning instead of a spare function key. fcitx5-vinput
+/// should keep the user's own `[TriggerKey]` entries and add a `Dictate` entry
+/// (for example `2=Dictate`); `F24` remains available as an alternative for
+/// IMEs that do not know the consumer key. The target IME must be configured
+/// to the same key.
+pub const DEFAULT_TRIGGER_KEY: &str = "DICTATE";
 
 /// How the daemon reaches fcitx5-vinput.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -243,6 +245,12 @@ mod tests {
     }
 
     #[test]
+    fn default_trigger_is_the_dictation_key() {
+        assert_eq!(DEFAULT_TRIGGER_KEY, "DICTATE");
+        assert!(parse_key_program(DEFAULT_TRIGGER_KEY).is_some());
+    }
+
+    #[test]
     fn parses_vinput_mode_and_trigger_key() {
         let path = std::env::temp_dir().join(format!(
             "atvv-config-vinput-{}-{}.toml",
@@ -262,6 +270,12 @@ mod tests {
         std::fs::write(&path, "trigger_key = \"ctrl+alt+v\"\n").unwrap();
         let config = load(&path, 0).unwrap();
         assert_eq!(config.trigger_key.as_deref(), Some("ctrl+alt+v"));
+
+        for key in ["DICTATE", "VOICECOMMAND", "ASSISTANT"] {
+            std::fs::write(&path, format!("trigger_key = \"{key}\"\n")).unwrap();
+            let config = load(&path, 0).unwrap();
+            assert_eq!(config.trigger_key.as_deref(), Some(key));
+        }
 
         std::fs::write(&path, "trigger_key = \"not-a-key\"\n").unwrap();
         assert!(matches!(

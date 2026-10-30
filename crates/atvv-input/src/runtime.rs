@@ -17,7 +17,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use atvv_protocol::profile::{DeviceProfile, RemoteButton};
-use evdev::{EventType, KeyCode};
+use evdevil::event::{EventKind, Key, KeyState};
 use thiserror::Error;
 
 use crate::action::{Action, ActionError, ActionMap, Trigger};
@@ -63,7 +63,7 @@ pub enum InputError {
 /// Optional synthetic key emitted while the voice key is held.
 ///
 /// The voice key is grabbed for the ATVV session, so applications would
-/// otherwise never see F5. A dedicated synthetic trigger key (`F24` by
+/// otherwise never see F5. A dedicated synthetic trigger key (`DICTATE` by
 /// default) preserves the IME input-context path without colliding with a
 /// normal keyboard key.
 #[derive(Debug, Clone, Default)]
@@ -85,14 +85,14 @@ enum RawEdge {
     Lost,
 }
 
-/// Map an evdev key value to a press/release edge.
+/// Map a key state to a press/release edge.
 ///
-/// `2` is an autorepeat of a held key, not a new edge; the gesture engine and
-/// the voice-key state track press/release themselves.
-fn edge(value: i32) -> Option<bool> {
-    match value {
-        0 => Some(false),
-        1 => Some(true),
+/// [`KeyState::REPEAT`] is an autorepeat of a held key, not a new edge; the
+/// gesture engine and the voice-key state track press/release themselves.
+fn edge(state: KeyState) -> Option<bool> {
+    match state {
+        KeyState::RELEASED => Some(false),
+        KeyState::PRESSED => Some(true),
         _ => None,
     }
 }
@@ -215,7 +215,7 @@ impl InputRuntime {
         };
 
         let resolver = KeyResolver;
-        let mut registration: BTreeSet<KeyCode> = keymap.codes().collect();
+        let mut registration: BTreeSet<Key> = keymap.codes().collect();
         registration.extend(resolver.codes_for(&map)?);
         if let Some(program) = &voice_trigger {
             registration.extend(program.press.iter().copied());
@@ -226,7 +226,7 @@ impl InputRuntime {
 
         let mut degraded = Vec::new();
         let mut grabbed_devices = Vec::new();
-        for mut matched in discovery.matched {
+        for matched in discovery.matched {
             match matched.device.grab() {
                 Ok(()) => grabbed_devices.push(matched),
                 Err(error) => degraded.push(format!(
@@ -264,6 +264,17 @@ impl InputRuntime {
                     path.display()
                 ));
             }
+            let mut reader = match matched.device.into_reader() {
+                Ok(reader) => reader,
+                Err(error) => {
+                    degraded.push(format!(
+                        "cannot read {} ({}): {error}",
+                        path.display(),
+                        matched.name
+                    ));
+                    continue;
+                }
+            };
             let tx = raw_tx.clone();
             let event_tx = event_tx.clone();
             let vkbd = vkbd.clone();
@@ -272,27 +283,29 @@ impl InputRuntime {
             let reader = thread::Builder::new()
                 .name(format!("atvv-evdev-{name}"))
                 .spawn(move || {
-                    let mut device = matched.device;
                     while !stop.load(Ordering::Relaxed) {
-                        match device.fetch_events() {
-                            Ok(events) => {
-                                for event in events {
-                                    if event.event_type() != EventType::KEY {
+                        let mut saw_event = false;
+                        let mut lost = None;
+                        for event in reader.events() {
+                            match event {
+                                Ok(event) => {
+                                    saw_event = true;
+                                    let EventKind::Key(event) = event.kind() else {
+                                        continue;
+                                    };
+                                    let key = event.key();
+                                    let state = event.state();
+                                    if !matches!(state.raw(), 0..=2) {
                                         continue;
                                     }
-                                    let value = event.value();
-                                    if !matches!(value, 0..=2) {
-                                        continue;
-                                    }
-                                    let code = KeyCode::new(event.code());
-                                    match keymap.button(code) {
+                                    match keymap.button(key) {
                                         Some(RemoteButton::Voice) => {
-                                            if let Some(pressed) = edge(value) {
+                                            if let Some(pressed) = edge(state) {
                                                 let _ = tx.send(RawEdge::Voice { pressed });
                                             }
                                         }
                                         Some(button) => {
-                                            if let Some(pressed) = edge(value) {
+                                            if let Some(pressed) = edge(state) {
                                                 let _ =
                                                     tx.send(RawEdge::Button { button, pressed });
                                             }
@@ -302,26 +315,30 @@ impl InputRuntime {
                                             // otherwise grabbing them loses input.
                                             // Repeats are forwarded as well.
                                             if let Some(keyboard) = &vkbd {
-                                                let _ = keyboard.emit_raw(code, value);
+                                                let _ = keyboard.emit_raw(key, state);
                                             }
                                         }
                                     }
                                 }
+                                Err(error) => {
+                                    lost = Some(error);
+                                    break;
+                                }
                             }
-                            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                                thread::sleep(Duration::from_millis(10));
-                            }
-                            Err(error) => {
-                                // The node cannot deliver the release that
-                                // lifts a held trigger key; let the engine
-                                // synthesize it before reporting the loss.
-                                let _ = tx.send(RawEdge::Lost);
-                                let _ = event_tx.send(RemoteEvent::DeviceLost {
-                                    path: path.clone(),
-                                    error: error.to_string(),
-                                });
-                                break;
-                            }
+                        }
+                        if let Some(error) = lost {
+                            // The node cannot deliver the release that
+                            // lifts a held trigger key; let the engine
+                            // synthesize it before reporting the loss.
+                            let _ = tx.send(RawEdge::Lost);
+                            let _ = event_tx.send(RemoteEvent::DeviceLost {
+                                path: path.clone(),
+                                error: error.to_string(),
+                            });
+                            break;
+                        }
+                        if !saw_event {
+                            thread::sleep(Duration::from_millis(10));
                         }
                     }
                 });
@@ -514,10 +531,9 @@ mod tests {
 
     #[test]
     fn evdev_repeats_are_not_edges() {
-        assert_eq!(edge(0), Some(false));
-        assert_eq!(edge(1), Some(true));
-        assert_eq!(edge(2), None);
-        assert_eq!(edge(3), None);
+        assert_eq!(edge(KeyState::RELEASED), Some(false));
+        assert_eq!(edge(KeyState::PRESSED), Some(true));
+        assert_eq!(edge(KeyState::REPEAT), None);
     }
 
     #[test]
@@ -546,26 +562,27 @@ mod tests {
 mod kernel_tests {
     use super::*;
     use crate::fake::{FAKE_REMOTE, FakeRemote};
+    use evdevil::Evdev;
 
-    fn wait_for(device: &mut evdev::Device, code: KeyCode, value: i32) -> bool {
+    fn wait_for(reader: &mut evdevil::EventReader, key: Key, state: KeyState) -> bool {
         let deadline = Instant::now() + Duration::from_secs(2);
         while Instant::now() < deadline {
-            match device.fetch_events() {
-                Ok(events) => {
-                    for event in events {
-                        if event.event_type() == EventType::KEY
-                            && event.code() == code.code()
-                            && event.value() == value
-                        {
-                            return true;
-                        }
-                    }
+            let mut found = false;
+            for event in reader.events() {
+                let Ok(event) = event else {
+                    return false;
+                };
+                if let EventKind::Key(event) = event.kind()
+                    && event.key() == key
+                    && event.state() == state
+                {
+                    found = true;
                 }
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(5));
-                }
-                Err(_) => return false,
             }
+            if found {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(5));
         }
         false
     }
@@ -578,7 +595,7 @@ mod kernel_tests {
             FAKE_REMOTE,
             ActionMap::defaults(),
             InputOptions {
-                voice_trigger: Some("F24".to_string()),
+                voice_trigger: Some("DICTATE".to_string()),
             },
         )
         .expect("input runtime");
@@ -589,8 +606,8 @@ mod kernel_tests {
 
         // udev applies the seat ACL after the node appears.
         let deadline = Instant::now() + Duration::from_secs(3);
-        let mut keyboard = loop {
-            match evdev::Device::open(&path) {
+        let device = loop {
+            match Evdev::open(&path) {
                 Ok(device) => break device,
                 Err(_) if Instant::now() < deadline => {
                     thread::sleep(Duration::from_millis(10));
@@ -598,17 +615,18 @@ mod kernel_tests {
                 Err(error) => panic!("cannot open {}: {error}", path.display()),
             }
         };
-        keyboard.set_nonblocking(true).unwrap();
+        device.set_nonblocking(true).unwrap();
+        let mut reader = device.into_reader().unwrap();
 
         fake.press(RemoteButton::Voice).expect("voice press");
         assert!(
-            wait_for(&mut keyboard, KeyCode::KEY_F24, 1),
-            "voice press did not synthesize F24 down"
+            wait_for(&mut reader, Key::KEY_DICTATE, KeyState::PRESSED),
+            "voice press did not synthesize DICTATE down"
         );
         fake.release(RemoteButton::Voice).expect("voice release");
         assert!(
-            wait_for(&mut keyboard, KeyCode::KEY_F24, 0),
-            "voice release did not lift F24"
+            wait_for(&mut reader, Key::KEY_DICTATE, KeyState::RELEASED),
+            "voice release did not lift DICTATE"
         );
 
         let mut edges = Vec::new();

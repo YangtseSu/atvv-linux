@@ -43,6 +43,12 @@ is 0BSD.
   The research and options are recorded in
   [`docs/research/consumer-keys.md`](../research/consumer-keys.md).
 
+Follow-up (2026-10-30): after the migration, step 11 changed the daemon's
+default synthetic trigger from `F24` to `DICTATE` by user direction. This is
+a policy choice, not an evdevil requirement; `F24` remains an explicit
+`trigger_key`. The real-device run is recorded in
+[step 11](../plans/11-input-evdevil.md).
+
 ## Consequences
 
 - `atvv-input` types move from `evdev::KeyCode` to

@@ -349,6 +349,30 @@ Follow-up to the package and trigger tests on the same RC003
   default trigger key. The `Control+Control_R` chord remains a verified
   alternative.
 
-Still pending: install `0.1.0-3` into `/usr` (root), rerun the post-reboot
-check, and verify the end-to-end fcitx text commit. The acceptance record is
+Step 09 later installed `0.1.0-3` into `/usr`, reran the post-reboot check,
+and recorded the end-to-end fcitx text commit in
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
+
+## Step 11 evdevil and DICTATE trigger (2026-10-30)
+
+Same RC003 (`C0:5D:39:F8:2D:4C`, `hci0`), fcitx5 5.1.23, and
+fcitx5-vinput 2.4.2. The step-11 workspace `atvvd` ran with a temporary
+config (`trigger_key = "DICTATE"`); the installed `0.1.0-3` unit was stopped
+for the run and restarted afterwards.
+
+- `atvvctl status`: connected, state `ready`, input grabbed
+  `/dev/input/event25`, `keyboard=true`, `vinput.trigger=DICTATE`.
+- `evtest` on the daemon's `atvv-virtual-keyboard` showed event code 586
+  (`KEY_DICTATE`) press and release during a physical press.
+- Status sampler during the press: `streaming=true`, frames 0 → 104, samples
+  0 → 24,960, `voice_key` true → false, no `last_error`.
+- fcitx key trace (`--verbose default=5,key_trace=5`) logged
+  `Key(Dictate)` press/release (keycode 594) in the focused window.
+- `vinput-daemon` journal: `target.object=atvv-miremote-rc003`,
+  `rate=16000 channels=1 fmt=259`, then
+  `recognition error: returned no text` because nothing was spoken.
+- A synthetic `ydotool` event with code 586 was not delivered to fcitx in
+  this session, while the daemon's evdevil virtual keyboard was. Use a real
+  press or an evdevil-based emitter for consumer-key checks.
+- fcitx rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit; edit the
+  file while fcitx is stopped or the change can be overwritten.

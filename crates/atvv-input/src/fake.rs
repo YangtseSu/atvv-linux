@@ -16,11 +16,13 @@ use atvv_protocol::profile::{
     ButtonKey, DeviceProfile, GestureTiming, KeepaliveVariant, MicCloseVariant, MicOpenVariant,
     NibbleOrder, RC003, RemoteButton,
 };
-use evdev::uinput::VirtualDevice;
-use evdev::{AttributeSet, BusType, EventType, InputEvent, InputId, KeyCode};
+use evdevil::event::{Key, KeyEvent, KeyState};
+use evdevil::uinput::UinputDevice;
+use evdevil::{Bus, Evdev, InputId};
 use thiserror::Error;
 
 use crate::keymap::{KeyMapError, resolve_key};
+use crate::vkbd::wait_for_node;
 
 /// Test-only profile. Unique name and ids; never part of production profiles.
 pub const FAKE_REMOTE: DeviceProfile = DeviceProfile {
@@ -69,7 +71,7 @@ pub enum FakeRemoteError {
 fn wait_until_readable(path: &Path) -> std::io::Result<()> {
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        match evdev::Device::open(path) {
+        match Evdev::open(path) {
             Ok(_) => return Ok(()),
             Err(_) if Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(5));
@@ -82,37 +84,34 @@ fn wait_until_readable(path: &Path) -> std::io::Result<()> {
 /// A uinput remote that emits the profile's key codes.
 #[derive(Debug)]
 pub struct FakeRemote {
-    device: VirtualDevice,
+    device: UinputDevice,
     path: PathBuf,
-    codes: BTreeMap<RemoteButton, KeyCode>,
+    codes: BTreeMap<RemoteButton, Key>,
 }
 
 impl FakeRemote {
     /// Create the fixture and register every key the profile maps.
     pub fn open() -> Result<Self, FakeRemoteError> {
-        let mut keys = AttributeSet::<KeyCode>::new();
+        let mut keys = Vec::new();
         let mut codes = BTreeMap::new();
         for &ButtonKey { button, key } in FAKE_REMOTE.button_keys {
             let code = resolve_key(key).ok_or(KeyMapError::Unknown { button, key })?;
-            keys.insert(code);
+            keys.push(code);
             codes.entry(button).or_insert(code);
         }
+        keys.sort_unstable();
+        keys.dedup();
 
-        let mut device = VirtualDevice::builder()?
-            .name(FAKE_REMOTE.bluetooth_names[0])
-            .input_id(InputId::new(
-                BusType::BUS_VIRTUAL,
+        let device = UinputDevice::builder()?
+            .with_input_id(InputId::new(
+                Bus::VIRTUAL,
                 FAKE_REMOTE.vendor_id,
                 FAKE_REMOTE.product_id,
                 0x0001,
-            ))
-            .with_keys(&keys)?
-            .build()?;
-        let path = device
-            .enumerate_dev_nodes_blocking()?
-            .next()
-            .transpose()?
-            .ok_or(FakeRemoteError::NoNode)?;
+            ))?
+            .with_keys(keys)?
+            .build(FAKE_REMOTE.bluetooth_names[0])?;
+        let path = wait_for_node(&device).ok_or(FakeRemoteError::NoNode)?;
         // UI_DEV_CREATE returns before udev/systemd-udevd has finished
         // making the event node readable; discovery opens nodes by path.
         wait_until_readable(&path)?;
@@ -131,12 +130,12 @@ impl FakeRemote {
 
     /// Emit one press.
     pub fn press(&mut self, button: RemoteButton) -> std::io::Result<()> {
-        self.emit(button, 1)
+        self.emit(button, KeyState::PRESSED)
     }
 
     /// Emit one release.
     pub fn release(&mut self, button: RemoteButton) -> std::io::Result<()> {
-        self.emit(button, 0)
+        self.emit(button, KeyState::RELEASED)
     }
 
     /// Press and release in two frames.
@@ -145,21 +144,21 @@ impl FakeRemote {
         self.release(button)
     }
 
-    fn emit(&mut self, button: RemoteButton, value: i32) -> std::io::Result<()> {
+    fn emit(&mut self, button: RemoteButton, state: KeyState) -> std::io::Result<()> {
         let Some(code) = self.codes.get(&button) else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("fake remote has no key for {button}"),
             ));
         };
-        let event = InputEvent::new_now(EventType::KEY.0, code.code(), value);
-        self.device.emit(&[event])
+        self.device
+            .write_events(&[KeyEvent::new(*code, state).into()])
     }
 
     /// Forward a raw key code (for tests of unmapped keys).
-    pub fn emit_code(&mut self, code: KeyCode, value: i32) -> std::io::Result<()> {
-        let event = InputEvent::new_now(EventType::KEY.0, code.code(), value);
-        self.device.emit(&[event])
+    pub fn emit_code(&mut self, code: Key, value: i32) -> std::io::Result<()> {
+        self.device
+            .write_events(&[KeyEvent::new(code, KeyState::from_raw(value)).into()])
     }
 }
 

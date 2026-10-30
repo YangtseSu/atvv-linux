@@ -4,7 +4,8 @@
 # expression can be satisfied by one of these licenses. GPL-3.0-only is
 # deliberately absent; accepting it requires relicensing the whole work (ADR
 # 0003). LGPL-2.1-or-later appears only as an alternative in a crate that is
-# also MIT/Apache-2.0, and is satisfied by the MIT branch.
+# also MIT/Apache-2.0, and is satisfied by the MIT branch. 0BSD covers
+# `evdevil` and its `uoctl` dependency (ADR 0006).
 [graph]
 all-features = false
 no-default-features = false
@@ -27,6 +28,7 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "0BSD",
     "ISC",
     "Unicode-3.0",
     "Zlib",

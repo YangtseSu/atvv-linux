@@ -11,7 +11,8 @@ use std::fmt;
 use std::path::PathBuf;
 
 use atvv_protocol::profile::DeviceProfile;
-use evdev::{Device, KeyCode};
+use evdevil::Evdev;
+use evdevil::event::Key;
 
 use crate::keymap::KeyMap;
 
@@ -48,8 +49,8 @@ pub struct MatchedDevice {
     pub path: PathBuf,
     pub name: String,
     pub quality: MatchQuality,
-    pub supported_keys: Vec<KeyCode>,
-    pub device: Device,
+    pub supported_keys: Vec<Key>,
+    pub device: Evdev,
 }
 
 /// One profile-matching node rejected by the safety filter.
@@ -85,39 +86,53 @@ pub fn match_quality(
     }
 }
 
-fn pointer_buttons() -> [KeyCode; 5] {
+fn pointer_buttons() -> [Key; 5] {
     [
-        KeyCode::BTN_LEFT,
-        KeyCode::BTN_RIGHT,
-        KeyCode::BTN_MIDDLE,
-        KeyCode::BTN_TOUCH,
-        KeyCode::BTN_STYLUS,
+        Key::BTN_LEFT,
+        Key::BTN_RIGHT,
+        Key::BTN_MIDDLE,
+        Key::BTN_TOUCH,
+        Key::BTN_STYLUS,
     ]
 }
 
-fn is_pointer(device: &Device) -> bool {
+fn is_pointer(device: &Evdev) -> bool {
     let has_axes = device
-        .supported_relative_axes()
-        .is_some_and(|axes| axes.iter().next().is_some())
+        .supported_rel_axes()
+        .is_ok_and(|axes| !axes.is_empty())
         || device
-            .supported_absolute_axes()
-            .is_some_and(|axes| axes.iter().next().is_some());
+            .supported_abs_axes()
+            .is_ok_and(|axes| !axes.is_empty());
     if has_axes {
         return true;
     }
     let pointer = pointer_buttons();
     device
         .supported_keys()
-        .is_some_and(|keys| pointer.iter().any(|button| keys.contains(*button)))
+        .is_ok_and(|keys| pointer.iter().any(|button| keys.contains(*button)))
 }
 
 /// Enumerate evdev nodes and select the profile's keyboard/consumer nodes.
+///
+/// `evdevil::enumerate()` yields one error per unreadable or vanished node;
+/// a missing permission or `ENODEV` on one node must not abort discovery, so
+/// those entries are skipped. If `/dev/input` itself cannot be read, the
+/// result is an empty discovery.
 #[must_use]
 pub fn discover(profile: &DeviceProfile, keymap: &KeyMap) -> Discovery {
     let mut discovery = Discovery::default();
-    for (path, device) in evdev::enumerate() {
-        let name = device.name().unwrap_or_default().to_string();
-        let id = device.input_id();
+    let Ok(devices) = evdevil::enumerate() else {
+        return discovery;
+    };
+    for entry in devices {
+        let (path, device) = match entry {
+            Ok(found) => found,
+            Err(_) => continue,
+        };
+        let name = device.name().unwrap_or_default();
+        let Ok(id) = device.input_id() else {
+            continue;
+        };
         let Some(quality) = match_quality(profile, id.vendor(), id.product(), &name) else {
             continue;
         };
@@ -129,7 +144,7 @@ pub fn discover(profile: &DeviceProfile, keymap: &KeyMap) -> Discovery {
             });
             continue;
         }
-        let supported_keys: Vec<KeyCode> = device
+        let supported_keys: Vec<Key> = device
             .supported_keys()
             .map(|keys| keys.iter().collect())
             .unwrap_or_default();

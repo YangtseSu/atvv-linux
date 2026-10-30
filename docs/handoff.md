@@ -7,8 +7,8 @@ Updated: 2026-10-30
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 114 passed (12 test binaries),
-  2 ignored kernel-uinput tests.
+- Tests: `cargo test --workspace` → 117 passed (12 test binaries),
+  2 ignored kernel-uinput tests (both pass with `/dev/uinput` access).
 
 ## Read first
 
@@ -65,21 +65,26 @@ per-session copies; `docs/plans/` remains the canonical plan.
   started `/usr/bin/atvvd`, `atvvctl doctor` was all green, and the end-to-end
   fcitx text commit was operator-confirmed. Completed record:
   `docs/acceptance/rc003-2026-10-30.md`.
+- **11 evdevil input backend (complete)**: `atvv-input` now uses `evdevil`
+  0.5.0 (`Key`, `Evdev`, `EventReader`, `UinputDevice`) instead of `evdev`
+  0.13.2; 0BSD added to `deny.toml`; discovery skips unreadable/vanished
+  nodes, pointer safety preserved; sysfs resolves the uinput event node;
+  `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and emit; fake remote and
+  both ignored uinput tests pass. The daemon default trigger is now `DICTATE`
+  (vinput `2=Dictate`); `F24` remains configurable. A real RC003 press emitted
+  `KEY_DICTATE`, streamed 104 frames / 24,960 samples, and made
+  fcitx5-vinput record from `atvv-miremote-rc003` at 16 kHz. See
+  `docs/plans/11-input-evdevil.md`.
 
 ## Not implemented
 
-- **10 vinput zero-config (in progress)**: the daemon now defaults to the
-  dedicated `F24` trigger (`0.1.0-3`), a regular key that normal keyboards do
-  not have, so no user shortcut is assumed. vinput keeps its existing
-  `[TriggerKey]` entries and adds `1=F24`. Upstream `SetCaptureDevice` /
+- **10 vinput zero-config (in progress)**: upstream `SetCaptureDevice` /
   `AddTriggerKey` and automatic device selection remain. Until then, the
-  one-time `vinput device use` step remains. See
-  `docs/plans/10-vinput-zero-config.md`.
-- **11 evdevil input backend (planned, not started)**: replace `evdev` 0.13.2
-  with `evdevil` 0.5.0 in `atvv-input`, making `VOICECOMMAND`, `ASSISTANT`,
-  and `DICTATE` resolvable and emittable. The evdev fork was abandoned. See
-  `docs/plans/11-input-evdevil.md`, ADR 0006, and
-  `docs/research/consumer-keys.md`. Context-dependent key mapping is deferred.
+  one-time `vinput device use` step remains. The daemon default trigger is now
+  `DICTATE` (step 11); vinput keeps the user's `[TriggerKey]` entries and adds
+  `2=Dictate`. The live installed `0.1.0-3` unit still reads
+  `trigger_key = "ASSISTANT"` from `~/.config/atvv/daemon.toml` until the new
+  build is installed. See `docs/plans/10-vinput-zero-config.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -133,11 +138,19 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   it does not auto-merge.
 - `deny.toml` allows GPL-3.0-or-later, MIT, Apache-2.0 (including the LLVM
   exception), BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, and Zlib.
-  GPL-3.0-only is deliberately absent. Step 11 will add 0BSD for `evdevil`.
-- Input backend: migrate `atvv-input` to `evdevil` 0.5.0 and abandon the
-  `evdev` fork (`docs/decisions/0006-evdevil-input-backend.md`). The three
-  consumer keys are available in `evdevil`; context-dependent mapping remains
-  undecided (`docs/research/consumer-keys.md`).
+  GPL-3.0-only is deliberately absent. Step 11 added 0BSD for `evdevil`
+  and its `uoctl` dependency.
+- Input backend: `atvv-input` uses `evdevil` 0.5.0; the `evdev` fork is
+  abandoned (`docs/decisions/0006-evdevil-input-backend.md`). The three
+  consumer keys are available; context-dependent mapping remains undecided
+  (`docs/research/consumer-keys.md`).
+- Default synthetic trigger: `DEFAULT_TRIGGER_KEY = "DICTATE"` (`KEY_DICTATE`,
+  evdev `0x24a`), by user direction 2026-10-30. vinput uses `2=Dictate`; the
+  names `VOICECOMMAND`/`ASSISTANT`/`DICTATE` (daemon) and
+  `VoiceCommand`/`Assistant`/`Dictate` (fcitx) stay distinct. `F24` remains an
+  explicit alternative.
+- fcitx5-vinput rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit;
+  edit it while fcitx5 is stopped.
 
 ## Verified
 
@@ -145,16 +158,23 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo test -p atvv-input -- --ignored --test-threads=1
 cargo deny check
+cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 ```
 
-- `cargo test --workspace` → 114 passed, 2 ignored.
-- `cargo deny check` → advisories, bans, licenses, sources ok; zbus 5
-  unmaintained advisories `RUSTSEC-2026-0370/0371/0372` ignored with a
-  migration note.
-- `reuse lint` → REUSE 3.3 compliant, 92 files.
+- `cargo test --workspace` → 117 passed, 2 ignored; `cargo test -p atvv-input -- --ignored --test-threads=1` → 2 passed.
+- `cargo run -q -p atvv-cli -- input fake-remote` → discovered and grabbed
+  `/dev/input/event27`, created `/dev/input/event28`, recognized 12/12
+  logical buttons, clean voice edges (evdevil backend).
+- `cargo tree -i evdev` → `package ID specification 'evdev' did not match any
+  packages`; `Cargo.lock` contains `evdevil 0.5.0` and `uoctl 1.0.1`.
+- `cargo deny check` → advisories, bans, licenses, sources ok; 0BSD accepted
+  for `evdevil`/`uoctl`; zbus 5 unmaintained advisories
+  `RUSTSEC-2026-0370/0371/0372` ignored with a migration note.
+- `reuse lint` → REUSE 3.3 compliant, 96 files.
 - `udevadm verify` → 1 rule file, 0 failures.
 - `systemd-analyze verify --user` with a temp copy pointing at the built
   binary → pass. The packaged unit was enabled and started from a temporary
@@ -182,8 +202,16 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 - Dedicated `F24` trigger (2026-10-30): daemon `trigger_key = "F24"`, vinput
   `[TriggerKey] 0=Alt_R, 1=F24`; the operator confirmed the voice key starts
   recording. A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2;
-  the `Control+Control_R` chord remains an alternative. `DEFAULT_TRIGGER_KEY`
-  is now `F24` (`0.1.0-3`).
+  the `Control+Control_R` chord remains an alternative. `0.1.0-3` shipped
+  `DEFAULT_TRIGGER_KEY = "F24"`. Step 11 later changed the code default to
+  `DICTATE`; `F24` remains an explicit `trigger_key`.
+- Step 11 real RC003 run (2026-10-30, `C0:5D:39:F8:2D:4C`): workspace
+  `atvvd` with `trigger_key = "DICTATE"` grabbed `/dev/input/event25`, created
+  `atvv-virtual-keyboard` with `KEY_DICTATE` (code 586), and a physical press
+  streamed 104 frames / 24,960 samples. fcitx logged `Key(Dictate)` and
+  vinput-daemon recorded from `atvv-miremote-rc003`
+  (`rate=16000 channels=1 fmt=259`); no speech, so it reported
+  `returned no text`.
 - Real RC003 (`C0:5D:39:F8:2D:4C`, `hci0`, 2026-10-30): release and packaged
   `atvvd` → CAPS `0b 01 00 02 03 00 78 00 00`; `atvvctl doctor` all green;
   `Audio/Source` at 16 kHz; 1 s capture = 16,000 samples; `MIC_OPEN` →
@@ -205,19 +233,20 @@ start, all-green `atvvctl doctor`, 16 kHz ATVV source, and end-to-end fcitx
 text commit are recorded in
 [`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-2026-10-30.md).
 
-Then **10 vinput-zero-config** (in progress): the dedicated `F24` trigger
-default is in `0.1.0-3`; vinput keeps its existing `[TriggerKey]` and adds
-`1=F24`. Upstream `SetCaptureDevice` / `AddTriggerKey` and automatic device
-selection remain; the manual `vinput device use atvv-miremote-rc003` step is
-still needed. See
-[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
+**11 input-evdevil is complete.** `atvv-input` uses `evdevil` 0.5.0, the
+three consumer keys resolve and emit, and the default trigger is `DICTATE`.
+The real RC003 press drove `MIC_OPEN`/`MIC_CLOSE`, `KEY_DICTATE`, and vinput
+recording. See
+[`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md) and
+[ADR 0006](decisions/0006-evdevil-input-backend.md).
 
-Then **11 input-evdevil** (planned): migrate `atvv-input` to `evdevil` 0.5.0
-on `main`, remove the `evdev` dependency, and add the 0BSD license to
-`deny.toml`. The evdev fork experiment is abandoned. The plan and research
-are in [`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md),
-[ADR 0006](decisions/0006-evdevil-input-backend.md), and
-[`docs/research/consumer-keys.md`](research/consumer-keys.md).
+**10 vinput-zero-config remains** (in progress): upstream
+`SetCaptureDevice` / `AddTriggerKey` and automatic device selection remain;
+the manual `vinput device use atvv-miremote-rc003` step is still needed.
+vinput keeps the user's entries and adds `2=Dictate`. The installed
+`0.1.0-3` unit still uses `trigger_key = "ASSISTANT"` from the live config
+until the new build is installed. See
+[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
 
 ## Commands
 
@@ -225,7 +254,9 @@ are in [`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md),
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo test -p atvv-input -- --ignored --test-threads=1
 cargo deny check
+cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 ./packaging/arch/make-source.sh

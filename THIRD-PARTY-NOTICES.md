@@ -32,7 +32,6 @@ and must be refreshed when `Cargo.lock` changes.
 | `autocfg` | 1.5.1 | Apache-2.0 OR MIT | https://github.com/cuviper/autocfg |
 | `bindgen` | 0.72.1 | BSD-3-Clause | https://github.com/rust-lang/rust-bindgen |
 | `bitflags` | 2.13.2 | MIT OR Apache-2.0 | https://github.com/bitflags/bitflags |
-| `bitvec` | 1.1.1 | MIT | https://github.com/bitvecto-rs/bitvec |
 | `blocking` | 1.7.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/blocking |
 | `bluer` | 0.17.4 | BSD-2-Clause | https://github.com/bluez/bluer |
 | `bumpalo` | 3.20.3 | MIT OR Apache-2.0 | https://github.com/fitzgen/bumpalo |
@@ -69,13 +68,12 @@ and must be refreshed when `Cargo.lock` changes.
 | `enumflags2_derive` | 0.7.12 | MIT OR Apache-2.0 | https://github.com/meithecatte/enumflags2 |
 | `equivalent` | 1.0.3 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/equivalent |
 | `errno` | 0.3.14 | MIT OR Apache-2.0 | https://github.com/lambda-fairy/rust-errno |
-| `evdev` | 0.13.2 | Apache-2.0 OR MIT | https://github.com/cmr/evdev |
+| `evdevil` | 0.5.0 | 0BSD | https://github.com/SludgePhD/evdevil |
 | `event-listener` | 5.4.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener |
 | `event-listener-strategy` | 0.5.4 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener-strategy |
 | `fastrand` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/fastrand |
 | `find-msvc-tools` | 0.1.15 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | `fnv` | 1.0.7 | Apache-2.0 / MIT | https://github.com/servo/rust-fnv |
-| `funty` | 2.0.0 | MIT | https://github.com/myrrlyn/funty |
 | `futures` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-channel` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-core` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
@@ -132,7 +130,6 @@ and must be refreshed when `Cargo.lock` changes.
 | `proc-macro2` | 1.0.107 | MIT OR Apache-2.0 | https://github.com/dtolnay/proc-macro2 |
 | `quote` | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote |
 | `r-efi` | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://github.com/r-efi/r-efi |
-| `radium` | 0.7.0 | MIT | https://github.com/bitvecto-rs/radium |
 | `regex` | 1.13.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | `regex-automata` | 0.4.18 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
 | `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 | https://github.com/rust-lang/regex |
@@ -159,7 +156,6 @@ and must be refreshed when `Cargo.lock` changes.
 | `syn` | 3.0.9 | MIT OR Apache-2.0 | https://github.com/dtolnay/syn |
 | `synstructure` | 0.13.2 | MIT | https://github.com/mystor/synstructure |
 | `system-deps` | 7.0.8 | MIT OR Apache-2.0 | https://github.com/gdesmott/system-deps |
-| `tap` | 1.0.1 | MIT | https://github.com/myrrlyn/tap |
 | `target-lexicon` | 0.13.5 | Apache-2.0 WITH LLVM-exception | https://github.com/bytecodealliance/target-lexicon |
 | `tempfile` | 3.27.0 | MIT OR Apache-2.0 | https://github.com/Stebalien/tempfile |
 | `thiserror` | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
@@ -180,6 +176,7 @@ and must be refreshed when `Cargo.lock` changes.
 | `uds_windows` | 1.2.1 | MIT | https://github.com/haraldh/rust_uds_windows |
 | `unicode-ident` | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 | https://github.com/dtolnay/unicode-ident |
 | `unicode-width` | 0.2.3 | MIT OR Apache-2.0 | https://github.com/unicode-rs/unicode-width |
+| `uoctl` | 1.0.1 | 0BSD | https://github.com/SludgePhD/uoctl |
 | `utf8parse` | 0.2.2 | Apache-2.0 OR MIT | https://github.com/alacritty/vte |
 | `uuid` | 1.26.1 | Apache-2.0 OR MIT | https://github.com/uuid-rs/uuid |
 | `version-compare` | 0.2.1 | MIT | https://gitlab.com/timvisee/version-compare |
@@ -192,7 +189,6 @@ and must be refreshed when `Cargo.lock` changes.
 | `windows-sys` | 0.61.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | `winnow` | 0.7.15 | MIT | https://github.com/winnow-rs/winnow |
 | `winnow` | 1.0.4 | MIT | https://github.com/winnow-rs/winnow |
-| `wyz` | 0.5.1 | MIT | https://github.com/myrrlyn/wyz |
 | `zbus` | 5.19.0 | MIT | https://github.com/z-galaxy/zbus/ |
 | `zbus_macros` | 5.19.0 | MIT | https://github.com/z-galaxy/zbus/ |
 | `zbus_names` | 4.3.5 | MIT | https://github.com/z-galaxy/zbus/ |

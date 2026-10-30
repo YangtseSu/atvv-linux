@@ -25,22 +25,26 @@ exists, adding one dedicated trigger entry is the only manual step.
 - A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2 on 2026-10-30.
   A dedicated regular key `F24` did, with the user's existing `0=` entry kept.
   The `Control+Control_R` chord also worked.
-- The daemon default is now `DEFAULT_TRIGGER_KEY = "F24"` (`0.1.0-3`). vinput
-  still needs `1=F24` until the upstream API can append it.
+- Step 11 changed the daemon default to `DEFAULT_TRIGGER_KEY = "DICTATE"`;
+  vinput keeps the user's entries and adds `2=Dictate`. `F24` remains an
+  explicit alternative. The live installed `0.1.0-3` unit still reads
+  `trigger_key = "ASSISTANT"` from the user's config until the new build is
+  installed.
 
 ## Deliverables
 
-- ✅ Dedicated trigger key: `DEFAULT_TRIGGER_KEY = "F24"`, resolved to
-  `KEY_F24` by `atvv-input`, with parser/daemon tests and docs. Use a regular
-  key that normal PC keyboards do not have; never assume a user shortcut.
+- ✅ Dedicated trigger key: `F24` was implemented first, resolved to
+  `KEY_F24` by `atvv-input`, with parser/daemon tests and docs. Step 11
+  superseded the default with `DICTATE`; `F24` remains configurable. Never
+  assume a user shortcut.
 - ⬜ Keep the user's existing `[TriggerKey]` entries: document
-  `1=F24` alongside `0=<user key>`; never replace `0=`.
+  `2=Dictate` alongside `0=<user key>`; never replace the user's entry.
 - ⬜ Upstream proposal/PR to fcitx5-vinput:
   - `SetCaptureDevice(s name)` (apply live; validate the PipeWire node) and
     `GetCaptureDevice() -> s`.
   - `AddTriggerKey(s key)` / `SetTriggerKey(s key)` or a dedicated
-    "ATVV trigger" that appends `F24` without replacing user entries; apply
-    without a daemon restart.
+    "ATVV trigger" that appends the configured key (`Dictate`) without
+    replacing user entries; apply without a daemon restart.
   - `StartRecording() -> s` returning the scene id, or a documented empty-id
     contract.
   - Tests and documentation upstream.
@@ -50,10 +54,10 @@ exists, adding one dedicated trigger entry is the only manual step.
   - Never override an explicit non-ATVV choice or the system default.
 - ⬜ Config policy: `vinput_device = "auto" | "none"` or equivalent. Never make
   the ATVV source the system default.
-- ⬜ Decide whether `trigger` (dedicated `F24`) remains the default or `auto`
-  prefers D-Bus when the upstream API is available. `F24` removes the
-  user-key assumption, so `trigger` remains viable; D-Bus is the fallback for
-  focus/scene-id edge cases.
+- ⬜ Decide whether `trigger` (now `DICTATE`) remains the default or `auto`
+  prefers D-Bus when the upstream API is available. The consumer-key default
+  removes the user-key assumption, so `trigger` remains viable; D-Bus is the
+  fallback for focus/scene-id edge cases.
 - ⬜ Add a read-only `atvvctl vinput` diagnostic: report
   `global.capture_device`, the configured trigger entries, daemon mode/key,
   and the exact one-line fix.
@@ -63,15 +67,19 @@ exists, adding one dedicated trigger entry is the only manual step.
 
 ## Design notes
 
-- The dedicated key rule: pick a regular key absent from normal keyboards
-  (`F24` is verified; `F13`–`F23` are fallbacks) and add it to vinput's
-  trigger list. This avoids collisions and does not replace the user's key.
+- The dedicated-key rule: add a key to vinput's trigger list without
+  replacing the user's key. The current default is the dictation consumer key
+  (`Dictate`); `F24` is a regular-key fallback if a downstream IME or
+  compositor cannot bind a consumer key.
 - Do not assume `Alt_R` or any user default. Changing shortcuts is normal; a
   bare synthetic modifier is not a reliable trigger for vinput 2.4.2.
 - `F24` is a normal key, so fcitx's input-context path is preserved; it is not
-  a bare modifier.
-- Upstream integration must append the dedicated key, not overwrite the
+  a bare modifier. `Dictate` also reaches the input context on the tested
+  GNOME 49/fcitx5 5.1.23 path.
+- Upstream integration must append the configured key, not overwrite the
   user's `[TriggerKey]` list.
+- fcitx rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit. Edit it
+  while fcitx is stopped; otherwise the edit is lost.
 - fcitx5-vinput is GPL-3.0. Use its D-Bus API; do not link, vendor, or copy
   its code or config handling.
 - The daemon must not write `~/.config/vinput/config.json` or
@@ -89,15 +97,16 @@ cargo test -p atvv-daemon
 cargo test --workspace
 dbus-run-session -- <mock-vinput test>
 # real device, done 2026-10-30:
-# daemon trigger_key=F24; vinput [TriggerKey] 0=Alt_R, 1=F24; voice press records
+# daemon trigger_key=DICTATE; vinput [TriggerKey] 2=Dictate; voice press records
 # after the upstream PR:
 vinput device list                     # ATVV active without manual use
 vinput daemon status                   # recording on voice press
 journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 ```
 
-- `F24` real-device path verified 2026-10-30 (operator-confirmed); the
-  `Control+Control_R` chord remains an alternative.
+- `DICTATE` real-device path verified 2026-10-30 after step 11: fcitx
+  received `Key(Dictate)` and vinput recorded from the ATVV source. The `F24`
+  and `Control+Control_R` paths remain alternatives.
 - Mock vinput with a non-default trigger: the dedicated key is appended and
   the user's key still works.
 
@@ -105,8 +114,8 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 
 - ⬜ Fresh install + pair + start `atvvd`: fcitx5-vinput records from the ATVV
   source without replacing the user's trigger key or capture device.
-- ⬜ A user with a customized trigger key keeps it and can use `F24` as an
-  additional ATVV trigger.
+- ⬜ A user with a customized trigger key keeps it and can use `Dictate`
+  (or `F24`) as an additional ATVV trigger.
 - ⬜ A user's explicit non-ATVV device is preserved.
 - ⬜ No direct writes to another application's configuration; upstream API
   only.
@@ -123,8 +132,8 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 - D-Bus mode's `StopRecording` scene-id contract is less certain than the
   trigger path; test both.
 - Auto-selection must not fight an explicit user choice or the system default.
-- Some keyboards/apps may bind `F24`; the key is configurable and a fallback
-  (`F13`–`F23`) is available.
+- Some keyboards/apps may bind `F24`; the key is configurable. `DICTATE` is
+  semantically owned by dictation software, so a future app may claim it.
 
 ## Progress log
 
@@ -133,4 +142,7 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   user trigger key.
 - 2026-10-30 — `F24` dedicated-key path verified on the real RC003: daemon
   `trigger_key = "F24"`, vinput `[TriggerKey] 0=Alt_R, 1=F24`. The default
-  trigger is now `F24` in the code; the user's existing entry is preserved.
+  trigger was `F24` at that point; the user's existing entry was preserved.
+- 2026-10-30 — step 11 changed the code default to `DICTATE`; vinput keeps
+  `0=Alt_R`, `1=Assistant` and adds `2=Dictate`. The same real press drove
+  fcitx `Key(Dictate)` and vinput recording at 16 kHz.

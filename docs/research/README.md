@@ -14,7 +14,8 @@ not a second plan and it does not override `docs/plans/`.
   snapshots, licenses, reuse boundaries, and upstream references.
 - [`consumer-keys.md`](consumer-keys.md) — `KEY_VOICECOMMAND`,
   `KEY_ASSISTANT`, and `KEY_DICTATE`: kernel/XKB/fcitx5 names, desktop usage,
-  `evdev`/`evdevil` support, and the deferred context-dependent mapping.
+  the `DICTATE` trigger default, `evdev`/`evdevil` support, and the deferred
+  context-dependent mapping.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -66,16 +67,18 @@ implementation direction:
   (`PartOf=pipewire.service`, `Restart=always`), not by an in-process monitor
   (ADR 0005).
 - **Hardware state.** Step 07 ran on a real RC003 (`C0:5D:39:F8:2D:4C`) on
-  2026-10-30. Steps 01–08 are complete; step 09 packaging is implemented and
-  the package builds. The release binaries and the packaged `atvvd` passed the
-  daemon/source/reconnect/PipeWire-restart checks; the root package install,
-  post-reboot run, and end-to-end fcitx text commit are pending. The verified
-  facts are in [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) and
+  2026-10-30. Steps 01–09 and 11 are complete; step 10 remains in progress.
+  Step 09's root package install, post-reboot run, and end-to-end fcitx text
+  commit are recorded in
   [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
-- **Input backend.** `evdev` 0.13.2's manual key table is stale and lacks
-  `KEY_DICTATE`; the fork experiment was abandoned. Step 11 will migrate
+  Step 11's evdevil run emitted `KEY_DICTATE` and made fcitx5-vinput record
+  from the ATVV source. The verified facts are in
+  [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md).
+- **Input backend.** `evdev` 0.13.2's manual key table was stale and lacked
+  `KEY_DICTATE`; the fork experiment was abandoned. Step 11 migrated
   `atvv-input` to `evdevil` 0.5.0, which includes the three consumer keys and
-  the required evdev/uinput surface. The evdev names used by the daemon
+  the required evdev/uinput surface. The daemon default trigger is now
+  `DICTATE`; `F24` remains configurable. The evdev names used by the daemon
   (`VOICECOMMAND`, `ASSISTANT`, `DICTATE`) and the fcitx5-vinput names
   (`VoiceCommand`, `Assistant`, `Dictate`) remain distinct. See
   [`consumer-keys.md`](consumer-keys.md) and
@@ -98,11 +101,11 @@ These cannot be closed by reading code or by synthetic tests:
 - Pairing gesture and LE Secure Connections numeric-comparison behavior. (The
   device was already bonded during step 07.)
 - Whether a single real-device press (voice key → daemon → synthetic trigger →
-  fcitx) records from `atvv-miremote-rc003` and commits text. The legs were
-  verified separately: a real press produced ATVV audio and the trigger
-  reached the compositor, and an automated focused-entry test made fcitx
-  record from the ATVV source at 16 kHz. A future joint spot check is useful
-  but must not be time-boxed.
+  fcitx) records from `atvv-miremote-rc003` and commits text. **Closed
+  2026-10-30 for recording, not for text:** the step-11 press produced
+  `KEY_DICTATE`, 104 frames / 24,960 samples, and fcitx5-vinput recorded from
+  the ATVV source at 16 kHz. No speech was captured, so the transcript check
+  remains a separate operator action.
 - fcitx5-vinput warm-stream behavior with the real daemon.
 - Which physical RC003 controls map to `VOICECOMMAND`, `ASSISTANT`, and
   `DICTATE`, and whether the mapping should change with the active

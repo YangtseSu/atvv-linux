@@ -39,12 +39,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: dedicated F24 trigger and upstream capture/trigger API; 11 **planned**: evdevil input backend |
+| D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: upstream capture/trigger API and automatic device selection; 11 **done**: evdevil input backend and `DICTATE` trigger default |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is in progress;
-step 11 is planned.
+step 11 is complete.
 
 ## Step files
 
@@ -60,7 +60,7 @@ step 11 is planned.
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
-| 11 | D | [input-evdevil](11-input-evdevil.md) | ⬜ not-started | 05, 08, 10 |
+| 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
 
 ## Architecture contract
 
@@ -124,18 +124,20 @@ records the ATVV source at 16 kHz. The completed record is
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily.
 
-Step 10 is in progress. The daemon now defaults to a dedicated `F24` trigger:
-a regular key that normal PC keyboards do not have, so it does not replace or
-collide with the user's vinput shortcut. vinput keeps its existing
-`[TriggerKey]` entries and adds `1=F24`; the real RC003 test confirmed this
-path. The upstream `SetCaptureDevice` and `AddTriggerKey` work, automatic
-device selection that preserves an explicit choice, and the remaining manual
-`vinput device use` step are still open.
+Step 10 is in progress. The upstream `SetCaptureDevice`/`AddTriggerKey`
+work, automatic device selection that preserves an explicit choice, and the
+remaining manual `vinput device use` step are still open. The daemon trigger
+default was changed by step 11: it is now `DICTATE` (`KEY_DICTATE`), not `F24`.
+`F24` remains available as an explicit `trigger_key`, and vinput keeps the
+user's existing `[TriggerKey]` entries and adds `2=Dictate`.
 
-Step 11 is planned, not started. It replaces the stale `evdev` 0.13.2 key
-table with `evdevil` 0.5.0 in `atvv-input`, making `VOICECOMMAND`,
-`ASSISTANT`, and `DICTATE` resolvable and emittable. The evdev fork experiment
-was abandoned; the decision and evidence are in
+Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
+`evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and
+emit. The default synthetic trigger is `DICTATE`; the daemon and vinput names
+are documented side by side. A real RC003 press at 2026-10-30 produced
+`KEY_DICTATE`, streamed 104 frames / 24,960 samples, and made fcitx5-vinput
+record from `atvv-miremote-rc003` at 16 kHz. The evdev fork experiment was
+abandoned; the decision and evidence are in
 [ADR 0006](../decisions/0006-evdevil-input-backend.md) and
 [`consumer-keys.md`](../research/consumer-keys.md). Context-dependent mapping
 of the three keys is deferred.

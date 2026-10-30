@@ -73,10 +73,23 @@ Recorded product direction (2026-10-30): the remote's consumer controls are
 intended to map to this three-key set. The exact physical-button assignment
 is not yet fixed.
 
-The current `F24` vinput trigger is **not** one of these keys. `F24` is a
-dedicated IME trigger chosen to avoid replacing a user shortcut; the three
-consumer keys are device functions. Do not conflate the two in the profile or
-in the daemon's trigger configuration.
+### Default trigger decision (2026-10-30)
+
+The daemon's default synthetic trigger is now `DICTATE`, by user direction.
+The remote's voice control is a dictation function, so the trigger and the
+device function coincide instead of using a spare function key. The vinput
+entry is `Dictate`; users keep their own `[TriggerKey]` entries.
+
+`F24` remains an explicit `trigger_key` alternative. It is not a consumer key
+and is still useful for IMEs or compositors that cannot bind these codes. Do
+not treat `F24` as the default or as a device fact.
+
+Real-device evidence (2026-10-30, `C0:5D:39:F8:2D:4C`): the daemon's evdevil
+virtual keyboard emitted `KEY_DICTATE`; fcitx5 5.1.23 received `Key(Dictate)`
+(keycode 594), and fcitx5-vinput recorded from `atvv-miremote-rc003` at
+16 kHz. A synthetic `ydotool` event with code 586 was not delivered to fcitx
+in the same session, while the daemon's virtual keyboard was; use the real
+press or an evdevil-based emitter when checking these consumer keys.
 
 ### Context-dependent mapping is TBD
 

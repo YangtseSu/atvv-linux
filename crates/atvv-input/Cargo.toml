@@ -10,5 +10,5 @@ authors.workspace = true
 
 [dependencies]
 atvv-protocol = { path = "../atvv-protocol" }
-evdev.workspace = true
+evdevil.workspace = true
 thiserror.workspace = true
