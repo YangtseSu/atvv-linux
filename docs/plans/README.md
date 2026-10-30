@@ -39,7 +39,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08 | **done**: fcitx5-vinput trigger/D-Bus, MCP surface, and an automated fcitx/source check |
+| D — Integration | 08, 10 | 08 **done**; 10 **planned**: upstream vinput capture-device API and zero-config selection |
 | E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
@@ -58,6 +58,7 @@ step 08 is complete and verified; step 09 is next.
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | 🚧 in-progress | all of 01–08 |
+| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⬜ not-started | 08 |
 
 ## Architecture contract
 
@@ -125,3 +126,9 @@ fcitx text commit; see
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily. Step 09 stays in progress until those operator checks
 and the sign-off are recorded.
+
+Step 10 is planned to remove the remaining manual vinput setup. It proposes an
+upstream fcitx5-vinput `SetCaptureDevice` D-Bus method (plus optional trigger
+API), daemon-side auto-selection that never overrides an explicit user device,
+and a recorded decision on the `trigger` vs `dbus` default. Until that lands,
+the one-time `vinput device use` step remains.

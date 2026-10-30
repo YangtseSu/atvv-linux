@@ -73,6 +73,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
 - **09 remaining acceptance**: `sudo pacman -U` into `/usr`, a post-reboot
   `atvvctl doctor` + source check, and a live fcitx text commit. These need
   root/the operator and are event-driven; do not put them on a timer.
+- **10 vinput zero-config (planned)**: upstream fcitx5-vinput
+  `SetCaptureDevice` PR, daemon auto-selection that preserves an explicit user
+  device, and the `trigger` vs `dbus` default decision. Until it lands, the
+  one-time `vinput device use` step remains. See
+  `docs/plans/10-vinput-zero-config.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -202,6 +207,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
    fabricate a result.
 6. Sign the acceptance record and mark step 09 done only when every exit
    criterion has a recorded command/output.
+
+Then **10 vinput-zero-config**: upstream fcitx5-vinput `SetCaptureDevice` PR,
+daemon auto-selection that never overrides an explicit user device, and the
+`trigger` vs `dbus` default decision. See
+[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md). Until
+it lands, `vinput device use atvv-miremote-rc003` remains a one-time step.
 
 ## Commands
 
