@@ -224,3 +224,12 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   the declared set and the provider emits one active key. Examples use the
   default vinput install index (`0=Alt_R`, so `1=Dictate`). Generic contract
   output is step 12.
+- 2026-10-31 — step 12 completed first: the provider contract is now exposed
+  by `atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
+  and the `atvv-mcp` `contract` tool. The ATVV-side deliverables of this step
+  (declared keys, docs, no config writes, vinput trigger default) are already
+  in place. Remaining work is upstream-only: the consumer-side
+  auto-selection/auto-bind issue/PR and the real vinput auto-bind check. The
+  fork at `YangtseSu/fcitx5-vinput` exists; no upstream issue or PR has been
+  submitted. The installed `0.1.0-4` package predates the provider contract
+  output.

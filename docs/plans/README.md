@@ -39,12 +39,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **in progress**: provider contract and consumer recipes |
+| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract and consumer recipes |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is in progress;
-step 11 is complete.
+steps 11 and 12 are complete.
 
 ## Step files
 
@@ -61,7 +61,7 @@ step 11 is complete.
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
-| 12 | D | [integration-contract](12-integration-contract.md) | 🚧 in-progress | 10 |
+| 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 10 |
 
 ## Architecture contract
 
@@ -112,9 +112,9 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
   `AUDIO_START` and an ignored stop echo (step 06).
 - No claim of RC003 hardware support is made before step 07.
 
-## Current state — 2026-10-30
+## Current state — 2026-10-31
 
-Steps 01–08 are complete. Step 07 ran on a real RC003
+Steps 01–09 and 11–12 are complete. Step 07 ran on a real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire
@@ -125,9 +125,10 @@ Step 08 verified the voice-edge mic control, the synthetic trigger, the
 `org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
 the same evidence document records the real-press and automated runs.
 
-Step 09 packaging and acceptance is complete: `atvv-linux 0.1.0-3` is
-root-installed, the enabled user unit started `/usr/bin/atvvd` after the
-2026-10-30 reboot, and `atvvctl doctor` reports all green on the real RC003.
+Step 09 packaging and acceptance is complete: `atvv-linux 0.1.0-3` is the
+acceptance baseline, `0.1.0-4` is installed and active, the enabled user unit
+starts `/usr/bin/atvvd`, and `atvvctl doctor` reports all green on the real
+RC003.
 The end-to-end fcitx text commit is operator-confirmed and the vinput journal
 records the ATVV source at 16 kHz. The completed record is
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
@@ -148,14 +149,15 @@ the declared set is `DICTATE`, `VOICECOMMAND`, `ASSISTANT`. Evidence:
 [`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md) and
 [ADR 0007](../decisions/0007-integration-direction.md).
 
-Step 12 is in progress: the provider contract
+Step 12 is complete: the provider contract
 (`atvv.contract_version`, `atvv.profile`, `atvv.recording_keys`) is on the
 source and documented in
 [`docs/integrations/provider-contract.md`](../integrations/provider-contract.md).
-The target consumers are fcitx5-vinput, browser AI chat pages, coding agents
-(Claude Code, Codex, OMP), and IM applications (Telegram, WeChat). Generic
-`atvvctl`/MCP contract output and the remaining consumer recipes are open. No
-per-application diagnostics are planned.
+`atvvctl contract [--json]`, the `contract` object in `atvvctl status`, the
+`atvv-mcp` `contract` tool, and the browser/IM recipes are implemented. The
+target consumers are fcitx5-vinput, browser AI chat pages, coding agents
+(Claude Code, Codex, OMP), and IM applications (Telegram, WeChat). No
+per-application diagnostics are provided.
 
 Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
 `evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and

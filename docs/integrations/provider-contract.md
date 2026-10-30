@@ -1,6 +1,7 @@
 # Provider contract
 
-Status: source metadata implemented 2026-10-31; this is the current guidance.
+Status: source metadata and generic contract output implemented
+2026-10-31; this is the current guidance.
 
 ## Goal
 
@@ -84,7 +85,12 @@ not try to discover an arbitrary application's shortcut.
 - `org.atvv.Daemon` on the session bus: status JSON, `StartVoice`,
   `StopVoice`, `ToggleVoice`, `ReloadConfig`, `ListDevices`.
 - `atvvctl`: human and JSON diagnostics; no per-application commands.
-- `atvv-mcp`: stdio MCP for coding agents (`status`, `voice_*`,
+- `atvvctl contract [--json]`: the provider contract consumers discover on the
+  source (profile, source, media class, format, declared keys, active key,
+  input/keyboard readiness, D-Bus/MCP endpoints, and a generic recipe).
+- `atvvctl status`: the full daemon view; its `contract` object is the same
+  contract data.
+- `atvv-mcp`: stdio MCP for coding agents (`status`, `contract`, `voice_*`,
   `list_devices`, `reload`). MCP is control/status, not an audio transport.
 
 ## Consumer recipes
@@ -118,9 +124,7 @@ virtual keyboard cannot reach the input method; it is not the default.
 
 ### Browser AI chat pages
 
-Select the ATVV source in the browser's microphone picker and record while
-holding the remote voice key. Pages cannot bind global shortcuts; use their
-own record button. No ATVV-specific API is required.
+See [browser-ai-chat](browser-ai-chat.md).
 
 ### Coding agents
 
@@ -131,9 +135,7 @@ If the agent needs the raw audio, it can record from the PipeWire source with
 
 ### IM applications
 
-Select the ATVV source in the application's microphone settings and hold the
-remote voice key while recording a voice message. No ATVV-specific API is
-required.
+See [im-applications](im-applications.md).
 
 ### Generic recorder
 
@@ -145,10 +147,12 @@ pw-cat --record --target atvv-miremote-rc003 /tmp/atvv.wav
 
 Generic only:
 
-- `atvvctl status` — daemon, source, input, and declared keys.
+- `atvvctl status` — daemon, source, input, and the `contract` object.
 - `atvvctl doctor` — provider-side checks (D-Bus, BlueZ, PipeWire, uinput,
-  config).
-- `atvvctl contract` — the machine-readable provider contract (planned).
+  config) including whether the live source advertises `atvv.*` properties.
+- `atvvctl contract [--json]` — the provider contract reported by the running
+  daemon.
+- `atvv-mcp contract` — the same object for coding agents.
 
 Per-consumer setup belongs in the documents above. If a consumer cannot see
 the source or its shortcut does not match, the fix belongs in that consumer's

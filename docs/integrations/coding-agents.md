@@ -39,7 +39,8 @@ or in an MCP JSON configuration:
 
 | Tool | Arguments | Result |
 |---|---|---|
-| `status` | none | daemon status JSON (`state`, `connected`, `streaming`, `device`, `caps`, `audio`, `input`, `vinput`, `config`, `last_error`) |
+| `status` | none | daemon status JSON (`state`, `connected`, `streaming`, `device`, `caps`, `audio`, `input`, `vinput`, `contract`, `config`, `last_error`) |
+| `contract` | none | provider contract JSON (profile, source, format, declared recording keys, active key, input/keyboard state, endpoints, recipe) |
 | `voice_start` | none | opens the remote mic (`MIC_OPEN`) |
 | `voice_stop` | none | closes the remote mic (`MIC_CLOSE`) |
 | `voice_toggle` | none | starts when idle, stops while opening/streaming |
@@ -49,6 +50,40 @@ or in an MCP JSON configuration:
 A backend failure is returned as `isError: true` with the error text, so the
 agent can report "daemon not running" instead of hanging. An unknown tool is a
 JSON-RPC `-32602` error.
+
+### Contract
+
+Call `contract` once at startup when the agent needs to know the capture
+surface. It returns the same object as `atvvctl contract --json`:
+
+```json
+{
+  "version": "1",
+  "profile": "miremote-rc003",
+  "source": "atvv-miremote-rc003",
+  "media_class": "Audio/Source",
+  "sample_format": "s16le",
+  "sample_rate": 16000,
+  "channels": 1,
+  "recording_keys": ["DICTATE", "VOICECOMMAND", "ASSISTANT"],
+  "active_key": "DICTATE",
+  "input_ready": true,
+  "keyboard_ready": true,
+  "dbus": {
+    "name": "org.atvv.Daemon",
+    "path": "/org/atvv/Daemon",
+    "interface": "org.atvv.Daemon"
+  },
+  "mcp": {"command": "atvv-mcp", "transport": "stdio"},
+  "recipe": "Select atvv-miremote-rc003 as the capture source; bind DICTATE, VOICECOMMAND, ASSISTANT or set the consumer shortcut to the active key."
+}
+```
+
+`active_key` is the configured key in trigger mode. `input_ready` and
+`keyboard_ready` report whether it can be emitted now; a disconnected remote
+leaves the key configured but not currently emittable. The agent does not need
+to select the source or bind keys; fcitx5-vinput owns that. The contract is for
+discovery and diagnostics.
 
 On the RC003, `voice_start` opens the session but the physical voice key still
 gates audio frames. For hands-free operation use fcitx5-vinput's trigger mode;

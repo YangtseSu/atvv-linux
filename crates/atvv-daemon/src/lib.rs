@@ -18,7 +18,8 @@ pub use config::VinputMode;
 pub use daemon::{Command, Daemon, DaemonConfig, DaemonEvent, DaemonHandle, EventSink, NullSink};
 pub use dbus::{Client, ClientError};
 pub use status::{
-    AudioView, CapsView, ConfigView, DeviceView, InputView, StatusCell, StatusView, VinputView,
+    AudioView, CapsView, ConfigView, ContractView, DbusView, DeviceView, InputView, McpView,
+    StatusCell, StatusView, VinputView,
 };
 pub use transport::{
     BluezTransport, MockConfig, MockHandle, MockTransport, Transport, TransportEvent,

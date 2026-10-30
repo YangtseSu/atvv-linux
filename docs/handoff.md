@@ -7,8 +7,8 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 118 passed (18 suites),
-  2 ignored kernel-uinput tests (both pass with `/dev/uinput` access).
+- Tests: `cargo test --workspace` → 126 passed, 2 ignored kernel-uinput
+  tests (both pass with `/dev/uinput` access).
 
 ## Read first
 
@@ -65,12 +65,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   started `/usr/bin/atvvd`, `atvvctl doctor` was all green, and the end-to-end
   fcitx text commit was operator-confirmed. Completed record:
   `docs/acceptance/rc003-2026-10-30.md`.
-- **0.1.0-4 package (built, install pending)**: a deterministic source
-  tarball from `d6a09b0` (sha256
+- **0.1.0-4 package (installed and active)**: a deterministic source tarball
+  from `d6a09b0` (sha256
   `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`) and
-  `makepkg -f` produced `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package. Root installation is pending the operator. The installed
-  `0.1.0-3` service is stopped because its `evdev` key table rejects
-  `trigger_key = "DICTATE"`; the `0.1.0-4` binary accepts the live config.
+  `makepkg -f` produced `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package.
+  The package is installed on 2026-10-31; the enabled user unit runs
+  `/usr/bin/atvvd` and accepts the live `trigger_key = "DICTATE"` config.
+  Its build predates the provider-contract output, so the installed source
+  does not yet advertise `atvv.*`.
 - **11 evdevil input backend (complete)**: `atvv-input` now uses `evdevil`
   0.5.0 (`Key`, `Evdev`, `EventReader`, `UinputDevice`) instead of `evdev`
   0.13.2; 0BSD added to `deny.toml`; discovery skips unreadable/vanished
@@ -81,6 +83,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   A real RC003 press emitted `KEY_DICTATE`, streamed 104 frames / 24,960
   samples, and made fcitx5-vinput record from `atvv-miremote-rc003` at 16 kHz.
   See `docs/plans/11-input-evdevil.md`.
+- **12 provider contract (complete and verified)**: `StatusView.contract` is
+  the single source of truth (version, profile, source, media class, format,
+  declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
+  recipe). `atvvctl contract [--json]` prints it, `atvvctl status` carries it,
+  `atvvctl doctor` checks it plus the live `atvv.*` properties, and
+  `atvv-mcp` exposes it as the `contract` tool. Browser AI chat and IM recipes
+  are first-class documents. See `docs/plans/12-integration-contract.md`.
 
 ## Not implemented
 
@@ -93,17 +102,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   setup, not a workaround. The ATVV-side `SetCaptureDevice` push and
   `vinput_device` policy are dropped. `vinput = "trigger"` remains the
   default; `vinput = "dbus"` is an explicit fallback. The live `daemon.toml`
-  already sets `trigger_key = "DICTATE"`; the stopped service will accept it
-  once `0.1.0-4` is installed. See `docs/plans/10-vinput-zero-config.md`,
+  already sets `trigger_key = "DICTATE"`; the installed `0.1.0-4` service
+  accepts it. The primary upstream request is still consumer-side source
+  auto-selection plus auto-binding of `atvv.recording_keys`; it is not
+  submitted. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **12 provider contract (in progress)**: the source advertises
-  `atvv.contract_version=1`, `atvv.profile`, and
-  `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`; the generic contract
-  and consumer recipes are in `docs/integrations/provider-contract.md`.
-  Generic `atvvctl contract`, MCP `contract`, browser/IM recipes, and real
-  checks remain. No per-application diagnostics are planned. See
-  `docs/plans/12-integration-contract.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -199,7 +203,7 @@ reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 ```
 
-- `cargo test --workspace` → 118 passed, 2 ignored; `cargo test -p atvv-input -- --ignored --test-threads=1` → 2 passed.
+- `cargo test --workspace` → 126 passed, 2 ignored; `cargo test -p atvv-input -- --ignored --test-threads=1` → 2 passed.
 - 2026-10-31 `cargo run -q -p atvv-cli -- audio test --seconds 5` and
   `pw-cli info atvv-test` → `media.class="Audio/Source"`,
   `atvv.contract_version="1"`, `atvv.profile="test"`,
@@ -224,7 +228,7 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 - 2026-10-30 `makepkg -f` with the step-11 source at `d6a09b0` →
   `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package; source checksum
   `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`.
-  Root install is pending the operator; `pkexec` was dismissed.
+  Installed on 2026-10-31; the enabled unit runs `/usr/bin/atvvd`.
 - CI run 41080061199 on `d6a09b0` failed in `cargo clippy`: `libdbus-sys`
   could not find `dbus-1.pc`. The test job now installs `libdbus-1-dev` and
   `pkg-config`; the next run is pending.
@@ -264,39 +268,39 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   accepted when the WAV contains data.
 - `atvvctl completions <shell>` and `atvvctl manpages <dir>` work from the
   release binary; a broken stdout pipe returns an error instead of panicking.
+- 2026-10-31 step 12 contract check: `cargo test -p atvv-cli --test contract`
+  → 1 passed; `cargo test -p atvv-mcp --test stdio` → 1 passed. A temporary
+  workspace `atvvd --mock` on the real PipeWire graph exposed
+  `atvv.contract_version="1"`, `atvv.profile="miremote-rc003"`, and
+  `atvv.recording_keys="DICTATE,VOICECOMMAND,ASSISTANT"` on
+  `atvv-miremote-rc003`; `atvvctl contract`/`status` printed the contract;
+  `atvvctl doctor` reported `properties ok` and `contract ok`;
+  `timeout 3 pw-cat --record --target atvv-miremote-rc003 --rate 16000
+  --channels 1 --format s16` produced a 96,246-byte WAV. The installed
+  `0.1.0-4` unit was stopped for the check and restarted afterwards.
 
 ## Next step
 
-**09 packaging-and-acceptance is complete.** The root install, post-reboot
-start, all-green `atvvctl doctor`, 16 kHz ATVV source, and end-to-end fcitx
-text commit are recorded in
-[`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-2026-10-30.md).
+**Step 12 is complete.** The provider contract is available through
+`atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
+`atvvctl doctor`, and the `atvv-mcp` `contract` tool. Browser and IM recipes
+are documented. The installed `0.1.0-4` package predates this output; rebuild
+and install a new package to expose `atvv.*` on the resident source.
 
-**11 input-evdevil is complete.** `atvv-input` uses `evdevil` 0.5.0, the
-three consumer keys resolve and emit, and the default trigger is `DICTATE`.
-The real RC003 press drove `MIC_OPEN`/`MIC_CLOSE`, `KEY_DICTATE`, and vinput
-recording. See
-[`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md) and
-[ADR 0006](decisions/0006-evdevil-input-backend.md).
+**Step 10 vinput-zero-config remains** (in progress, upstream-bound): ATVV is
+the provider and vinput is the consumer. The primary path is the resident
+PipeWire source plus the standard `Dictate` key; the one-time
+`vinput device use` and `Dictate` at the next free index (default install:
+`1=Dictate`) setup is correct layering. A consumer-side
+auto-selection/auto-bind feature would remove the manual entries; the
+ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). The upstream issue
+and PR are not submitted. `vinput = "trigger"` stays the default;
+`vinput = "dbus"` is an explicit fallback.
 
-**10 vinput-zero-config remains** (in progress): ATVV is the provider and
-vinput is the consumer. The primary path is the resident PipeWire source plus
-the standard `Dictate` key; the one-time `vinput device use` and `Dictate` at
-the next free index (default install: `1=Dictate`) setup is correct layering.
-A consumer-side auto-selection/auto-bind feature would remove the manual
-entries; the ATVV-side `SetCaptureDevice` push is dropped (ADR 0007).
-`vinput = "trigger"` stays the default; `vinput = "dbus"` is an explicit
-fallback. The next action is the operator install:
-
-```sh
-sudo pacman -U packaging/arch/atvv-linux-0.1.0-4-x86_64.pkg.tar.zst
-systemctl --user start atvvd
-atvvctl doctor
-```
-
-The installed `0.1.0-3` service is stopped because it cannot parse
-`DICTATE`; `0.1.0-4` is built and accepts the live config. See
-[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
+Immediate action: rebuild the Arch package from the step-12 tree
+(`./packaging/arch/make-source.sh`, then `makepkg -f`), and have the operator
+install it so the resident source advertises the contract. Then proceed with
+the step 10 upstream issue/PR and the real vinput auto-bind check.
 
 ## Commands
 
@@ -317,6 +321,7 @@ cargo run -q -p atvv-cli -- audio test --seconds 3
 cargo run -q -p atvv-cli -- input fake-remote
 dbus-run-session -- cargo run -q -p atvv-daemon -- --mock --verbose
 cargo run -q -p atvv-cli -- status
+cargo run -q -p atvv-cli -- contract --json
 cargo run -q -p atvv-cli -- mic start
 cargo run -q -p atvv-cli -- mic stop
 cargo run -q -p atvv-cli -- mic toggle

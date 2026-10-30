@@ -11,7 +11,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
-use atvv_daemon::Client;
+use atvv_daemon::{Client, ContractView};
 use atvv_input::{ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, RemoteEvent};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
@@ -60,6 +60,12 @@ enum Command {
     },
     /// Show the running daemon's status from `org.atvv.Daemon`.
     Status,
+    /// Print the provider contract consumers discover on the source.
+    Contract {
+        /// Emit the contract as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Control the remote microphone through the daemon.
     Mic {
         #[command(subcommand)]
@@ -184,6 +190,7 @@ fn run() -> Result<(), String> {
             InputCommand::FakeRemote { hold } => input_fake_remote(hold),
         },
         Command::Status => status(),
+        Command::Contract { json } => contract(json),
         Command::Mic { command } => mic(command),
         Command::Reload => reload(),
         Command::Pair {
@@ -247,6 +254,57 @@ fn status() -> Result<(), String> {
     let rendered = serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?;
     println!("{rendered}");
     Ok(())
+}
+
+fn contract(json: bool) -> Result<(), String> {
+    let client = daemon_client()?;
+    let status = client
+        .status()
+        .map_err(|error| format!("cannot read daemon status: {error}"))?;
+    if json {
+        let rendered = serde_json::to_string_pretty(&status.contract)
+            .map_err(|error| format!("cannot render contract: {error}"))?;
+        println!("{rendered}");
+    } else {
+        print!("{}", render_contract(&status.contract));
+    }
+    Ok(())
+}
+
+fn render_contract(contract: &ContractView) -> String {
+    let layout = if contract.channels == 1 {
+        "mono".to_string()
+    } else {
+        format!("{} channels", contract.channels)
+    };
+    let active = contract.active_key.as_deref().unwrap_or("none");
+    format!(
+        "profile:        {}\nsource:         {}\nmedia class:    {}\nformat:         {} Hz {} {}\nrecording keys: {}\nactive key:     {}\ninput:          {}\nkeyboard:       {}\ndbus:           {} {} {}\nmcp:            {} ({})\nrecipe:         {}\n",
+        contract.profile,
+        contract.source,
+        contract.media_class,
+        contract.sample_rate,
+        layout,
+        contract.sample_format,
+        contract.recording_keys.join(", "),
+        active,
+        if contract.input_ready {
+            "ready"
+        } else {
+            "unavailable"
+        },
+        if contract.keyboard_ready {
+            "ready"
+        } else {
+            "unavailable"
+        },
+        contract.dbus.name,
+        contract.dbus.path,
+        contract.dbus.interface,
+        contract.mcp.command,
+        contract.mcp.transport,
+        contract.recipe,
+    )
 }
 
 fn mic(command: MicCommand) -> Result<(), String> {
@@ -516,11 +574,28 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
             .args(["info", &status.audio.source])
             .output()
         {
-            Ok(output) if output.status.success() => checks.push(Check::new(
-                "pipewire",
-                CheckState::Ok,
-                format!("node {} found", status.audio.source),
-            )),
+            Ok(output) if output.status.success() => {
+                checks.push(Check::new(
+                    "pipewire",
+                    CheckState::Ok,
+                    format!("node {} found", status.audio.source),
+                ));
+                let advertised = String::from_utf8_lossy(&output.stdout).contains("atvv.");
+                checks.push(Check::new(
+                    "properties",
+                    if advertised {
+                        CheckState::Ok
+                    } else {
+                        CheckState::Warn
+                    },
+                    if advertised {
+                        "source advertises the atvv.* contract".to_string()
+                    } else {
+                        "source advertises no atvv.* properties; rebuild or restart atvvd"
+                            .to_string()
+                    },
+                ));
+            }
             Ok(_) => checks.push(Check::new(
                 "pipewire",
                 CheckState::Warn,
@@ -532,6 +607,30 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
                 format!("pw-cli unavailable: {error}"),
             )),
         }
+
+        let contract = &status.contract;
+        let declared = if contract.recording_keys.is_empty() {
+            "none".to_string()
+        } else {
+            contract.recording_keys.join(",")
+        };
+        checks.push(Check::new(
+            "contract",
+            if contract.recording_keys.is_empty() {
+                CheckState::Warn
+            } else {
+                CheckState::Ok
+            },
+            format!(
+                "v{} {} {} Hz {}; keys {}; active {}",
+                contract.version,
+                contract.media_class,
+                contract.sample_rate,
+                contract.sample_format,
+                declared,
+                contract.active_key.as_deref().unwrap_or("none")
+            ),
+        ));
     } else {
         checks.push(Check::new(
             "source",
@@ -1097,7 +1196,71 @@ fn parse_hex(input: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_hex;
+    use super::{parse_hex, render_contract};
+    use atvv_daemon::{ContractView, DbusView, McpView};
+
+    fn contract() -> ContractView {
+        ContractView {
+            version: "1".to_string(),
+            profile: "miremote-rc003".to_string(),
+            source: "atvv-miremote-rc003".to_string(),
+            media_class: "Audio/Source".to_string(),
+            sample_format: "s16le".to_string(),
+            sample_rate: 16_000,
+            channels: 1,
+            recording_keys: vec![
+                "DICTATE".to_string(),
+                "VOICECOMMAND".to_string(),
+                "ASSISTANT".to_string(),
+            ],
+            active_key: Some("DICTATE".to_string()),
+            input_ready: true,
+            keyboard_ready: true,
+            dbus: DbusView {
+                name: "org.atvv.Daemon".to_string(),
+                path: "/org/atvv/Daemon".to_string(),
+                interface: "org.atvv.Daemon".to_string(),
+            },
+            mcp: McpView {
+                command: "atvv-mcp".to_string(),
+                transport: "stdio".to_string(),
+            },
+            recipe: "Select atvv-miremote-rc003; bind the declared keys.".to_string(),
+        }
+    }
+
+    #[test]
+    fn renders_the_contract_for_consumers() {
+        let text = render_contract(&contract());
+        for expected in [
+            "profile:        miremote-rc003",
+            "source:         atvv-miremote-rc003",
+            "media class:    Audio/Source",
+            "format:         16000 Hz mono s16le",
+            "recording keys: DICTATE, VOICECOMMAND, ASSISTANT",
+            "active key:     DICTATE",
+            "input:          ready",
+            "keyboard:       ready",
+            "dbus:           org.atvv.Daemon /org/atvv/Daemon org.atvv.Daemon",
+            "mcp:            atvv-mcp (stdio)",
+        ] {
+            assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+        }
+    }
+
+    #[test]
+    fn renders_missing_active_key_and_multichannel_layout() {
+        let mut contract = contract();
+        contract.active_key = None;
+        contract.input_ready = false;
+        contract.keyboard_ready = false;
+        contract.channels = 2;
+        let text = render_contract(&contract);
+        assert!(text.contains("format:         16000 Hz 2 channels s16le"));
+        assert!(text.contains("active key:     none"));
+        assert!(text.contains("input:          unavailable"));
+        assert!(text.contains("keyboard:       unavailable"));
+    }
 
     #[test]
     fn parses_spaced_prefixed_and_plain_hex() {

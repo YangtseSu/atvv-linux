@@ -39,6 +39,18 @@ pub struct AudioSourceConfig {
     pub extra_properties: Vec<(String, String)>,
 }
 
+/// Version of the provider contract implemented by this source.
+pub const CONTRACT_VERSION: &str = "1";
+
+/// PipeWire media class of the provider source.
+pub const MEDIA_CLASS: &str = "Audio/Source";
+
+/// Sample format of the provider source.
+pub const SAMPLE_FORMAT: &str = "s16le";
+
+/// Channel count of the provider source.
+pub const CHANNELS: u32 = 1;
+
 /// Canonical recording keys declared by an ATVV source, in priority order.
 ///
 /// These are evdev names. Consumers map them to their own vocabulary (for
@@ -49,7 +61,10 @@ pub const RECORDING_KEYS: &[&str] = &["DICTATE", "VOICECOMMAND", "ASSISTANT"];
 #[must_use]
 pub fn contract_properties(profile: &str) -> Vec<(String, String)> {
     vec![
-        ("atvv.contract_version".to_string(), "1".to_string()),
+        (
+            "atvv.contract_version".to_string(),
+            CONTRACT_VERSION.to_string(),
+        ),
         ("atvv.profile".to_string(), profile.to_string()),
         ("atvv.recording_keys".to_string(), RECORDING_KEYS.join(",")),
     ]
@@ -270,7 +285,7 @@ fn run_session(
     let mut props = properties! {
         *pw::keys::MEDIA_TYPE => "Audio",
         *pw::keys::MEDIA_CATEGORY => "Capture",
-        *pw::keys::MEDIA_CLASS => "Audio/Source",
+        *pw::keys::MEDIA_CLASS => MEDIA_CLASS,
         *pw::keys::MEDIA_ROLE => "Communication",
         *pw::keys::NODE_NAME => config.name.clone(),
         *pw::keys::NODE_DESCRIPTION => config.description.clone(),
@@ -451,7 +466,10 @@ mod tests {
     #[test]
     fn contract_declares_the_recording_keys() {
         let props = contract_properties("miremote-rc003");
-        assert!(props.contains(&("atvv.contract_version".to_string(), "1".to_string())));
+        assert!(props.contains(&(
+            "atvv.contract_version".to_string(),
+            CONTRACT_VERSION.to_string()
+        )));
         assert!(props.contains(&("atvv.profile".to_string(), "miremote-rc003".to_string())));
         assert!(props.contains(&(
             "atvv.recording_keys".to_string(),

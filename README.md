@@ -9,10 +9,10 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–08 complete and verified. Step 09 packaging is implemented; the
-package builds, and the release binaries passed the daemon, source, reconnect,
-and PipeWire-restart checks on a real RC003. The installed-package,
-post-reboot, and end-to-end fcitx text checks remain.**
+**Steps 01–09 and 11 are complete.** The package is installed, the user unit
+runs, and `atvvctl doctor` reports green on a real RC003. Step 10 (vinput
+zero-config) depends on an upstream consumer change; step 12 (provider contract
+output and consumer recipes) is in progress.
 
 The RC003 path and the fcitx5-vinput source path have both run on real system
 services.
@@ -38,15 +38,10 @@ Implemented:
   input layer, and a JSON view model over `org.atvv.Daemon`.
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
   simulation, an audio-source smoke test, the fake input remote, plus
-  `status`, `mic start|stop|toggle`, `reload`, `pair`, `record`, `monitor`, and
-  `doctor`.
-- `atvv-mcp`: stdio MCP server with `status`, `voice_start`, `voice_stop`,
-  `voice_toggle`, `list_devices`, and `reload`.
-
-Not yet complete:
-
-- Installed-package, post-reboot, and end-to-end fcitx text acceptance (step
-  09); the package builds and its unit and udev syntax pass.
+  `status`, `contract`, `mic start|stop|toggle`, `reload`, `pair`, `record`,
+  `monitor`, and `doctor`.
+- `atvv-mcp`: stdio MCP server with `status`, `contract`, `voice_start`,
+  `voice_stop`, `voice_toggle`, `list_devices`, and `reload`.
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run

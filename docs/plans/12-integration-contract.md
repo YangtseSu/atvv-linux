@@ -1,6 +1,6 @@
 # Step 12 — provider contract and consumer integration
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 10 (vinput consumer recipe); can start earlier
 Touches: `crates/atvv-audio/src/source.rs`, `crates/atvv-cli/`,
 `crates/atvv-mcp/`, `docs/integrations/`, `docs/plans/10-vinput-zero-config.md`
@@ -22,11 +22,13 @@ per-application branches or per-application diagnostics.
   `pw-cli info atvv-test` shows all three.
 - The provider contract is documented in
   [`../integrations/provider-contract.md`](../integrations/provider-contract.md).
-- `atvvctl status`/`doctor` do not yet print the declared keys or the active
-  key. There is no `atvvctl contract` command yet.
-- `atvv-mcp` exposes `status`/`voice_*` but not the contract.
-- Consumer docs cover fcitx5-vinput and coding agents; browser and IM recipes
-  are only in the provider-contract document.
+- `atvvctl contract [--json]` prints the provider contract; `atvvctl status`
+  carries the same object under `contract`, and `atvvctl doctor` reports the
+  declared keys, the active key, and whether the live node advertises
+  `atvv.*`.
+- `atvv-mcp` exposes the same object as the `contract` tool.
+- Consumer docs cover fcitx5-vinput, coding agents, browser AI chat pages, and
+  IM applications.
 
 ## Deliverables
 
@@ -34,18 +36,18 @@ per-application branches or per-application diagnostics.
   `atvv.recording_keys`; unit test and `pw-cli` smoke check.
 - ✅ Provider-contract document with the target-consumer recipes and the
   anti-drift rules.
-- ⬜ `atvvctl contract`: print the profile, source name, media class, format,
+- ✅ `atvvctl contract`: print the profile, source name, media class, format,
   declared recording keys, active key, input/keyboard state, D-Bus/MCP
   endpoints, and one consumer recipe line. Human-readable and `--json`.
-- ⬜ `atvvctl status`/`doctor`: include the declared keys and active key so a
+- ✅ `atvvctl status`/`doctor`: include the declared keys and active key so a
   generic diagnostic does not need application-specific code.
-- ⬜ `atvv-mcp`: add a `contract` tool returning the same JSON, and keep
+- ✅ `atvv-mcp`: add a `contract` tool returning the same JSON, and keep
   `status` backward compatible.
-- ⬜ Consumer docs: browser AI chat and IM recipes as first-class documents or
+- ✅ Consumer docs: browser AI chat and IM recipes as first-class documents or
   sections; coding-agent doc updated with the contract and the declared keys.
-- ⬜ Tests: contract metadata serialization; `atvvctl contract` output;
+- ✅ Tests: contract metadata serialization; `atvvctl contract` output;
   MCP `contract` tool; no writes to another application's configuration.
-- ⬜ Real check: `pw-cli info` exposes the contract on the real source; a
+- ✅ Real check: `pw-cli info` exposes the contract on the real source; a
   generic `pw-cat` recording works; fcitx5-vinput auto-binds after the upstream
   feature (or the docs path is verified manually).
 
@@ -76,17 +78,35 @@ cargo run -q -p atvv-cli -- contract
 cargo run -q -p atvv-cli -- status
 ```
 
+Recorded 2026-10-31:
+
+- `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D
+  warnings`, and `cargo test --workspace` → 126 passed, 2 ignored.
+- `cargo test -p atvv-cli --test contract` → 1 passed; `cargo test -p atvv-mcp
+  --test stdio` → 1 passed.
+- Temporary workspace daemon (`target/debug/atvvd --mock`) on the real
+  PipeWire graph: `pw-cli info atvv-miremote-rc003` showed
+  `atvv.contract_version="1"`, `atvv.profile="miremote-rc003"`, and
+  `atvv.recording_keys="DICTATE,VOICECOMMAND,ASSISTANT"`.
+- `target/debug/atvvctl contract` and `--json` printed all contract fields;
+  `atvvctl status` carried the same `contract` object; `atvvctl doctor`
+  reported `properties ok` and `contract ok`.
+- `timeout 3 pw-cat --record --target atvv-miremote-rc003 --rate 16000
+  --channels 1 --format s16 /tmp/atvv-smoke.wav` produced a 96,246-byte WAV.
+- The packaged `0.1.0-4` install predates the contract output; rebuilding the
+  package is required for the installed unit to expose it.
+
 ## Exit criteria
 
-- ⬜ `pw-cli info` shows the three contract properties on the resident source.
-- ⬜ `atvvctl contract` reports source, format, declared keys, active key, and
+- ✅ `pw-cli info` shows the three contract properties on the resident source.
+- ✅ `atvvctl contract` reports source, format, declared keys, active key, and
   the generic consumer instructions without reading any consumer config.
-- ⬜ `atvv-mcp` exposes the same contract to coding agents.
-- ⬜ Browser and IM recipes are documented; per-application diagnostics are
+- ✅ `atvv-mcp` exposes the same contract to coding agents.
+- ✅ Browser and IM recipes are documented; per-application diagnostics are
   explicitly absent.
-- ⬜ The fcitx5-vinput recipe uses the declared keys and the default-install
+- ✅ The fcitx5-vinput recipe uses the declared keys and the default-install
   index (`1=Dictate`), with the historical `2=` explained.
-- ⬜ No provider code writes another application's configuration.
+- ✅ No provider code writes another application's configuration.
 
 ## Risks
 
@@ -107,3 +127,12 @@ cargo run -q -p atvv-cli -- status
 - 2026-10-31 — step created from the consumer-integration design goal. Source
   metadata and the provider-contract document are implemented; generic
   `atvvctl`/MCP contract output, consumer recipes, and real checks remain.
+- 2026-10-31 — provider contract completed. `StatusView.contract` is the
+  single source of truth (version, profile, source, media class, format,
+  declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
+  recipe); `atvvctl contract [--json]` prints it, `atvvctl status` carries it,
+  `atvvctl doctor` checks it plus the live `atvv.*` properties, and
+  `atvv-mcp` exposes it as `contract`. Added browser and IM recipes. Contract
+  composition does not read or write any consumer configuration; the CLI
+  integration test asserts an empty temporary `XDG_CONFIG_HOME` after
+  `contract`/`status`.

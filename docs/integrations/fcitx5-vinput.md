@@ -62,7 +62,9 @@ key edge opens the microphone; a software start cannot produce frames.
 
    On a default install the existing entry is `0=Alt_R`, so `Dictate` is
    `1=Dictate`. A customized list uses its next free index; never copy a
-   higher index from another machine. `atvvd` defaults to
+   higher index from another machine. If `1` is already taken (for example by
+   `Assistant`), `Dictate` takes the next free index; indices are per-user.
+   `atvvd` defaults to
    `trigger_key = "DICTATE"`, which emits the dictation consumer key. Stop
    fcitx5 before editing this file: the addon rewrites its in-memory
    configuration on exit, so an edit made while fcitx5 is running can be

@@ -7,5 +7,6 @@
 mod source;
 
 pub use source::{
-    AudioSource, AudioSourceConfig, AudioSourceError, PcmQueue, RECORDING_KEYS, contract_properties,
+    AudioSource, AudioSourceConfig, AudioSourceError, CHANNELS, CONTRACT_VERSION, MEDIA_CLASS,
+    PcmQueue, RECORDING_KEYS, SAMPLE_FORMAT, contract_properties,
 };

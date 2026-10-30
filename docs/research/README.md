@@ -96,8 +96,11 @@ implementation direction:
   `org.fcitx.Vinput` is not viable, and ATVV does not call
   `SetCaptureDevice` in the primary path (ADR 0007). See
   [`vinput-upstream-api.md`](vinput-upstream-api.md).
-- **Consumer integration.** The provider contract is recorded in `AGENTS.md`
-  and [`../integrations/provider-contract.md`](../integrations/provider-contract.md):
+- **Consumer integration.** The provider contract is implemented and recorded
+  in `AGENTS.md` and
+  [`../integrations/provider-contract.md`](../integrations/provider-contract.md);
+  `atvvctl contract [--json]`, the `contract` object in `status`, and the
+  `atvv-mcp` `contract` tool expose it:
   PipeWire source, declared recording keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`), generic control/status, and consumer-owned configuration.
   Per-application diagnostics are out of scope.

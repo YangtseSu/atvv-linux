@@ -25,6 +25,7 @@ const INVALID_PARAMS: i64 = -32602;
 /// Tool names exposed to MCP clients.
 pub const TOOLS: &[&str] = &[
     "status",
+    "contract",
     "voice_start",
     "voice_stop",
     "voice_toggle",
@@ -103,6 +104,7 @@ impl<B: Backend> Server<B> {
         };
         let result = match name {
             "status" => self.backend.status().map(|status| pretty(&status)),
+            "contract" => self.backend.contract().map(|contract| pretty(&contract)),
             "voice_start" => self
                 .backend
                 .voice_start()
@@ -194,7 +196,13 @@ fn tools() -> Value {
         tool(
             "status",
             "Daemon status as JSON: session state, device, caps, audio counters, \
-             input, vinput mode, config, and the last error."
+             input, vinput mode, contract, config, and the last error."
+        ),
+        tool(
+            "contract",
+            "Provider contract as JSON: profile, source node, media class, sample \
+             format, declared recording keys, active key, input/keyboard state, \
+             D-Bus/MCP endpoints, and a consumer recipe."
         ),
         tool(
             "voice_start",
@@ -251,6 +259,21 @@ mod tests {
                 return Err("daemon is not running".to_string());
             }
             Ok(json!({"state": "ready", "connected": true}))
+        }
+
+        fn contract(&mut self) -> Result<Value, String> {
+            self.calls.push("contract");
+            if self.fail {
+                return Err("daemon is not running".to_string());
+            }
+            Ok(json!({
+                "version": "1",
+                "profile": "miremote-rc003",
+                "source": "atvv-miremote-rc003",
+                "media_class": "Audio/Source",
+                "recording_keys": ["DICTATE", "VOICECOMMAND", "ASSISTANT"],
+                "active_key": "DICTATE"
+            }))
         }
 
         fn voice_start(&mut self) -> Result<(), String> {
@@ -355,6 +378,44 @@ mod tests {
         );
         assert_eq!(response["result"]["isError"], false);
         assert_eq!(server.backend.calls, ["status", "voice_toggle"]);
+    }
+
+    #[test]
+    fn contract_tool_returns_the_provider_contract() {
+        let mut server = Server::new(FakeBackend::default());
+        let response = request(
+            &mut server,
+            "tools/call",
+            json!({"name": "contract", "arguments": {}}),
+        );
+        assert_eq!(response["result"]["isError"], false);
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .expect("contract text");
+        let contract: Value = serde_json::from_str(text).expect("contract JSON");
+        assert_eq!(contract["version"], "1");
+        assert_eq!(contract["source"], "atvv-miremote-rc003");
+        assert_eq!(contract["media_class"], "Audio/Source");
+        assert_eq!(
+            contract["recording_keys"],
+            json!(["DICTATE", "VOICECOMMAND", "ASSISTANT"])
+        );
+        assert_eq!(server.backend.calls, ["contract"]);
+    }
+
+    #[test]
+    fn contract_tool_reports_backend_failure() {
+        let mut server = Server::new(FakeBackend {
+            fail: true,
+            ..FakeBackend::default()
+        });
+        let response = request(
+            &mut server,
+            "tools/call",
+            json!({"name": "contract", "arguments": {}}),
+        );
+        assert_eq!(response["result"]["isError"], true);
+        assert!(response["error"].is_null());
     }
 
     #[test]

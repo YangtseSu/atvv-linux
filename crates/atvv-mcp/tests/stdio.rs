@@ -210,12 +210,35 @@ fn stdio_mcp_contract_against_the_mock_daemon() {
     let text = status["result"]["content"][0]["text"]
         .as_str()
         .expect("status text");
-    let parsed: Value = serde_json::from_str(text).expect("status JSON");
-    assert_eq!(parsed["device"]["id"], RC003.id);
-    assert_eq!(parsed["device"]["transport"], "mock");
+    let status_json: Value = serde_json::from_str(text).expect("status JSON");
+    assert_eq!(status_json["device"]["id"], RC003.id);
+    assert_eq!(status_json["device"]["transport"], "mock");
+
+    let contract = mcp.exchange(request(
+        4,
+        "tools/call",
+        json!({"name": "contract", "arguments": {}}),
+    ));
+    assert_eq!(contract["result"]["isError"], false, "{contract}");
+    let text = contract["result"]["content"][0]["text"]
+        .as_str()
+        .expect("contract text");
+    let parsed: Value = serde_json::from_str(text).expect("contract JSON");
+    assert_eq!(parsed["version"], "1");
+    assert_eq!(parsed["profile"], RC003.id);
+    assert_eq!(parsed["source"], status_json["audio"]["source"]);
+    assert_eq!(parsed["media_class"], "Audio/Source");
+    assert_eq!(
+        parsed["recording_keys"],
+        json!(["DICTATE", "VOICECOMMAND", "ASSISTANT"])
+    );
+    assert_eq!(parsed["active_key"], "DICTATE");
+    assert_eq!(parsed["input_ready"], false);
+    assert_eq!(parsed["dbus"]["name"], "org.atvv.Daemon");
+    assert_eq!(parsed["mcp"]["command"], "atvv-mcp");
 
     let start = mcp.exchange(request(
-        4,
+        5,
         "tools/call",
         json!({"name": "voice_start", "arguments": {}}),
     ));
@@ -223,7 +246,7 @@ fn stdio_mcp_contract_against_the_mock_daemon() {
     wait_for_command(&mock, 0x0C);
 
     let stop = mcp.exchange(request(
-        5,
+        6,
         "tools/call",
         json!({"name": "voice_stop", "arguments": {}}),
     ));
@@ -231,7 +254,7 @@ fn stdio_mcp_contract_against_the_mock_daemon() {
     wait_for_command(&mock, 0x0D);
 
     let devices = mcp.exchange(request(
-        6,
+        7,
         "tools/call",
         json!({"name": "list_devices", "arguments": {}}),
     ));

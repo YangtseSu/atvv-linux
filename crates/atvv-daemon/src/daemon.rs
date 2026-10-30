@@ -204,6 +204,25 @@ impl Daemon {
             config.input_enabled,
             input_trigger.as_deref(),
         );
+        let input_view = InputView {
+            enabled: config.input_enabled,
+            available: input.is_some(),
+            keyboard: input.as_ref().is_some_and(InputRuntime::keyboard_available),
+            grabbed: grabbed_paths(&input),
+            degraded: input_degraded.clone(),
+            last_button: None,
+            voice_key: None,
+        };
+        let vinput_view = VinputView {
+            mode: config.vinput.name().to_string(),
+            trigger: config.trigger_key.clone(),
+            available: vinput.as_ref().is_some_and(|control| control.available()),
+            last_error: vinput
+                .as_ref()
+                .and_then(|control| control.last_error().map(str::to_string)),
+        };
+        let contract =
+            crate::status::contract_view(&config.profile, audio.name(), &input_view, &vinput_view);
         let status = StatusView {
             state: "disconnected".to_string(),
             connected: false,
@@ -227,23 +246,9 @@ impl Daemon {
                 dropped_frames: 0,
                 degraded: audio.degraded().map(str::to_string),
             },
-            input: InputView {
-                enabled: config.input_enabled,
-                available: input.is_some(),
-                keyboard: input.as_ref().is_some_and(InputRuntime::keyboard_available),
-                grabbed: grabbed_paths(&input),
-                degraded: input_degraded.clone(),
-                last_button: None,
-                voice_key: None,
-            },
-            vinput: VinputView {
-                mode: config.vinput.name().to_string(),
-                trigger: config.trigger_key.clone(),
-                available: vinput.as_ref().is_some_and(|control| control.available()),
-                last_error: vinput
-                    .as_ref()
-                    .and_then(|control| control.last_error().map(str::to_string)),
-            },
+            input: input_view,
+            vinput: vinput_view,
+            contract,
             config: ConfigView {
                 path: Some(config.config_path.display().to_string()),
                 loaded: config.config_loaded,
@@ -906,6 +911,32 @@ impl Daemon {
             interaction: interaction_name(caps.interaction),
             frame_size: caps.frame_size,
         });
+        let input = InputView {
+            enabled: self.input_enabled,
+            available: self.input.is_some(),
+            keyboard: self
+                .input
+                .as_ref()
+                .is_some_and(InputRuntime::keyboard_available),
+            grabbed: grabbed_paths(&self.input),
+            degraded: self.input_degraded.clone(),
+            last_button: self.last_button.clone(),
+            voice_key: self.voice_key,
+        };
+        let vinput = VinputView {
+            mode: self.vinput_mode.name().to_string(),
+            trigger: self.trigger_key.clone(),
+            available: self
+                .vinput
+                .as_ref()
+                .is_some_and(|control| control.available()),
+            last_error: self
+                .vinput
+                .as_ref()
+                .and_then(|control| control.last_error().map(str::to_string)),
+        };
+        let contract =
+            crate::status::contract_view(&self.profile, self.audio.name(), &input, &vinput);
         StatusView {
             state: self.state_name(),
             connected: self.connected,
@@ -929,30 +960,9 @@ impl Daemon {
                 dropped_frames: self.dropped_frames,
                 degraded: self.audio.degraded().map(str::to_string),
             },
-            input: InputView {
-                enabled: self.input_enabled,
-                available: self.input.is_some(),
-                keyboard: self
-                    .input
-                    .as_ref()
-                    .is_some_and(InputRuntime::keyboard_available),
-                grabbed: grabbed_paths(&self.input),
-                degraded: self.input_degraded.clone(),
-                last_button: self.last_button.clone(),
-                voice_key: self.voice_key,
-            },
-            vinput: VinputView {
-                mode: self.vinput_mode.name().to_string(),
-                trigger: self.trigger_key.clone(),
-                available: self
-                    .vinput
-                    .as_ref()
-                    .is_some_and(|control| control.available()),
-                last_error: self
-                    .vinput
-                    .as_ref()
-                    .and_then(|control| control.last_error().map(str::to_string)),
-            },
+            input,
+            vinput,
+            contract,
             config: ConfigView {
                 path: Some(self.config_path.display().to_string()),
                 loaded: self.config_loaded,

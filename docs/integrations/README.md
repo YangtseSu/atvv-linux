@@ -12,9 +12,9 @@ else consumes one of two boundaries:
 | Provider contract | [provider-contract](provider-contract.md) | source metadata + recording keys + generic control |
 | fcitx5-vinput | [fcitx5-vinput](fcitx5-vinput.md) | source + declared recording keys |
 | Coding agents | [coding-agents](coding-agents.md) | MCP tools + agent text delivery |
-| Browser AI chat | [provider-contract](provider-contract.md#browser-ai-chat-pages) | `getUserMedia` device selection |
-| IM applications | [provider-contract](provider-contract.md#im-applications) | source selection in the app |
-| CLI | [`atvvctl`](../../README.md) | `org.atvv.Daemon` |
+| Browser AI chat | [browser-ai-chat](browser-ai-chat.md) | `getUserMedia` device selection |
+| IM applications | [im-applications](im-applications.md) | source selection in the app |
+| CLI | [`atvvctl`](../../README.md) | `org.atvv.Daemon`, `contract`, `status`, `doctor` |
 
 The provider declares its contract on the source
 (`atvv.contract_version`, `atvv.profile`, `atvv.recording_keys`). Consumers

@@ -9,6 +9,7 @@ use atvv_daemon::Client;
 /// Control surface behind the MCP tools. Tests inject a fake.
 pub trait Backend: Send {
     fn status(&mut self) -> Result<Value, String>;
+    fn contract(&mut self) -> Result<Value, String>;
     fn voice_start(&mut self) -> Result<(), String>;
     fn voice_stop(&mut self) -> Result<(), String>;
     fn voice_toggle(&mut self) -> Result<(), String>;
@@ -47,6 +48,15 @@ impl Backend for DaemonBackend {
         self.client()?
             .status_json()
             .map_err(|error| format!("GetStatus failed: {error}"))
+    }
+
+    fn contract(&mut self) -> Result<Value, String> {
+        let status = self
+            .client()?
+            .status()
+            .map_err(|error| format!("GetStatus failed: {error}"))?;
+        serde_json::to_value(status.contract)
+            .map_err(|error| format!("contract serialization failed: {error}"))
     }
 
     fn voice_start(&mut self) -> Result<(), String> {
