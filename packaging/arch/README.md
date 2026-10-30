@@ -24,9 +24,9 @@ not change it.
 ```sh
 cd packaging/arch
 makepkg
-sudo pacman -U atvv-linux-0.1.0-7-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-0.1.0-8-x86_64.pkg.tar.zst
 # optional GUI:
-sudo pacman -U atvv-linux-gui-0.1.0-7-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-gui-0.1.0-8-x86_64.pkg.tar.zst
 ```
 
 `makepkg -si` installs both packages. The packages do not enable a user

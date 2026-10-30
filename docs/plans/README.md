@@ -205,7 +205,7 @@ verified it after a daemon restart. The physical test-mode run observed all
 thirteen keys, kept Test mode active after OK, and left system volume
 unchanged; Home/Menu use `KEY_HOME`/`KEY_COMPOSE`. Packaging is a split
 `atvv-linux-gui` package with desktop entry, AppStream metadata, icon, and GTK
-runtime dependencies kept out of `atvv-linux`; `0.1.0-7` is built and staged
+runtime dependencies kept out of `atvv-linux`; `0.1.0-8` is built and staged
 but not installed. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
 sayall-style mapping board (central remote + per-button cards with all three

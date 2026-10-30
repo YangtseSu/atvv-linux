@@ -11,7 +11,7 @@ graph; evdev/uinput owns input remapping.
 
 **Steps 01–09 and 11–14 are complete.** The installed package is
 `atvv-linux 0.1.0-6`, the user unit runs, and `atvvctl doctor` reports green
-on a real RC003. The step-14 tree builds as `atvv-linux 0.1.0-7` plus the
+on a real RC003. The step-14 tree builds as `atvv-linux 0.1.0-8` plus the
 optional `atvv-linux-gui` package; install them to get `atvv-config` and the
 step-13 `atvvctl config`, `capture`, and `map` commands. Step 10 (vinput zero-config) depends on an
 upstream consumer change.
@@ -75,9 +75,9 @@ cd atvv-linux
 ./packaging/arch/make-source.sh
 cd packaging/arch
 makepkg
-sudo pacman -U atvv-linux-0.1.0-7-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-0.1.0-8-x86_64.pkg.tar.zst
 # optional GUI:
-sudo pacman -U atvv-linux-gui-0.1.0-7-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-gui-0.1.0-8-x86_64.pkg.tar.zst
 ```
 
 `makepkg -si` installs both packages. The GUI app is optional; the daemon and

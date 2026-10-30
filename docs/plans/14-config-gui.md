@@ -216,6 +216,10 @@ Manual:
 - 2026-10-31 — rebuilt `0.1.0-7` with the click fix. The packaged
   `atvv-config` selected `Back` (`KEY_BACK`) when clicked under Xvfb, so the
   staged binary has the working hit areas.
+- 2026-10-31 — final `0.1.0-8` rebuild: `atvv-linux` sha256
+  `d6792082…718076`, `atvv-linux-gui` sha256 `7fc99deb…c4c117`, source
+  tarball `1752544f…c541451`. Built from the completed step-14 tree; not
+  installed. The earlier installed 0.1.0-7 predates these fixes.
 - 2026-10-31 — test-mode fixes verified on the RC003: capture now suppresses
   mapped keys, exec, dictation, the synthetic voice trigger, and voice-session
   start/stop; voice edges and release edges are forwarded as `ButtonEvent`.
