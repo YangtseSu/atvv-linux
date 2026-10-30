@@ -54,10 +54,10 @@ There is no capture-device getter or setter.
   passed as `target.object`; there is no fallback to the system default when a
   configured named source is absent
   (`src/common/audio/pipewire_device.cpp:227-264`).
-- Implication: a third-party controller cannot select a source without
-  editing vinput's config. A D-Bus API needs to distinguish "unset" (`""`)
-  from an explicit `"default"` choice, or auto-selection cannot honor the
-  user's explicit choice.
+- Implication: source selection is consumer-owned. A consumer-side
+  auto-selection/priority feature is the layered fix; ATVV must not push a
+  selection. A generic setter is optional for other controllers and must
+  distinguish "unset" (`""`) from an explicit `"default"` if it is built.
 
 ## 3. Trigger keys are addon-owned
 
@@ -102,9 +102,9 @@ There is no capture-device getter or setter.
   (`src/lib/fcitx/instance.h`) and is fcitx's authoritative "most recent
   focused" context. Using it as the fallback fixes external start without
   changing the trigger-key path.
-- Implication: D-Bus mode is viable as the zero-config path, but this focus
-  fallback should land first. The trigger-key path does not have the problem
-  because the key event carries the context.
+- Implication: the focus fallback matters only for the opt-in D-Bus
+  fallback. The primary trigger-key path carries the context and is
+  unaffected.
 
 ## 5. Scene id
 
@@ -128,23 +128,30 @@ There is no capture-device getter or setter.
 - External PRs are not treated as feature requests; open an issue first
   (`docs/agents/issue-tracker.md`).
 
-## 7. PR implications
+## 7. Integration implications
 
-Required:
+ATVV is the lower layer: it exposes a PipeWire source and a uinput key.
+vinput is the consumer and owns source selection and trigger binding (ADR
+0007). The upstream requests follow from that direction.
 
-1. **Capture-device API**: `GetCaptureDevice() -> s` (raw configured value) and
-   `SetCaptureDevice(s) -> ()` (persist + apply to the next recording;
-   validate against the source list). The CLI should use it when the daemon is
-   running and stop claiming a restart is needed.
-2. **Addon focus fallback**: use `instance_->mostRecentInputContext()` before
-   `last_active_ic_` in `resolveFrontendInputContext`, so external D-Bus start
-   does not depend on a key event.
+Primary (consumer-side):
 
-Optional / deferred:
+1. **Capture-device auto-selection / priority list.** Let
+   `global.capture_device` accept an automatic mode or a pattern/priority list
+   (for example `atvv-*` then `default`) and pick the first available source.
+   This is the only way to reach true zero-config; ATVV must not call a setter.
+2. **Optional: trigger defaults or docs.** Include `Dictate` in vinput's
+   default trigger list, or document the one-entry addition. Do not change the
+   upstream default without maintainer agreement.
 
-3. **Trigger-key CLI** via fcitx's `Controller1` `GetConfig`/`SetConfig`.
-   Needed only if trigger mode must be zero-config. D-Bus mode needs no
-   trigger key.
+Generic control API (optional, not used by ATVV):
+
+3. `GetCaptureDevice()`/`SetCaptureDevice(s)` remains a reasonable API for
+   settings UIs and other controllers. If it lands, `atvvctl vinput` may read
+   it for diagnostics; ATVV does not call `SetCaptureDevice` in the primary
+   path.
+4. The addon focus fallback is only relevant to the opt-in D-Bus fallback, not
+   to the primary key path.
 
 Do not file:
 

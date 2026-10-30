@@ -39,7 +39,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: upstream capture/trigger API and automatic device selection; 11 **done**: evdevil input backend and `DICTATE` trigger default |
+| D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
@@ -81,6 +81,10 @@ Binding rules:
 - `atvvctl` formats state; it does not duplicate protocol logic.
 - Device facts live in `DeviceProfile`, not in conditionals scattered through
   the daemon.
+- ATVV is the provider: it exposes a PipeWire source, a standard input key,
+  and read-only status. Consumers such as fcitx5-vinput own source selection
+  and trigger binding; ATVV does not write their configuration or call their
+  daemon in the primary path (ADR 0007).
 
 ## RC003 profile facts
 
@@ -124,17 +128,17 @@ records the ATVV source at 16 kHz. The completed record is
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily.
 
-Step 10 is in progress. The upstream work is now two PRs: a capture-device
-`GetCaptureDevice`/`SetCaptureDevice` API and an addon focus fallback for
-external `StartRecording`. The earlier `AddTriggerKey` daemon request is not
-viable (trigger keys are addon-owned); D-Bus mode is the zero-config trigger
-path, with trigger mode kept as the manual push-to-talk fallback. Automatic
-device selection that preserves an explicit choice and the remaining manual
-`vinput device use` step are still open. The daemon trigger default was
-changed by step 11: it is now `DICTATE` (`KEY_DICTATE`), not `F24`. `F24`
-remains available as an explicit `trigger_key`, and vinput keeps the user's
-existing `[TriggerKey]` entries and adds `2=Dictate`. Evidence:
-[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
+Step 10 is in progress. ATVV is the provider: it exposes the resident
+`Audio/Source` and the standard `Dictate` key. vinput is the consumer and owns
+source selection and trigger binding. The primary upstream request is a
+consumer-side capture-device auto-selection/priority list; until it exists,
+the one-time `vinput device use` plus `2=Dictate` is the correct layered setup.
+The earlier ATVV-side `SetCaptureDevice` push and the `vinput_device` policy
+are dropped (ADR 0007). D-Bus mode remains an opt-in fallback, not the
+zero-config default. The daemon trigger default is `DICTATE` (`KEY_DICTATE`),
+not `F24`; `F24` remains an explicit alternative. Evidence:
+[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md) and
+[ADR 0007](../decisions/0007-integration-direction.md).
 
 Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
 `evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and

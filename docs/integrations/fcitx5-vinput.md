@@ -1,8 +1,9 @@
 # fcitx5-vinput
 
 Tested against fcitx5-vinput `2.4.2` (upstream snapshot
-`xifan2333/fcitx5-vinput@d9a409d`). Integration is over D-Bus and the PipeWire
-source; no vinput code is linked or copied.
+`xifan2333/fcitx5-vinput@d9a409d`). Integration is over the PipeWire source and
+the synthetic voice key; D-Bus is an optional fallback. No vinput code is
+linked or copied.
 
 ## Architecture
 
@@ -16,6 +17,13 @@ ATVV audio ──GATT──> atvvd ──> Audio/Source atvv-miremote-rc003 ─�
 `atvvd` owns the session and opens `MIC_OPEN` when the voice key is pressed.
 fcitx5-vinput owns recording, ASR, and text commit. The source is resident and
 outputs silence while the remote is idle.
+
+ATVV is the provider; vinput is the consumer (ADR 0007). The integration
+surface is the PipeWire source plus the standard `Dictate` key. `atvvd` does
+not write vinput's configuration and does not call `org.fcitx.Vinput` in the
+trigger path. Source selection and trigger binding belong to vinput. vinput
+does not need to call `atvvd` either: the source is resident, and the physical
+key edge opens the microphone; a software start cannot produce frames.
 
 ## Setup
 
@@ -135,7 +143,11 @@ speak, release. `atvvctl status` must show `streaming` and growing
 `audio.frames`; fcitx commits the transcript. A browser must not reload (no F5
 leak).
 
-### D-Bus mode
+### D-Bus mode (explicit fallback)
+
+This is not the zero-config path; `trigger` remains the default. Use it only
+when the trigger key conflicts with an application binding, or when the
+compositor/IME path cannot see the virtual keyboard.
 
 ```toml
 vinput = "dbus"
@@ -157,9 +169,9 @@ Use D-Bus mode when the trigger key conflicts with an application binding, or
 when the compositor/IME path cannot see the virtual keyboard. External
 `StartRecording` resolves the addon's input context from its last key event,
 so a mouse-only focus change before the next key press can target a stale
-context; trigger-key mode does not have that problem. The upstream focus
-fallback (`mostRecentInputContext`) is pending; see
-[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
+context; trigger-key mode does not have that problem. A focus fallback
+(`mostRecentInputContext`) is optional upstream work for this fallback only;
+see [`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
 
 ## Verification without a deadline
 

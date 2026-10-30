@@ -18,7 +18,7 @@ not a second plan and it does not override `docs/plans/`.
   context-dependent mapping.
 - [`vinput-upstream-api.md`](vinput-upstream-api.md) — fcitx5-vinput
   `bd7dd4365` D-Bus surface, capture-device ownership, addon-owned trigger
-  keys, the external-start focus gap, and the resulting upstream PR list.
+  keys, the external-start focus gap, and the resulting integration direction.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -88,12 +88,12 @@ implementation direction:
   [`consumer-keys.md`](consumer-keys.md) and
   [`../decisions/0006-evdevil-input-backend.md`](../decisions/0006-evdevil-input-backend.md).
 - **vinput upstream API.** A 2026-10-30 source review of fcitx5-vinput
-  `bd7dd4365` reduced step 10's upstream scope: the daemon has no
-  capture-device API, trigger keys are addon-owned, and an external
-  `StartRecording` can resolve a stale input context. The required upstream
-  changes are a capture-device D-Bus API and an addon focus fallback; an
-  `AddTriggerKey` daemon method is not viable and D-Bus mode is the
-  zero-config trigger path. See
+  `bd7dd4365` reduced step 10's upstream scope to the consumer side: ATVV
+  provides the PipeWire source and the `Dictate` key; vinput owns source
+  selection and trigger binding. The primary upstream request is a
+  capture-device auto-selection/priority list. `AddTriggerKey` on
+  `org.fcitx.Vinput` is not viable, and ATVV does not call
+  `SetCaptureDevice` in the primary path (ADR 0007). See
   [`vinput-upstream-api.md`](vinput-upstream-api.md).
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens

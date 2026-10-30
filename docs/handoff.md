@@ -1,6 +1,6 @@
 # Handoff
 
-Updated: 2026-10-30
+Updated: 2026-10-31
 
 ## Project
 
@@ -84,19 +84,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **10 vinput zero-config (in progress)**: the upstream scope is two PRs: a
-  capture-device `GetCaptureDevice`/`SetCaptureDevice` API and an addon
-  `mostRecentInputContext` focus fallback. The earlier `AddTriggerKey` daemon
-  request is dropped: trigger keys are addon-owned and fcitx's
-  `Controller1` `GetConfig`/`SetConfig` is the only legitimate live path.
-  D-Bus mode is the zero-config trigger path; trigger mode remains the manual
-  push-to-talk fallback. Automatic device selection that preserves an explicit
-  choice and the manual `vinput device use` step remain. vinput keeps the
-  user's entries and adds `2=Dictate`. The live `daemon.toml` already sets
+- **10 vinput zero-config (in progress)**: ATVV is the provider; vinput owns
+  source selection and trigger binding (ADR 0007). The primary upstream
+  request is a consumer-side capture-device auto-selection/priority list.
+  Until it exists, the one-time `vinput device use atvv-miremote-rc003` plus
+  `[TriggerKey] 2=Dictate` is the correct layered setup, not a workaround.
+  The ATVV-side `SetCaptureDevice` push and `vinput_device` policy are
+  dropped. `vinput = "trigger"` remains the default; `vinput = "dbus"` is an
+  explicit fallback. The live `daemon.toml` already sets
   `trigger_key = "DICTATE"`; the stopped service will accept it once
-  `0.1.0-4` is installed. See
-  `docs/plans/10-vinput-zero-config.md` and
-  `docs/research/vinput-upstream-api.md`.
+  `0.1.0-4` is installed. See `docs/plans/10-vinput-zero-config.md`,
+  `docs/research/vinput-upstream-api.md`, and
+  `docs/decisions/0007-integration-direction.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -165,12 +164,12 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   explicit alternative.
 - fcitx5-vinput rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit;
   edit it while fcitx5 is stopped.
-- vinput upstream API: trigger keys are addon-owned; do not add
-  `AddTriggerKey` to `org.fcitx.Vinput`. The zero-config path is D-Bus mode
-  plus a capture-device API and an addon focus fallback. Trigger-key
-  management, if needed, goes through fcitx's `Controller1`
-  `GetConfig`/`SetConfig`. Evidence:
-  `docs/research/vinput-upstream-api.md`.
+- vinput integration direction: ATVV is the lower layer and exposes a
+  PipeWire source plus a uinput key; vinput owns source selection and trigger
+  binding. ATVV does not write vinput config or call `org.fcitx.Vinput` in the
+  primary path. The D-Bus `vinput` mode is an opt-in fallback. The primary
+  upstream request is a consumer-side capture-device auto-selection/priority
+  list; `AddTriggerKey` on `org.fcitx.Vinput` is out of scope (ADR 0007).
 
 ## Verified
 
@@ -267,15 +266,13 @@ recording. See
 [`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md) and
 [ADR 0006](decisions/0006-evdevil-input-backend.md).
 
-**10 vinput-zero-config remains** (in progress): the upstream source review
-reduced it to a capture-device D-Bus API and an addon focus fallback; an
-`AddTriggerKey` daemon method is not viable because the trigger list is
-addon-owned. D-Bus mode is the zero-config trigger path; trigger mode stays as
-the manual fallback. Automatic device selection that preserves an explicit
-choice and the manual `vinput device use atvv-miremote-rc003` step are still
-open. vinput keeps the user's entries and adds `2=Dictate`. The live config
-already sets `trigger_key = "DICTATE"`. The next action is the operator
-install:
+**10 vinput-zero-config remains** (in progress): ATVV is the provider and
+vinput is the consumer. The primary path is the resident PipeWire source plus
+the standard `Dictate` key; the one-time `vinput device use` and
+`2=Dictate` setup is correct layering. A consumer-side auto-selection feature
+would remove the device step; the ATVV-side `SetCaptureDevice` push is
+dropped (ADR 0007). `vinput = "trigger"` stays the default; `vinput = "dbus"`
+is an explicit fallback. The next action is the operator install:
 
 ```sh
 sudo pacman -U packaging/arch/atvv-linux-0.1.0-4-x86_64.pkg.tar.zst
