@@ -15,6 +15,8 @@ The remote is useful to:
 - generic recorders such as `pw-cat`.
 
 The provider exposes standard boundaries. Consumers own their configuration.
+The per-button keymap and gesture timing are local `daemon.toml` configuration;
+they are not part of the provider contract.
 
 ```text
 RC003 voice key ──HID──> atvv-input ──uinput recording key──> consumer shortcut

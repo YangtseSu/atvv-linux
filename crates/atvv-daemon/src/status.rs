@@ -8,6 +8,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use atvv_audio::{CHANNELS, CONTRACT_VERSION, MEDIA_CLASS, RECORDING_KEYS, SAMPLE_FORMAT};
+use atvv_config::{ConfigDocument, VinputMode};
 use atvv_protocol::profile::DeviceProfile;
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +20,18 @@ pub fn cell(view: StatusView) -> StatusCell {
 }
 
 pub fn lock(cell: &StatusCell) -> MutexGuard<'_, StatusView> {
+    cell.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Shared JSON view of the active configuration.
+pub type ConfigCell = Arc<Mutex<ConfigDocument>>;
+
+#[must_use]
+pub fn config_cell(document: ConfigDocument) -> ConfigCell {
+    Arc::new(Mutex::new(document))
+}
+
+pub fn lock_config(cell: &ConfigCell) -> MutexGuard<'_, ConfigDocument> {
     cell.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -143,7 +156,7 @@ pub fn contract_view(
 ) -> ContractView {
     let input_ready = input.enabled && input.available;
     let keyboard_ready = input.keyboard;
-    let active_key = (vinput.mode == crate::config::VinputMode::Trigger.name())
+    let active_key = (vinput.mode == VinputMode::Trigger.name())
         .then(|| vinput.trigger.clone())
         .flatten();
     ContractView {
@@ -183,6 +196,7 @@ pub struct ConfigView {
     pub loaded: bool,
     pub gain_db: i8,
     pub input: bool,
+    pub allow_exec: bool,
 }
 
 #[cfg(test)]

@@ -19,11 +19,14 @@ path = "src/lib.rs"
 [dependencies]
 atvv-audio = { path = "../atvv-audio" }
 atvv-bluez = { path = "../atvv-bluez" }
+atvv-config = { path = "../atvv-config" }
 atvv-input = { path = "../atvv-input" }
 atvv-protocol = { path = "../atvv-protocol" }
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-toml.workspace = true
 zbus.workspace = true
+
+[dev-dependencies]
+evdevil.workspace = true

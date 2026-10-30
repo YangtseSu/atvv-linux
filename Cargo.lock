@@ -234,6 +234,7 @@ version = "0.1.0"
 dependencies = [
  "atvv-audio",
  "atvv-bluez",
+ "atvv-config",
  "atvv-daemon",
  "atvv-input",
  "atvv-protocol",
@@ -245,18 +246,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "atvv-config"
+version = "0.1.0"
+dependencies = [
+ "atvv-input",
+ "atvv-protocol",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
 name = "atvv-daemon"
 version = "0.1.0"
 dependencies = [
  "atvv-audio",
  "atvv-bluez",
+ "atvv-config",
  "atvv-input",
  "atvv-protocol",
  "clap",
+ "evdevil",
  "serde",
  "serde_json",
  "thiserror",
- "toml 0.9.12+spec-1.1.0",
  "zbus",
 ]
 

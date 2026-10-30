@@ -191,7 +191,7 @@ impl ButtonActions {
 }
 
 /// Effective action slots for every logical button.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionMap {
     slots: BTreeMap<RemoteButton, ButtonActions>,
 }

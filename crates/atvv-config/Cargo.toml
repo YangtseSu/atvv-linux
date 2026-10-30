@@ -1,0 +1,19 @@
+[package]
+name = "atvv-config"
+description = "Shared daemon.toml schema, validation, and editable config document"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+atvv-input = { path = "../atvv-input" }
+atvv-protocol = { path = "../atvv-protocol" }
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

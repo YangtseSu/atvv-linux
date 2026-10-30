@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/atvv-protocol",
+    "crates/atvv-config",
     "crates/atvv-audio",
     "crates/atvv-input",
     "crates/atvv-bluez",

@@ -11,8 +11,11 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
+use atvv_config::{ConfigDocument, VinputMode, parse_checked_action};
 use atvv_daemon::{Client, ContractView};
-use atvv_input::{ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, RemoteEvent};
+use atvv_input::{
+    ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, KeyResolver, RemoteEvent, Trigger,
+};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
 use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find};
@@ -73,6 +76,25 @@ enum Command {
     },
     /// Re-read the daemon configuration.
     Reload,
+    /// Read or edit the daemon configuration.
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
+    /// Wait for one physical remote button press (capture mode).
+    Capture {
+        /// Stop after this many seconds.
+        #[arg(long, default_value_t = 30)]
+        timeout: u64,
+        /// Emit one JSON object per event.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Resolve or validate an action mapping without executing it.
+    Map {
+        #[command(subcommand)]
+        command: MapCommand,
+    },
     /// Pair and trust a remote, then save its address.
     Pair {
         /// Bluetooth address, e.g. C0:5D:39:F8:2D:4C.
@@ -125,6 +147,74 @@ enum MicCommand {
     Start,
     Stop,
     Toggle,
+}
+
+#[derive(Debug, Subcommand)]
+enum ConfigCommand {
+    /// Print the active configuration.
+    Get {
+        /// Emit the JSON document used by `SetConfig`.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change values, apply them live, and persist them.
+    Set(ConfigSet),
+}
+
+#[derive(Debug, clap::Args)]
+struct ConfigSet {
+    /// Output gain in dB.
+    #[arg(long)]
+    gain_db: Option<i8>,
+    /// Enable or disable the evdev/uinput input path.
+    #[arg(long, num_args = 0..=1, default_missing_value = "true",
+          value_parser = clap::value_parser!(bool))]
+    input: Option<bool>,
+    /// Allow `exec:` actions.
+    #[arg(long, num_args = 0..=1, default_missing_value = "true",
+          value_parser = clap::value_parser!(bool))]
+    allow_exec: Option<bool>,
+    /// fcitx5-vinput integration mode.
+    #[arg(long, value_parser = ["trigger", "dbus", "off"])]
+    vinput: Option<String>,
+    /// Synthetic key or chord; `none` disables it.
+    #[arg(long)]
+    trigger_key: Option<String>,
+    /// Bluetooth address saved for the next start.
+    #[arg(long)]
+    device: Option<String>,
+    /// BlueZ adapter name saved for the next start.
+    #[arg(long)]
+    adapter: Option<String>,
+    /// Logical button to edit: power, ok, back, up, down, left, right, home,
+    /// menu, tv, volume_up, volume_down.
+    #[arg(long)]
+    button: Option<String>,
+    /// Gesture slot to edit.
+    #[arg(long, value_parser = ["single", "double", "long"])]
+    trigger: Option<String>,
+    /// Action string, `none`, or `default` to restore the profile value.
+    #[arg(long)]
+    action: Option<String>,
+}
+
+#[derive(Debug, Subcommand)]
+enum MapCommand {
+    /// Print the effective action for a button and trigger slot.
+    Test {
+        /// Logical button; defaults to every button when omitted.
+        #[arg(long)]
+        button: Option<String>,
+        #[arg(long, default_value = "single",
+              value_parser = ["single", "double", "long"])]
+        trigger: String,
+        /// Validate this action string instead of reading the configuration.
+        #[arg(long)]
+        action: Option<String>,
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -193,6 +283,9 @@ fn run() -> Result<(), String> {
         Command::Contract { json } => contract(json),
         Command::Mic { command } => mic(command),
         Command::Reload => reload(),
+        Command::Config { command } => config(command),
+        Command::Capture { timeout, json } => capture(timeout, json),
+        Command::Map { command } => map(command),
         Command::Pair {
             address,
             adapter,
@@ -326,6 +419,382 @@ fn reload() -> Result<(), String> {
     Ok(())
 }
 
+fn config(command: ConfigCommand) -> Result<(), String> {
+    let client = daemon_client()?;
+    match command {
+        ConfigCommand::Get { json } => {
+            let document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            if json {
+                let rendered = serde_json::to_string_pretty(&document)
+                    .map_err(|error| format!("cannot render the configuration: {error}"))?;
+                println!("{rendered}");
+            } else {
+                print!("{}", render_config(&document));
+            }
+            Ok(())
+        }
+        ConfigCommand::Set(args) => set_config(&client, args),
+    }
+}
+
+fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
+    let mut document = client
+        .config()
+        .map_err(|error| format!("cannot read the configuration: {error}"))?;
+    let status = client.status().ok();
+    let mut changed = false;
+
+    if let Some(gain_db) = args.gain_db {
+        document.gain_db = gain_db;
+        changed = true;
+    }
+    if let Some(input) = args.input {
+        document.input = input;
+        changed = true;
+    }
+    if let Some(allow_exec) = args.allow_exec {
+        document.allow_exec = allow_exec;
+        changed = true;
+    }
+    if let Some(vinput) = args.vinput.as_deref() {
+        document.vinput = parse_vinput(vinput)?;
+        changed = true;
+    }
+    if let Some(trigger_key) = args.trigger_key {
+        let trigger_key = trigger_key.trim();
+        document.trigger_key = if trigger_key.is_empty() || trigger_key.eq_ignore_ascii_case("none")
+        {
+            None
+        } else {
+            Some(trigger_key.to_string())
+        };
+        changed = true;
+    }
+    if let Some(device) = args.device {
+        document.device = Some(device);
+        changed = true;
+    }
+    if let Some(adapter) = args.adapter {
+        document.adapter = Some(adapter);
+        changed = true;
+    }
+
+    match (args.button, args.trigger, args.action) {
+        (Some(button), Some(trigger), Some(action)) => {
+            let button = find_button(&button)?;
+            let trigger = parse_trigger(&trigger)?;
+            let value = if action.trim().eq_ignore_ascii_case("default") {
+                default_action(status.as_ref(), button, trigger)
+            } else {
+                Some(action.trim().to_string())
+            };
+            let slots = document
+                .buttons
+                .entry(button.name().to_string())
+                .or_default();
+            set_slot(slots, trigger, value);
+            changed = true;
+        }
+        (None, None, None) => {}
+        _ => return Err("--button requires --trigger and --action".to_string()),
+    }
+
+    if !changed {
+        return Err("no changes requested".to_string());
+    }
+    client
+        .set_config(&document)
+        .map_err(|error| format!("cannot apply the configuration: {error}"))?;
+    println!("applied");
+    Ok(())
+}
+
+fn parse_vinput(value: &str) -> Result<VinputMode, String> {
+    match value {
+        "trigger" => Ok(VinputMode::Trigger),
+        "dbus" => Ok(VinputMode::Dbus),
+        "off" => Ok(VinputMode::Off),
+        other => Err(format!("unknown vinput mode {other:?}")),
+    }
+}
+
+fn parse_trigger(value: &str) -> Result<Trigger, String> {
+    match value {
+        "single" => Ok(Trigger::Single),
+        "double" => Ok(Trigger::Double),
+        "long" => Ok(Trigger::Long),
+        other => Err(format!("unknown trigger slot {other:?}")),
+    }
+}
+
+fn find_button(name: &str) -> Result<RemoteButton, String> {
+    RemoteButton::LOGICAL
+        .iter()
+        .copied()
+        .find(|button| button.name() == name)
+        .ok_or_else(|| {
+            let available = RemoteButton::LOGICAL
+                .iter()
+                .map(|button| button.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("unknown button {name:?}; available: {available}")
+        })
+}
+
+fn default_action(
+    _status: Option<&atvv_daemon::StatusView>,
+    button: RemoteButton,
+    trigger: Trigger,
+) -> Option<String> {
+    ActionMap::defaults()
+        .resolve(button, trigger)
+        .map(ToString::to_string)
+}
+
+fn set_slot(slots: &mut atvv_config::ButtonDocument, trigger: Trigger, value: Option<String>) {
+    match trigger {
+        Trigger::Single => slots.single = value,
+        Trigger::Double => slots.double = value,
+        Trigger::Long => slots.long = value,
+    }
+}
+
+fn render_config(document: &ConfigDocument) -> String {
+    let trigger_key = document.trigger_key.as_deref().unwrap_or("none");
+    let mut text = format!(
+        "schema:      {}\nprofile:     {}\ndevice:      {}\nadapter:     {}\ngain_db:     {}\ninput:       {}\nvinput:      {}\ntrigger_key: {}\nallow_exec:  {}\ngesture:     double={} long={} repeat_start={} latch={} suppression={} repeat={} back_repeat={}\n",
+        document.schema_version,
+        document.profile,
+        document.device.as_deref().unwrap_or("-"),
+        document.adapter.as_deref().unwrap_or("-"),
+        document.gain_db,
+        document.input,
+        document.vinput.name(),
+        trigger_key,
+        document.allow_exec,
+        document.gesture.double_click_ms,
+        document.gesture.long_press_ms,
+        document.gesture.repeat_start_ms,
+        document.gesture.stable_release_ms,
+        document.gesture.suppression_ms,
+        document.gesture.repeat_interval_ms,
+        document.gesture.back_repeat_interval_ms,
+    );
+    text.push_str("buttons:\n");
+    for button in RemoteButton::LOGICAL {
+        let Some(slots) = document.buttons.get(button.name()) else {
+            continue;
+        };
+        text.push_str(&format!(
+            "  {:<12} single={:<22} double={:<22} long={}\n",
+            button.name(),
+            slots.single.as_deref().unwrap_or("-"),
+            slots.double.as_deref().unwrap_or("-"),
+            slots.long.as_deref().unwrap_or("-"),
+        ));
+    }
+    if document.allow_exec {
+        text.push_str("note: exec actions run shell commands as your user\n");
+    }
+    text
+}
+
+fn capture(timeout: u64, json: bool) -> Result<(), String> {
+    let client = daemon_client()?;
+    let connection = client.connection().clone();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<()>();
+    let (tx, rx) = std::sync::mpsc::channel::<(String, String, bool)>();
+    std::thread::spawn(move || {
+        let Ok(proxy) = atvv_daemon::dbus::DaemonApiProxyBlocking::new(&connection) else {
+            return;
+        };
+        let Ok(mut events) = proxy.receive_button_event() else {
+            return;
+        };
+        let _ = ready_tx.send(());
+        for event in events.by_ref() {
+            let Ok(args) = event.args() else {
+                continue;
+            };
+            if tx
+                .send((
+                    args.button().to_string(),
+                    args.trigger().to_string(),
+                    *args.pressed(),
+                ))
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    ready_rx
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|_| "cannot subscribe to ButtonEvent".to_string())?;
+    client
+        .begin_capture()
+        .map_err(|error| format!("BeginCapture failed: {error}"))?;
+
+    let deadline = Instant::now() + Duration::from_secs(timeout.max(1));
+    let result = loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break Err(format!("no button pressed within {timeout}s"));
+        }
+        match rx.recv_timeout(remaining) {
+            Ok((button, trigger, pressed)) => {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "button": button,
+                            "trigger": trigger,
+                            "pressed": pressed,
+                        })
+                    );
+                } else {
+                    println!("button: {button:<12} trigger: {trigger:<8} pressed: {pressed}");
+                }
+                if pressed {
+                    break Ok(());
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                break Err(format!("no button pressed within {timeout}s"));
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                break Err("the ButtonEvent stream ended".to_string());
+            }
+        }
+    };
+    let _ = client.end_capture();
+    result
+}
+
+fn map(command: MapCommand) -> Result<(), String> {
+    let MapCommand::Test {
+        button,
+        trigger,
+        action,
+        json,
+    } = command;
+    let client = daemon_client()?;
+    let document = client
+        .config()
+        .map_err(|error| format!("cannot read the configuration: {error}"))?;
+    let trigger = parse_trigger(&trigger)?;
+
+    if let Some(action) = action {
+        let checked = parse_checked_action(&action, document.allow_exec)
+            .map_err(|error| format!("{action:?}: {error}"))?;
+        let program = KeyResolver.program(&checked).ok();
+        if json {
+            let value = serde_json::json!({
+                "action": checked.to_string(),
+                "kind": action_kind(&checked),
+                "allowed": true,
+                "press": program.as_ref().map(|program| {
+                    program.press.iter().map(|key| format!("{key:?}")).collect::<Vec<_>>()
+                }),
+                "release": program.as_ref().map(|program| {
+                    program.release.iter().map(|key| format!("{key:?}")).collect::<Vec<_>>()
+                }),
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
+            );
+        } else {
+            println!("action:  {}", checked);
+            println!("kind:    {}", action_kind(&checked));
+            println!("allowed: true");
+            match program {
+                Some(program) => {
+                    println!("press:   {}", key_names(&program.press));
+                    println!("release: {}", key_names(&program.release));
+                }
+                None => println!("keys:    none"),
+            }
+        }
+        return Ok(());
+    }
+
+    let buttons: Vec<RemoteButton> = button
+        .as_deref()
+        .map(find_button)
+        .transpose()?
+        .map_or_else(|| RemoteButton::LOGICAL.to_vec(), |button| vec![button]);
+    if json {
+        if let Some(button) = button.as_deref() {
+            let button = find_button(button)?;
+            let value = serde_json::json!({
+                "button": button.name(),
+                "trigger": trigger.name(),
+                "action": resolved_action(&document, button, trigger),
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
+            );
+        } else {
+            let mut map = serde_json::Map::new();
+            for button in buttons {
+                map.insert(
+                    button.name().to_string(),
+                    serde_json::json!(resolved_action(&document, button, trigger)),
+                );
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&map).map_err(|error| error.to_string())?
+            );
+        }
+    } else {
+        for button in buttons {
+            println!(
+                "{:<12} {:<7} {}",
+                button.name(),
+                trigger.name(),
+                resolved_action(&document, button, trigger).unwrap_or_else(|| "-".to_string())
+            );
+        }
+    }
+    Ok(())
+}
+
+fn resolved_action(
+    document: &ConfigDocument,
+    button: RemoteButton,
+    trigger: Trigger,
+) -> Option<String> {
+    let slots = document.buttons.get(button.name())?;
+    match trigger {
+        Trigger::Single => slots.single.clone(),
+        Trigger::Double => slots.double.clone(),
+        Trigger::Long => slots.long.clone(),
+    }
+}
+
+fn action_kind(action: &atvv_input::Action) -> &'static str {
+    match action {
+        atvv_input::Action::None => "none",
+        atvv_input::Action::Key { .. } => "key",
+        atvv_input::Action::Combo { .. } => "combo",
+        atvv_input::Action::Exec { .. } => "exec",
+        atvv_input::Action::Dictation(_) => "dictation",
+    }
+}
+
+fn key_names<T: std::fmt::Debug>(keys: &[T]) -> String {
+    keys.iter()
+        .map(|key| format!("{key:?}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), String> {
     let report = atvv_bluez::pair(atvv_bluez::PairConfig {
         address: address.to_string(),
@@ -351,8 +820,8 @@ fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), Str
         println!("config: not saved (--no-save)");
         return Ok(());
     }
-    let path = atvv_daemon::config::default_path();
-    atvv_daemon::config::save_device(&path, &report.address, adapter.as_deref())
+    let path = atvv_config::default_path();
+    atvv_config::save_device(&path, &report.address, adapter.as_deref())
         .map_err(|error| error.to_string())?;
     println!("config: {} device={}", path.display(), report.address);
     Ok(())
@@ -509,12 +978,12 @@ impl Check {
 
 fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), String> {
     let mut checks = Vec::new();
-    let config_path = atvv_daemon::config::default_path();
-    let config = atvv_daemon::config::load(&config_path, RC003.gain_db);
+    let config_path = atvv_config::default_path();
+    let config = atvv_config::load(&config_path, &RC003);
     let configured_device = config
         .as_ref()
         .ok()
-        .and_then(|config| config.device.clone());
+        .and_then(|config| config.config.device.clone());
     let address = device_arg.or(configured_device);
     let status = match Client::connect() {
         Ok(client) => match client.status() {
@@ -745,9 +1214,9 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
 
     match &config {
         Ok(config) => {
-            let trigger = config.trigger_key.as_deref().unwrap_or("none");
-            match config.vinput {
-                atvv_daemon::VinputMode::Trigger => {
+            let trigger = config.config.trigger_key.as_deref().unwrap_or("none");
+            match config.config.vinput {
+                atvv_config::VinputMode::Trigger => {
                     let keyboard = status.as_ref().is_some_and(|status| status.input.keyboard);
                     checks.push(Check::new(
                         "vinput",
@@ -766,7 +1235,7 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
                         ),
                     ));
                 }
-                atvv_daemon::VinputMode::Dbus => {
+                atvv_config::VinputMode::Dbus => {
                     let present = vinput_service_present();
                     checks.push(Check::new(
                         "vinput",
@@ -782,7 +1251,7 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
                         },
                     ));
                 }
-                atvv_daemon::VinputMode::Off => checks.push(Check::new(
+                atvv_config::VinputMode::Off => checks.push(Check::new(
                     "vinput",
                     CheckState::Warn,
                     "disabled; the voice key does not trigger fcitx",
@@ -803,9 +1272,9 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
             format!(
                 "{} (gain {} dB, input {}, vinput {})",
                 config_path.display(),
-                config.gain_db,
-                config.input,
-                config.vinput.name()
+                config.config.gain_db,
+                config.config.input,
+                config.config.vinput.name()
             ),
         )),
         Ok(_) => checks.push(Check::new(

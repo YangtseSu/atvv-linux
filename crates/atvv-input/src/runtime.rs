@@ -16,11 +16,11 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use atvv_protocol::profile::{DeviceProfile, RemoteButton};
+use atvv_protocol::profile::{DeviceProfile, GestureTiming, RemoteButton};
 use evdevil::event::{EventKind, Key, KeyState};
 use thiserror::Error;
 
-use crate::action::{Action, ActionError, ActionMap, Trigger};
+use crate::action::{Action, ActionError, ActionMap};
 use crate::device::{SkippedDevice, discover};
 use crate::gesture::{Gesture, GestureEngine, Timing};
 use crate::keymap::{KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program};
@@ -73,6 +73,8 @@ pub enum InputError {
 pub struct InputOptions {
     /// Key name resolved with [`resolve_key`]. `None` disables the trigger.
     pub voice_trigger: Option<String>,
+    /// Gesture timing override; `None` uses the profile value.
+    pub gesture: Option<GestureTiming>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -130,7 +132,7 @@ impl Dispatcher {
 
     fn dispatch(&self, gestures: Vec<Gesture>) {
         for gesture in gestures {
-            let Some(trigger) = trigger_for(gesture) else {
+            let Some(trigger) = gesture.trigger() else {
                 continue;
             };
             let button = gesture.button();
@@ -166,15 +168,6 @@ impl Dispatcher {
                 error,
             });
         }
-    }
-}
-
-fn trigger_for(gesture: Gesture) -> Option<Trigger> {
-    match gesture {
-        Gesture::SingleClick(_) | Gesture::RepeatTick(_) => Some(Trigger::Single),
-        Gesture::DoubleClick(_) => Some(Trigger::Double),
-        Gesture::LongPress(_) => Some(Trigger::Long),
-        Gesture::Release(_) => None,
     }
 }
 
@@ -216,6 +209,7 @@ impl InputRuntime {
             Some(name) => Some(parse_key_program(&name).ok_or(InputError::TriggerKey(name))?),
             None => None,
         };
+        let timing = options.gesture.unwrap_or(profile.gesture_timing);
 
         let resolver = KeyResolver;
         let mut registration: BTreeSet<Key> = keymap.codes().collect();
@@ -364,16 +358,16 @@ impl InputRuntime {
         let engine_stop = Arc::clone(&stop);
         let engine_vkbd = vkbd.clone();
         let engine_map = map.clone();
-        let timing = profile.gesture_timing;
+        let engine_timing = timing;
         let engine_event_tx = event_tx.clone();
         let drop_trigger = voice_trigger.clone();
         let engine_trigger = voice_trigger;
         let engine = thread::Builder::new()
             .name("atvv-gesture".into())
             .spawn(move || {
-                let mut engine = GestureEngine::new(Timing::from(timing));
+                let mut engine = GestureEngine::new(Timing::from(engine_timing));
                 for button in RemoteButton::LOGICAL {
-                    engine.set_policy(button, engine_map.policy(button, &timing));
+                    engine.set_policy(button, engine_map.policy(button, &engine_timing));
                 }
                 let dispatcher = Dispatcher {
                     map: engine_map,
@@ -541,23 +535,25 @@ mod tests {
 
     #[test]
     fn gestures_map_to_their_slots() {
+        use crate::action::Trigger;
+
         assert_eq!(
-            trigger_for(Gesture::SingleClick(RemoteButton::Ok)),
+            Gesture::SingleClick(RemoteButton::Ok).trigger(),
             Some(Trigger::Single)
         );
         assert_eq!(
-            trigger_for(Gesture::RepeatTick(RemoteButton::Up)),
+            Gesture::RepeatTick(RemoteButton::Up).trigger(),
             Some(Trigger::Single)
         );
         assert_eq!(
-            trigger_for(Gesture::DoubleClick(RemoteButton::Ok)),
+            Gesture::DoubleClick(RemoteButton::Ok).trigger(),
             Some(Trigger::Double)
         );
         assert_eq!(
-            trigger_for(Gesture::LongPress(RemoteButton::Menu)),
+            Gesture::LongPress(RemoteButton::Menu).trigger(),
             Some(Trigger::Long)
         );
-        assert_eq!(trigger_for(Gesture::Release(RemoteButton::Ok)), None);
+        assert_eq!(Gesture::Release(RemoteButton::Ok).trigger(), None);
     }
 }
 
@@ -599,6 +595,7 @@ mod kernel_tests {
             ActionMap::defaults(),
             InputOptions {
                 voice_trigger: Some("DICTATE".to_string()),
+                ..InputOptions::default()
             },
         )
         .expect("input runtime");

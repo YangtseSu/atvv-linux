@@ -160,7 +160,7 @@ fn stdio_mcp_contract_against_the_mock_daemon() {
     let address = transport.address().to_string();
 
     let mut config = DaemonConfig::new(RC003, address.clone());
-    config.input_enabled = false;
+    config.config.input = false;
     let signals: std::sync::Arc<dyn EventSink> = std::sync::Arc::new(NullSink);
     let (daemon, handle) = Daemon::new(
         config,
@@ -169,7 +169,13 @@ fn stdio_mcp_contract_against_the_mock_daemon() {
         signals,
         None,
     );
-    let interface = DaemonInterface::new(handle.status(), handle.commands(), address.clone());
+    let interface = DaemonInterface::new(
+        handle.status(),
+        handle.config(),
+        handle.capture(),
+        handle.commands(),
+        address.clone(),
+    );
     dbus::serve(&server, interface).expect("serve org.atvv.Daemon");
     let daemon_thread = std::thread::spawn(move || daemon.run());
 

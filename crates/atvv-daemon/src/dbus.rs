@@ -2,36 +2,54 @@
 
 //! `org.atvv.Daemon` service and client.
 //!
-//! The service exposes a JSON view model and signals, not protocol structs.
+//! The service exposes JSON view models and signals, not protocol structs.
 //! The client is the only place that knows D-Bus member names.
 
-use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
+use atvv_config::ConfigDocument;
 use atvv_protocol::profile::DeviceProfile;
 use serde_json::Value;
 use zbus::blocking::Connection;
+use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::ObjectPath;
 
+use crate::capture::{self, CaptureCell, CaptureState};
 use crate::daemon::{Command, DaemonEvent, EventSink};
-use crate::status::{StatusCell, StatusView};
+use crate::status::{ConfigCell, StatusCell, StatusView, lock_config};
 
 pub const SERVICE: &str = "org.atvv.Daemon";
 pub const PATH: &str = "/org/atvv/Daemon";
 pub const INTERFACE: &str = "org.atvv.Daemon";
 
+/// How long a `SetConfig` caller waits for the daemon loop to apply it.
+const CONFIG_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Object served at [`PATH`].
 pub struct DaemonInterface {
     status: StatusCell,
+    config: ConfigCell,
+    capture: CaptureCell,
     commands: Sender<Command>,
     address: String,
 }
 
 impl DaemonInterface {
     #[must_use]
-    pub fn new(status: StatusCell, commands: Sender<Command>, address: String) -> Self {
+    pub fn new(
+        status: StatusCell,
+        config: ConfigCell,
+        capture: CaptureCell,
+        commands: Sender<Command>,
+        address: String,
+    ) -> Self {
         Self {
             status,
+            config,
+            capture,
             commands,
             address,
         }
@@ -50,6 +68,46 @@ impl DaemonInterface {
     fn get_status(&self) -> String {
         let status = crate::status::lock(&self.status).clone();
         serde_json::to_string(&status).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Effective editable configuration as JSON.
+    fn get_config(&self) -> String {
+        let config = lock_config(&self.config).clone();
+        serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Validate, apply, and persist a configuration document.
+    fn set_config(&self, json: &str) -> zbus::fdo::Result<()> {
+        let (reply, result) = mpsc::channel();
+        self.commands
+            .send(Command::SetConfig {
+                json: json.to_string(),
+                reply,
+            })
+            .map_err(|_| zbus::fdo::Error::Failed("the daemon is not running".to_string()))?;
+        wait(result)
+    }
+
+    /// Start reporting logical button events to the caller.
+    fn begin_capture(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> zbus::fdo::Result<()> {
+        let owner = header.sender().map(ToString::to_string);
+        capture::begin(&self.capture, owner.clone());
+        if let Some(owner) = owner {
+            let cell = Arc::clone(&self.capture);
+            let connection = connection.clone();
+            std::thread::spawn(move || watch_owner(connection, owner, cell));
+        }
+        Ok(())
+    }
+
+    /// Stop capture mode.
+    fn end_capture(&self) -> zbus::fdo::Result<()> {
+        capture::end(&self.capture);
+        Ok(())
     }
 
     /// Configured device addresses.
@@ -72,9 +130,13 @@ impl DaemonInterface {
         self.send(Command::ToggleVoice)
     }
 
-    /// Re-read `daemon.toml`.
+    /// Re-read `daemon.toml`; returns the load or apply error.
     fn reload_config(&self) -> zbus::fdo::Result<()> {
-        self.send(Command::ReloadConfig)
+        let (reply, result) = mpsc::channel();
+        self.commands
+            .send(Command::ReloadConfig { reply })
+            .map_err(|_| zbus::fdo::Error::Failed("the daemon is not running".to_string()))?;
+        wait(result)
     }
 
     #[zbus(signal)]
@@ -85,6 +147,57 @@ impl DaemonInterface {
 
     #[zbus(signal)]
     async fn voice_stopped(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn button_event(
+        emitter: &SignalEmitter<'_>,
+        button: &str,
+        trigger: &str,
+        pressed: bool,
+    ) -> zbus::Result<()>;
+}
+
+/// Wait for a daemon reply to a configuration command.
+fn wait(result: Receiver<Result<(), String>>) -> zbus::fdo::Result<()> {
+    match result.recv_timeout(CONFIG_TIMEOUT) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(message)) => Err(zbus::fdo::Error::InvalidArgs(message)),
+        Err(_) => Err(zbus::fdo::Error::Failed(
+            "the daemon did not answer the configuration request".to_string(),
+        )),
+    }
+}
+
+/// Clear capture mode when the client that started it leaves the bus.
+///
+/// The owner is a unique bus name, so `NameHasOwner` is a direct check and
+/// avoids depending on match-rule argument filtering.
+fn watch_owner(connection: zbus::Connection, owner: String, cell: CaptureCell) {
+    let connection = zbus::blocking::Connection::from(connection);
+    let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+        return;
+    };
+    loop {
+        {
+            let state = capture::lock(&cell);
+            if !state.active || state.owner.as_deref() != Some(owner.as_str()) {
+                return;
+            }
+        }
+        let Ok(name) = zbus::names::BusName::try_from(owner.as_str()) else {
+            return;
+        };
+        match proxy.name_has_owner(name) {
+            Ok(true) => {}
+            Ok(false) => break,
+            Err(_) => return,
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let mut state = capture::lock(&cell);
+    if state.active && state.owner.as_deref() == Some(owner.as_str()) {
+        *state = CaptureState::default();
+    }
 }
 
 /// Emits daemon events on the session bus.
@@ -114,6 +227,16 @@ impl EventSink for DbusSink {
             DaemonEvent::VoiceStopped => {
                 zbus::block_on(DaemonInterface::voice_stopped(&self.emitter))
             }
+            DaemonEvent::ButtonEvent {
+                button,
+                trigger,
+                pressed,
+            } => zbus::block_on(DaemonInterface::button_event(
+                &self.emitter,
+                &button,
+                &trigger,
+                pressed,
+            )),
         };
         if let Err(error) = result {
             eprintln!("atvvd: D-Bus signal failed: {error}");
@@ -143,6 +266,10 @@ pub fn serve(connection: &Connection, interface: DaemonInterface) -> zbus::Resul
 )]
 pub trait DaemonApi {
     fn get_status(&self) -> zbus::Result<String>;
+    fn get_config(&self) -> zbus::Result<String>;
+    fn set_config(&self, json: &str) -> zbus::Result<()>;
+    fn begin_capture(&self) -> zbus::Result<()>;
+    fn end_capture(&self) -> zbus::Result<()>;
     fn list_devices(&self) -> zbus::Result<Vec<String>>;
     fn start_voice(&self) -> zbus::Result<()>;
     fn stop_voice(&self) -> zbus::Result<()>;
@@ -157,6 +284,9 @@ pub trait DaemonApi {
 
     #[zbus(signal)]
     fn voice_stopped(&self) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn button_event(&self, button: &str, trigger: &str, pressed: bool) -> zbus::Result<()>;
 }
 
 /// Blocking client for the daemon API.
@@ -167,7 +297,7 @@ pub struct Client {
 impl Client {
     pub fn connect() -> Result<Self, ClientError> {
         let connection = zbus::blocking::connection::Builder::session()?
-            .method_timeout(std::time::Duration::from_secs(10))
+            .method_timeout(Duration::from_secs(10))
             .build()?;
         Ok(Self { connection })
     }
@@ -194,6 +324,24 @@ impl Client {
     pub fn status_json(&self) -> Result<Value, ClientError> {
         let raw = self.proxy()?.get_status()?;
         Ok(serde_json::from_str(&raw)?)
+    }
+
+    pub fn config(&self) -> Result<ConfigDocument, ClientError> {
+        let raw = self.proxy()?.get_config()?;
+        Ok(serde_json::from_str(&raw)?)
+    }
+
+    pub fn set_config(&self, document: &ConfigDocument) -> Result<(), ClientError> {
+        let json = serde_json::to_string(document)?;
+        Ok(self.proxy()?.set_config(&json)?)
+    }
+
+    pub fn begin_capture(&self) -> Result<(), ClientError> {
+        Ok(self.proxy()?.begin_capture()?)
+    }
+
+    pub fn end_capture(&self) -> Result<(), ClientError> {
+        Ok(self.proxy()?.end_capture()?)
     }
 
     pub fn devices(&self) -> Result<Vec<String>, ClientError> {

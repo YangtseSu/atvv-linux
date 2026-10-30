@@ -112,7 +112,7 @@ fn contract_and_status_expose_the_provider_contract() {
     let address = transport.address().to_string();
 
     let mut config = DaemonConfig::new(RC003, address.clone());
-    config.input_enabled = false;
+    config.config.input = false;
     let signals: Arc<dyn EventSink> = Arc::new(NullSink);
     let (daemon, handle) = Daemon::new(
         config,
@@ -121,7 +121,13 @@ fn contract_and_status_expose_the_provider_contract() {
         signals,
         None,
     );
-    let interface = DaemonInterface::new(handle.status(), handle.commands(), address.clone());
+    let interface = DaemonInterface::new(
+        handle.status(),
+        handle.config(),
+        handle.capture(),
+        handle.commands(),
+        address.clone(),
+    );
     dbus::serve(&server, interface).expect("serve org.atvv.Daemon");
     let daemon_thread = std::thread::spawn(move || daemon.run());
 

@@ -168,7 +168,7 @@ fn mock_daemon_dbus_contract() {
     let _ = std::fs::remove_file(&config_path);
 
     let mut config = DaemonConfig::new(RC003, ADDRESS);
-    config.input_enabled = false;
+    config.config.input = false;
     config.config_path = config_path.clone();
     let address = transport.address().to_string();
 
@@ -180,7 +180,13 @@ fn mock_daemon_dbus_contract() {
         signals,
         None,
     );
-    let interface = DaemonInterface::new(handle.status(), handle.commands(), address.clone());
+    let interface = DaemonInterface::new(
+        handle.status(),
+        handle.config(),
+        handle.capture(),
+        handle.commands(),
+        address.clone(),
+    );
     dbus::serve(&server, interface).expect("serve org.atvv.Daemon");
     let daemon_thread = std::thread::spawn(move || daemon.run());
 

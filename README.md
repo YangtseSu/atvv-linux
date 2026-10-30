@@ -9,10 +9,10 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–09 and 11 are complete.** The package is installed, the user unit
-runs, and `atvvctl doctor` reports green on a real RC003. Step 10 (vinput
-zero-config) depends on an upstream consumer change; step 12 (provider contract
-output and consumer recipes) is in progress.
+**Steps 01–09 and 11–13 are complete.** The package is installed, the user
+unit runs, and `atvvctl doctor` reports green on a real RC003. Step 10 (vinput
+zero-config) depends on an upstream consumer change; step 14 (GTK4
+configuration app) is next.
 
 The RC003 path and the fcitx5-vinput source path have both run on real system
 services.
@@ -29,6 +29,10 @@ Implemented:
   gesture engine, a uinput virtual keyboard, and a configurable synthetic
   trigger key/chord for the grabbed voice key. `atvvctl input fake-remote`
   exercises the whole path without hardware.
+- `atvv-config`: the single `daemon.toml` schema parser, the versioned JSON
+  configuration document, per-button action validation, gesture overrides,
+  and the `exec:` policy. Live changes are applied through `atvvctl config`
+  or the D-Bus `SetConfig` method.
 - `atvv-bluez`: BlueZ GATT transport (`bluer`), adapter/device selection,
   `AcquireNotify` with a `StartNotify` fallback, a pairing agent, and
   reconnect handling.
@@ -38,8 +42,8 @@ Implemented:
   input layer, and a JSON view model over `org.atvv.Daemon`.
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
   simulation, an audio-source smoke test, the fake input remote, plus
-  `status`, `contract`, `mic start|stop|toggle`, `reload`, `pair`, `record`,
-  `monitor`, and `doctor`.
+  `status`, `contract`, `mic start|stop|toggle`, `reload`, `config
+  get|set`, `capture`, `map test`, `pair`, `record`, `monitor`, and `doctor`.
 - `atvv-mcp`: stdio MCP server with `status`, `contract`, `voice_start`,
   `voice_stop`, `voice_toggle`, `list_devices`, and `reload`.
 
@@ -79,6 +83,9 @@ atvvctl doctor
 fcitx5-vinput by name (see [`docs/integrations/fcitx5-vinput.md`](docs/integrations/fcitx5-vinput.md));
 do not make it the system default.
 
+Button mappings, gesture timing, `exec:` opt-in, and the live `SetConfig`
+path are documented in [`docs/configuration.md`](docs/configuration.md).
+
 The package installs `/usr/bin/{atvvd,atvvctl,atvv-mcp}`;
 `/usr/lib/systemd/user/atvvd.service`;
 `/usr/lib/udev/rules.d/70-atvv-linux.rules` (`uaccess` for the RC003 event
@@ -116,6 +123,10 @@ cargo run -q -p atvv-cli -- audio test --seconds 3
 cargo run -q -p atvv-cli -- input fake-remote
 dbus-run-session -- cargo run -q -p atvv-daemon -- --mock
 cargo run -q -p atvv-cli -- status
+cargo run -q -p atvv-cli -- config get --json
+cargo run -q -p atvv-cli -- config set --button up --trigger single --action key:KEY_F13
+cargo run -q -p atvv-cli -- map test --button up --trigger single
+cargo run -q -p atvv-cli -- capture --timeout 10
 cargo run -q -p atvv-cli -- doctor
 cargo run -q -p atvv-cli -- pair C0:5D:39:F8:2D:4C
 cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
@@ -128,6 +139,7 @@ cargo run -q -p atvv-mcp
 
 ```text
 crates/atvv-protocol/   protocol, ADPCM, frames, profiles, session state
+crates/atvv-config/     daemon.toml schema, validation, JSON config document
 crates/atvv-audio/      native PipeWire Audio/Source and PCM queue
 crates/atvv-input/      evdev discovery/grab, gestures, uinput keyboard
 crates/atvv-bluez/      BlueZ GATT transport and pairing agent

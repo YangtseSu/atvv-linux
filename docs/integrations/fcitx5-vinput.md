@@ -120,8 +120,9 @@ A bare modifier is accepted by fcitx in principle, but a synthetic `Alt_R`
 from the ATVV virtual keyboard did not trigger fcitx5-vinput 2.4.2 on
 2026-10-30. The `Control+Control_R` chord did work.
 
-`vinput` and `trigger_key` are read at daemon start; `ReloadConfig` applies
-`gain_db` and `input` only. Restart `atvvd` after changing the vinput mode.
+`vinput`, `trigger_key`, gesture timing, and button mappings apply live:
+`ReloadConfig` or `atvvctl config set` restarts only the input runtime when the
+trigger path changes. `atvvctl config get` shows the active values.
 
 ### Trigger-key mode (default)
 

@@ -1,6 +1,6 @@
 # Step 13 — keymap configuration backend
 
-Status: ⬜ not-started
+Status: ✅ done
 Depends on: 12, 06
 Touches: `crates/atvv-config/` (new), `crates/atvv-input/`,
 `crates/atvv-daemon/`, `crates/atvv-cli/`, `docs/`
@@ -12,7 +12,7 @@ No GUI is required for this step. A user must be able to change a mapping from
 `atvvctl`, reload it, and see the input runtime use it without a daemon
 restart.
 
-## Current state
+## State before this step
 
 - The provider contract and generic status surface are complete (step 12).
 - `atvv-input` already has the action grammar and default `ActionMap`:
@@ -24,7 +24,7 @@ restart.
 
 ## Deliverables
 
-- ⬜ New `atvv-config` crate shared by daemon, CLI, and GUI:
+- ✅ New `atvv-config` crate shared by daemon, CLI, and GUI:
   - Schema version (`schema_version = 1`).
   - Device/profile selection, gain, input enable, vinput mode, trigger key.
   - Per-button `single`/`double`/`long` action strings.
@@ -32,34 +32,34 @@ restart.
   - `allow_exec` opt-in for `exec:` actions.
   - Parse, validate, and serialize using the existing `atvv-input` action
     grammar.
-- ⬜ `daemon.toml` accepts `[buttons.<logical-button>]` and validates every
+- ✅ `daemon.toml` accepts `[buttons.<logical-button>]` and validates every
   action at load time. Invalid actions name the button, trigger, and value.
-- ⬜ Backward compatibility: an existing config without `[buttons]` loads the
+- ✅ Backward compatibility: an existing config without `[buttons]` loads the
   current defaults (pass-through keys, power `none`, no desktop shortcuts).
-- ⬜ The voice key remains special and cannot be mapped to an ordinary action.
-- ⬜ The daemon applies a changed map live to the input runtime. A failed
+- ✅ The voice key remains special and cannot be mapped to an ordinary action.
+- ✅ The daemon applies a changed map live to the input runtime. A failed
   reload leaves the previous map active and reports the error.
-- ⬜ D-Bus additions on `org.atvv.Daemon`:
+- ✅ D-Bus additions on `org.atvv.Daemon`:
   - `GetConfig() -> s` (JSON view of the editable config).
   - `SetConfig(s) -> ()` (validate, atomically apply, report errors).
   - `BeginCapture() -> ()`, `EndCapture() -> ()` for “press a remote key”
     mode.
   - Signal `ButtonEvent(s button, s trigger, b pressed)` while capturing.
   - Capture mode ends automatically if the GUI disconnects.
-- ⬜ `atvvctl config get`, `atvvctl config set`, `atvvctl capture`, and
+- ✅ `atvvctl config get`, `atvvctl config set`, `atvvctl capture`, and
   `atvvctl map test` (human and `--json` where applicable).
-- ⬜ `exec:` policy:
+- ✅ `exec:` policy:
   - Disabled unless `allow_exec = true`.
   - Runs as the user, never root; timeout and failure are reported.
   - Selecting or previewing an `exec` action in a UI does not run it.
-- ⬜ Tests:
+- ✅ Tests:
   - Config round-trip and schema version.
   - Invalid action, unknown button, voice-key mapping, duplicate/invalid
     chord, `exec` disabled.
   - Live reload success and failure.
   - D-Bus `GetConfig`/`SetConfig`/capture under `dbus-run-session`.
   - Fake remote produces button events; no real evdev grab in tests.
-- ⬜ Docs: config schema, action grammar, safety rules, `atvvctl` examples.
+- ✅ Docs: config schema, action grammar, safety rules, `atvvctl` examples.
 
 ## Design notes
 
@@ -100,15 +100,32 @@ cargo run -q -p atvv-cli -- capture
 cargo run -q -p atvv-cli -- map test
 ```
 
+Observed results on 2026-10-31:
+
+- `cargo test -p atvv-config` → 14 passed.
+- `cargo test -p atvv-input` → 42 passed, 2 ignored; the ignored kernel tests
+  pass with `/dev/uinput` access.
+- `cargo test -p atvv-daemon` → 24 unit tests pass (1 ignored), the isolated
+  `config_dbus` suite passes 4/4, `dbus_integration` 1/1, and `vinput_dbus`
+  2/2.
+- `cargo test -p atvv-daemon --lib -- --ignored` → the live-map fake-remote
+  test passes: `SetConfig` changed `up` to `KEY_F13`, the daemon recreated the
+  input runtime, and a fake `Up` press produced `KEY_F13` without a daemon
+  restart.
+- A `dbus-run-session` CLI run against `atvvd --mock` printed the effective
+  config, applied `up = key:KEY_F13`, persisted it to `daemon.toml`, resolved
+  `map test`, timed out cleanly on `capture --timeout 1`, and rejected
+  `key:nope` while leaving the file unchanged.
+
 ## Exit criteria
 
-- ⬜ A mapping can be changed in `daemon.toml` or by `atvvctl`, reloaded, and
+- ✅ A mapping can be changed in `daemon.toml` or by `atvvctl`, reloaded, and
   observed through the fake remote without restarting `atvvd`.
-- ⬜ Invalid config does not replace the active map.
-- ⬜ The voice key cannot be mapped to an ordinary action.
-- ⬜ `exec:` cannot run unless explicitly enabled.
-- ⬜ D-Bus config/capture API is isolated and tested.
-- ⬜ No GUI code is required for this step.
+- ✅ Invalid config does not replace the active map.
+- ✅ The voice key cannot be mapped to an ordinary action.
+- ✅ `exec:` cannot run unless explicitly enabled.
+- ✅ D-Bus config/capture API is isolated and tested.
+- ✅ No GUI code is required for this step.
 
 ## Risks
 
@@ -125,3 +142,23 @@ cargo run -q -p atvv-cli -- map test
 
 - 2026-10-31 — planned after the GTK4/libadwaita UI decision; no
   implementation yet. Step 12 is complete; step 10 is upstream-blocked.
+- 2026-10-31 — implemented `atvv-config` as the only TOML/JSON parser, moved
+  `daemon.toml` validation out of `atvv-daemon`, added `profile`, `[gesture]`,
+  `[buttons.<button>]`, `allow_exec`, and schema versioning. The daemon applies
+  map/timing/trigger/vinput changes by recreating the input runtime (uinput key
+  registration depends on the map) and restores the previous runtime if the
+  new one cannot start. D-Bus `GetConfig`/`SetConfig`/`BeginCapture`/
+  `EndCapture`/`ButtonEvent` are implemented; capture ends when the calling
+  connection leaves the bus. `atvvctl config get|set`, `capture`, and
+  `map test` are implemented. `exec:` runs one command at a time on a worker
+  thread with a 5 s timeout, stdio on `/dev/null`, and refuses to run as root.
+- 2026-10-31 — verification: `cargo test -p atvv-config` 14 passed;
+  `cargo test -p atvv-input` 42 passed, 2 ignored; the ignored kernel tests
+  pass (2/2); `cargo test -p atvv-daemon` 24 unit (1 ignored live-map test),
+  4 config-D-Bus tests, 1 daemon integration, and 2 vinput tests pass; the
+  ignored live-map test passes on the fake remote (SetConfig changed `up` to
+  `KEY_F13` and the running runtime emitted it without a daemon restart).
+  An isolated-bus CLI run verified `config get`, `config set`, persistence,
+  `map test`, capture timeout, and rejection of `key:nope` without changing
+  the file. `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets -- -D warnings` are clean.

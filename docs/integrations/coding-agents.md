@@ -45,7 +45,7 @@ or in an MCP JSON configuration:
 | `voice_stop` | none | closes the remote mic (`MIC_CLOSE`) |
 | `voice_toggle` | none | starts when idle, stops while opening/streaming |
 | `list_devices` | none | configured device addresses |
-| `reload` | none | re-reads `daemon.toml` (`gain_db`, `input`) |
+| `reload` | none | re-reads `daemon.toml`; applies gain, input, gesture timing, trigger key, vinput mode, and the per-button map live |
 
 A backend failure is returned as `isError: true` with the error text, so the
 agent can report "daemon not running" instead of hanging. An unknown tool is a

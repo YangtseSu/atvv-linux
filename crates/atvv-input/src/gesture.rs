@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 
 use atvv_protocol::profile::{GestureTiming, RemoteButton};
 
+use crate::action::Trigger;
+
 /// Timing windows, in durations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -69,6 +71,19 @@ impl Gesture {
             | Self::LongPress(button)
             | Self::RepeatTick(button)
             | Self::Release(button) => button,
+        }
+    }
+
+    /// The action slot a recognized gesture resolves to.
+    ///
+    /// `Release` carries no action; repeat ticks use the single-click slot.
+    #[must_use]
+    pub const fn trigger(self) -> Option<Trigger> {
+        match self {
+            Self::SingleClick(_) | Self::RepeatTick(_) => Some(Trigger::Single),
+            Self::DoubleClick(_) => Some(Trigger::Double),
+            Self::LongPress(_) => Some(Trigger::Long),
+            Self::Release(_) => None,
         }
     }
 }

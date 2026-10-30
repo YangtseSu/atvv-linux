@@ -7,8 +7,9 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 126 passed, 2 ignored kernel-uinput
-  tests (both pass with `/dev/uinput` access).
+- Tests: `cargo test --workspace` → 144 passed, 3 ignored tests (two
+  kernel-uinput input tests and one fake-remote live-map test; all three pass
+  with `/dev/uinput` access).
 
 ## Read first
 
@@ -85,6 +86,21 @@ per-session copies; `docs/plans/` remains the canonical plan.
   A real RC003 press emitted `KEY_DICTATE`, streamed 104 frames / 24,960
   samples, and made fcitx5-vinput record from `atvv-miremote-rc003` at 16 kHz.
   See `docs/plans/11-input-evdevil.md`.
+- **13 keymap configuration backend (complete and verified)**: `atvv-config`
+  is now the only `daemon.toml` parser. It carries `schema_version`, `profile`,
+  `device`/`adapter`, gain, input, vinput mode, trigger key, `allow_exec`,
+  `[gesture]` timing overrides, and `[buttons.<button>]` `single`/`double`/
+  `long` actions. The daemon applies map/timing/trigger/vinput changes live by
+  recreating the input runtime (uinput key registration depends on the map),
+  restores the previous runtime if the new one cannot start, and rolls the
+  runtime back if the atomic file write fails. D-Bus `GetConfig`/`SetConfig`
+  and `BeginCapture`/`EndCapture`/`ButtonEvent` are implemented; capture ends
+  when the calling connection leaves the bus. `atvvctl config get|set`,
+  `capture`, and `map test` are implemented. `exec:` is opt-in, runs one
+  command at a time on a worker thread with a 5 s timeout, closes stdio, and
+  refuses to run as root. The fake-remote test changed `up` to `KEY_F13` live
+  and observed it without a daemon restart. See
+  `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -109,9 +125,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **13 keymap configuration backend (planned)**: shared `atvv-config` schema,
-  per-button action persistence, D-Bus `GetConfig`/`SetConfig`/capture, and
-  `atvvctl config`/`capture`/`map`. No GUI required.
 - **14 GTK4 configuration GUI (planned)**: `atvv-gui`/`atvv-config`, remote
   diagram with clickable hotspots, action editor, live key learning, test
   mode, and GNOME HIG. Depends on step 13.
@@ -147,12 +160,28 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - The fake remote profile (`test-fake-remote`, VID `0x1209`, PID `0x0002`) is
   test-only and never part of `PROFILES`.
 - D-Bus boundary: `org.atvv.Daemon` at `/org/atvv/Daemon`; `GetStatus` returns
-  JSON from the `StatusView` model; `ListDevices` returns addresses;
-  `StartVoice`, `StopVoice`, `ToggleVoice`, `ReloadConfig`; signals
-  `StateChanged(s)`, `VoiceStarted()`, `VoiceStopped()`. Protocol structs do
-  not cross D-Bus.
+  JSON from the `StatusView` model; `GetConfig` returns the versioned
+  `ConfigDocument`; `SetConfig` validates, applies, and persists atomically;
+  `BeginCapture`/`EndCapture` control capture mode; `ListDevices` returns
+  addresses; `StartVoice`, `StopVoice`, `ToggleVoice`, `ReloadConfig`;
+  signals `StateChanged(s)`, `VoiceStarted()`, `VoiceStopped()`, and
+  `ButtonEvent(s,s,b)`. Protocol structs do not cross D-Bus.
 - Config: `$XDG_CONFIG_HOME/atvv/daemon.toml`; missing file = defaults;
   invalid file is reported by `ReloadConfig` and `atvvctl doctor`.
+  `atvv-config` is the only parser. A slot that is absent means "profile
+  default"; `none` swallows the button. The voice key is not mappable.
+  `exec:` requires `allow_exec = true`; the daemon runs it as the user with a
+  5 s timeout and refuses to run when the effective uid is 0.
+- Live config: `SetConfig` validates the complete document, applies the
+  runtime, then writes the file atomically; a failed runtime apply restores
+  the previous runtime, and a failed write rolls the runtime back. The input
+  runtime is recreated only when the map, gesture timing, trigger key, vinput
+  mode, or input enable changes.
+- Capture: the daemon emits `ButtonEvent(button, trigger, pressed)` only while
+  capture is active; `trigger` is the recognized gesture slot (`single`,
+  `double`, `long`) or `release`. The owner is the unique bus name of the
+  `BeginCapture` caller; a poll of `NameHasOwner` ends capture when that client
+  disconnects.
 - The RC003 mic is gated by the physical voice key; host `MIC_OPEN` alone
   yields `AUDIO_START` and then a frame timeout. Voice-key edges drive both
   `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger.
@@ -206,13 +235,15 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p atvv-input -- --ignored --test-threads=1
+cargo test -p atvv-daemon --lib -- --ignored
+cargo test -p atvv-daemon --test config_dbus
 cargo deny check
 cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 ```
 
-- `cargo test --workspace` → 126 passed, 2 ignored; `cargo test -p atvv-input -- --ignored --test-threads=1` → 2 passed.
+- `cargo test --workspace` → 144 passed, 3 ignored; `cargo test -p atvv-input -- --ignored --test-threads=1` → 2 passed; `cargo test -p atvv-daemon --lib -- --ignored` → 1 passed.
 - 2026-10-31 `cargo run -q -p atvv-cli -- audio test --seconds 5` and
   `pw-cli info atvv-test` → `media.class="Audio/Source"`,
   `atvv.contract_version="1"`, `atvv.profile="test"`,
@@ -296,28 +327,44 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `atvv-linux 0.1.0-5` (5.9 MiB) plus a debug package; package sha256
   `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`.
   Installed on 2026-10-31; the unit restarted and reports the contract.
+- 2026-10-31 step 13 verification: `cargo test --workspace` →
+  144 passed, 3 ignored; `cargo test -p atvv-input -- --ignored
+  --test-threads=1` → 2 passed; `cargo test -p atvv-daemon --lib --
+  --ignored` → the live-map fake-remote test passed (`up` changed to
+  `key:KEY_F13` while the daemon kept running; the fake `Up` press produced
+  `KEY_F13`). `cargo test -p atvv-daemon --test config_dbus` → 4 passed
+  (`GetConfig` shape, SetConfig persistence/rollback, capture owner
+  disconnect). An isolated `dbus-run-session` CLI run against `atvvd --mock`
+  printed the document, applied and persisted `key:KEY_F13`, resolved
+  `map test`/`combo:ctrl+alt+v`, timed out cleanly on `capture --timeout 1`,
+  and rejected `key:nope` with the file unchanged. `cargo fmt --all --
+  --check` and `cargo clippy --workspace --all-targets -- -D warnings` are
+  clean.
 
 ## Next step
 
-**Step 12 is complete.** The provider contract is available through
-`atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
-`atvvctl doctor`, and the `atvv-mcp` `contract` tool. The browser recipe and
-generic IM guidance are documented; step 12's dependency is `03, 06`, while
-the vinput consumer recipe is the blocked step 10. `atvv-linux 0.1.0-5` is installed and active; the resident
-source advertises the contract and `atvvctl doctor` is all green.
+**Step 13 keymap-config is complete.** `atvv-config` is the only schema parser;
+`atvvctl config get|set`, `capture`, and `map test` work against
+`org.atvv.Daemon`; the D-Bus config/capture API is covered by an isolated-bus
+test; the fake-remote live-map test proves a map change reaches the running
+input runtime without a daemon restart. See `docs/configuration.md` and
+`docs/plans/13-keymap-config.md`. `atvv-linux 0.1.0-5` remains installed and
+active (it predates step 13, so the new commands are available from a workspace
+build, not the installed binary yet).
+
+**Step 14 GTK4/libadwaita GUI is next.** It depends on step 13 and reads
+`docs/plans/14-config-gui.md`; the toolkit decision is ADR 0008. The GUI is a
+separate D-Bus client: it must use `GetConfig`/`SetConfig` and
+`BeginCapture`/`EndCapture`, never write `daemon.toml` or grab evdev.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-**Step 13 keymap-config can start now.** It does not depend on step 10. Read
-`docs/plans/13-keymap-config.md`; step 14 (GTK4/libadwaita GUI) follows after
-step 13. The GUI decision is recorded in ADR 0008.
-
-Immediate action: wait for upstream review on PR #493; after it merges, rebase
-PR #494 onto `main`, then PR #495, rebuild vinput, and record the real
-auto-bind acceptance. In parallel, start step 13.
+Immediate action: start step 14. In parallel, wait for upstream review on PR
+#493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
+vinput, and record the real auto-bind acceptance.
 
 ## Commands
 
@@ -326,6 +373,8 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p atvv-input -- --ignored --test-threads=1
+cargo test -p atvv-daemon --lib -- --ignored
+cargo test -p atvv-daemon --test config_dbus
 cargo deny check
 cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
@@ -343,6 +392,13 @@ cargo run -q -p atvv-cli -- mic start
 cargo run -q -p atvv-cli -- mic stop
 cargo run -q -p atvv-cli -- mic toggle
 cargo run -q -p atvv-cli -- reload
+cargo run -q -p atvv-cli -- config get
+cargo run -q -p atvv-cli -- config get --json
+cargo run -q -p atvv-cli -- config set --button up --trigger single --action key:KEY_F13
+cargo run -q -p atvv-cli -- config set --allow-exec
+cargo run -q -p atvv-cli -- capture --timeout 10
+cargo run -q -p atvv-cli -- map test --button up --trigger single
+cargo run -q -p atvv-cli -- map test --action "combo:ctrl+alt+v"
 cargo run -q -p atvv-cli -- doctor
 cargo run -q -p atvv-cli -- pair C0:5D:39:F8:2D:4C
 cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose

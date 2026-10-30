@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 atvv-audio = { path = "../atvv-audio" }
 atvv-bluez = { path = "../atvv-bluez" }
+atvv-config = { path = "../atvv-config" }
 atvv-daemon = { path = "../atvv-daemon" }
 atvv-input = { path = "../atvv-input" }
 atvv-protocol = { path = "../atvv-protocol" }

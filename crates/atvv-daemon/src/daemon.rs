@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
+use atvv_config::{Config, ConfigDocument, VinputMode};
 use atvv_input::{Action, ActionMap, DictationMode, InputOptions, InputRuntime, RemoteEvent};
 use atvv_protocol::adpcm::Decoder;
 use atvv_protocol::caps::{Codec, InteractionModel};
@@ -19,20 +20,30 @@ use atvv_protocol::session::{Session, SessionAction, SessionState};
 use thiserror::Error;
 
 use crate::audio::PcmSink;
-use crate::config::{self, VinputMode};
+use crate::capture::{self, CaptureCell};
+use crate::exec::ExecEngine;
 use crate::status::{
-    AudioView, CapsView, ConfigView, DeviceView, InputView, StatusCell, StatusView, VinputView,
+    AudioView, CapsView, ConfigCell, ConfigView, DeviceView, InputView, StatusCell, StatusView,
+    VinputView,
 };
 use crate::transport::{Transport, TransportEvent};
 use crate::vinput::VinputControl;
 
 /// Request from D-Bus or the CLI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum Command {
     StartVoice,
     StopVoice,
     ToggleVoice,
-    ReloadConfig,
+    /// Re-read `daemon.toml`; the reply carries the result.
+    ReloadConfig {
+        reply: Sender<Result<(), String>>,
+    },
+    /// Replace the configuration document; the reply carries the result.
+    SetConfig {
+        json: String,
+        reply: Sender<Result<(), String>>,
+    },
     Shutdown,
 }
 
@@ -42,6 +53,12 @@ pub enum DaemonEvent {
     StateChanged(String),
     VoiceStarted,
     VoiceStopped,
+    /// Logical button activity while capture mode is active.
+    ButtonEvent {
+        button: String,
+        trigger: String,
+        pressed: bool,
+    },
 }
 
 /// Signal transport; D-Bus implements this, tests record it.
@@ -64,12 +81,8 @@ pub struct DaemonConfig {
     pub source_name: String,
     pub config_path: PathBuf,
     pub config_loaded: bool,
-    pub gain_db: i8,
-    pub input_enabled: bool,
-    /// fcitx5-vinput integration mode.
-    pub vinput: VinputMode,
-    /// Synthetic key name while the voice key is held; `None` disables it.
-    pub trigger_key: Option<String>,
+    /// Validated configuration; the daemon applies changes live.
+    pub config: Config,
     pub verbose: bool,
     pub tick: Duration,
     pub keepalive_interval: Duration,
@@ -85,12 +98,9 @@ impl DaemonConfig {
             profile,
             address: address.into(),
             source_name: format!("atvv-{}", profile.id),
-            config_path: config::default_path(),
+            config_path: atvv_config::default_path(),
             config_loaded: false,
-            gain_db: profile.gain_db,
-            input_enabled: true,
-            vinput: VinputMode::Trigger,
-            trigger_key: Some(config::DEFAULT_TRIGGER_KEY.to_string()),
+            config: Config::defaults(&profile),
             verbose: false,
             tick: Duration::from_millis(10),
             keepalive_interval: Duration::from_secs(10),
@@ -106,6 +116,8 @@ impl DaemonConfig {
 pub struct DaemonHandle {
     commands: Sender<Command>,
     status: StatusCell,
+    config: ConfigCell,
+    capture: CaptureCell,
 }
 
 impl DaemonHandle {
@@ -118,6 +130,18 @@ impl DaemonHandle {
     #[must_use]
     pub fn status(&self) -> StatusCell {
         Arc::clone(&self.status)
+    }
+
+    /// Active configuration document (`GetConfig`).
+    #[must_use]
+    pub fn config(&self) -> ConfigCell {
+        Arc::clone(&self.config)
+    }
+
+    /// Capture mode flag shared with the D-Bus interface.
+    #[must_use]
+    pub fn capture(&self) -> CaptureCell {
+        Arc::clone(&self.capture)
     }
 
     #[must_use]
@@ -141,11 +165,12 @@ pub struct Daemon {
     input: Option<InputRuntime>,
     signals: Arc<dyn EventSink>,
     status: StatusCell,
+    config_cell: ConfigCell,
+    capture: CaptureCell,
     commands: Receiver<Command>,
 
-    vinput_mode: VinputMode,
     vinput: Option<Box<dyn VinputControl>>,
-    trigger_key: Option<String>,
+    exec: Option<ExecEngine>,
 
     session: Session,
     accumulator: Option<FrameAccumulator>,
@@ -154,10 +179,9 @@ pub struct Daemon {
     pcm: Vec<i16>,
 
     gain: f32,
-    gain_db: i8,
+    config: Config,
     config_path: PathBuf,
     config_loaded: bool,
-    input_enabled: bool,
     input_retry_at: Option<Instant>,
 
     connected: bool,
@@ -196,16 +220,16 @@ impl Daemon {
         vinput: Option<Box<dyn VinputControl>>,
     ) -> (Self, DaemonHandle) {
         let (sender, commands) = mpsc::channel();
-        let input_trigger = (config.vinput == VinputMode::Trigger)
-            .then(|| config.trigger_key.clone())
-            .flatten();
+        let input_trigger = trigger_for(&config.config);
         let (input, input_degraded) = start_input(
             config.profile,
-            config.input_enabled,
-            input_trigger.as_deref(),
+            config.config.input,
+            input_trigger,
+            &config.config.map,
+            config.config.gesture,
         );
         let input_view = InputView {
-            enabled: config.input_enabled,
+            enabled: config.config.input,
             available: input.is_some(),
             keyboard: input.as_ref().is_some_and(InputRuntime::keyboard_available),
             grabbed: grabbed_paths(&input),
@@ -214,8 +238,8 @@ impl Daemon {
             voice_key: None,
         };
         let vinput_view = VinputView {
-            mode: config.vinput.name().to_string(),
-            trigger: config.trigger_key.clone(),
+            mode: config.config.vinput.name().to_string(),
+            trigger: config.config.trigger_key.clone(),
             available: vinput.as_ref().is_some_and(|control| control.available()),
             last_error: vinput
                 .as_ref()
@@ -240,7 +264,7 @@ impl Daemon {
                 available: audio.is_available(),
                 streaming: false,
                 queued_samples: audio.queued_samples(),
-                gain_db: config.gain_db,
+                gain_db: config.config.gain_db,
                 frames: 0,
                 samples: 0,
                 dropped_frames: 0,
@@ -252,15 +276,20 @@ impl Daemon {
             config: ConfigView {
                 path: Some(config.config_path.display().to_string()),
                 loaded: config.config_loaded,
-                gain_db: config.gain_db,
-                input: config.input_enabled,
+                gain_db: config.config.gain_db,
+                input: config.config.input,
+                allow_exec: config.config.allow_exec,
             },
             last_error: None,
         };
         let status = crate::status::cell(status);
+        let config_cell = crate::status::config_cell(ConfigDocument::from_config(&config.config));
+        let capture = capture::cell();
         let handle = DaemonHandle {
             commands: sender,
             status: Arc::clone(&status),
+            config: Arc::clone(&config_cell),
+            capture: Arc::clone(&capture),
         };
         // A lazy transport (BlueZ) starts disconnected. Ask for an immediate
         // reconnect so the daemon owns D-Bus and reports status even when the
@@ -274,20 +303,20 @@ impl Daemon {
             input,
             signals,
             status,
+            config_cell,
+            capture,
             commands,
-            vinput_mode: config.vinput,
             vinput,
-            trigger_key: config.trigger_key,
+            exec: None,
             session: Session::new(config.profile),
             accumulator: None,
             decoder: Decoder::new(),
             swap: Vec::new(),
             pcm: Vec::new(),
-            gain: gain_factor(config.gain_db),
-            gain_db: config.gain_db,
+            gain: gain_factor(config.config.gain_db),
+            config: config.config,
             config_path: config.config_path,
             config_loaded: config.config_loaded,
-            input_enabled: config.input_enabled,
             input_retry_at: None,
             connected: false,
             last_status_at: Instant::now(),
@@ -336,6 +365,7 @@ impl Daemon {
             }
 
             self.poll_input();
+            self.poll_exec();
             let now = Instant::now();
             let wait = self.next_wait(now);
             match self.transport.poll(wait) {
@@ -349,6 +379,7 @@ impl Daemon {
                 }
             }
             self.poll_input();
+            self.poll_exec();
             self.on_timers(Instant::now());
         }
     }
@@ -596,7 +627,23 @@ impl Daemon {
                 );
                 self.request_voice(!active);
             }
-            Command::ReloadConfig => self.reload_config(),
+            Command::ReloadConfig { reply } => {
+                let result = self.reload_config();
+                if let Some(error) = result.as_ref().err() {
+                    self.last_error = Some(format!("reload: {error}"));
+                    self.trace(format!("config reload failed: {error}"));
+                }
+                let _ = reply.send(result);
+            }
+            Command::SetConfig { json, reply } => {
+                let result = self.set_config(&json);
+                let failed = result.as_ref().err().cloned();
+                if let Some(error) = failed {
+                    self.last_error = Some(format!("set config: {error}"));
+                    self.trace(format!("set config failed: {error}"));
+                }
+                let _ = reply.send(result);
+            }
         }
         self.publish_status();
         false
@@ -631,37 +678,116 @@ impl Daemon {
         }
     }
 
-    fn reload_config(&mut self) {
-        match config::load(&self.config_path, self.profile.gain_db) {
-            Ok(loaded) => {
-                self.gain_db = loaded.gain_db;
-                self.gain = gain_factor(loaded.gain_db);
-                self.config_loaded = loaded.existed;
-                self.input_enabled = loaded.input;
-                self.apply_input_enabled();
-                self.last_error = None;
-                self.trace(format!(
-                    "config reloaded: gain={} dB input={}",
-                    self.gain_db, self.input_enabled
-                ));
-            }
-            Err(error) => {
-                self.last_error = Some(format!("reload: {error}"));
-                self.trace(format!("config reload failed: {error}"));
-            }
-        }
+    fn reload_config(&mut self) -> Result<(), String> {
+        let loaded = atvv_config::load(&self.config_path, &self.profile)
+            .map_err(|error| error.to_string())?;
+        let existed = loaded.existed;
+        self.apply_config(loaded.config)?;
+        self.config_loaded = existed;
+        self.last_error = None;
+        self.trace(format!(
+            "config reloaded: gain={} dB input={} buttons={}",
+            self.config.gain_db,
+            self.config.input,
+            self.config.map.actions().count()
+        ));
+        Ok(())
     }
 
-    fn apply_input_enabled(&mut self) {
-        if self.input_enabled {
-            if self.input.is_none() {
-                self.attach_input(Instant::now());
-            }
-        } else {
-            self.input = None;
-            self.input_degraded.clear();
-            self.input_retry_at = None;
+    /// Validate, apply, and persist a JSON configuration document.
+    ///
+    /// The runtime is applied before the file is written; a failed apply
+    /// leaves the previous map active, and a failed write rolls the runtime
+    /// back.
+    fn set_config(&mut self, json: &str) -> Result<(), String> {
+        let document: ConfigDocument = serde_json::from_str(json)
+            .map_err(|error| format!("invalid configuration document: {error}"))?;
+        let next = document
+            .validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        let previous = self.config.clone();
+        self.apply_config(next)?;
+        if let Err(error) = atvv_config::save_document(&self.config_path, &document, &self.profile)
+        {
+            let _ = self.apply_config(previous);
+            return Err(format!(
+                "cannot save {}: {error}",
+                self.config_path.display()
+            ));
         }
+        self.config_loaded = true;
+        self.last_error = None;
+        Ok(())
+    }
+
+    /// Apply a validated configuration to the live runtime.
+    ///
+    /// The input runtime is recreated only when the map, timing, trigger, or
+    /// vinput mode changes; its uinput key registration depends on the map.
+    /// On failure the previous runtime is restored and the previous
+    /// configuration stays active.
+    fn apply_config(&mut self, next: Config) -> Result<(), String> {
+        let old = self.config.clone();
+        let restart = old.input != next.input
+            || old.map != next.map
+            || old.gesture != next.gesture
+            || old.trigger_key != next.trigger_key
+            || old.vinput != next.vinput;
+        let had_input = self.input.is_some();
+
+        if restart {
+            if !next.input {
+                self.input = None;
+                self.input_degraded.clear();
+                self.input_retry_at = None;
+            } else if had_input {
+                // Dropping the old runtime releases the evdev grab and the
+                // uinput device, so the new map can register its own keys.
+                self.input = None;
+                self.input_degraded.clear();
+                let (input, degraded) = start_input(
+                    self.profile,
+                    true,
+                    trigger_for(&next),
+                    &next.map,
+                    next.gesture,
+                );
+                if input.is_some() {
+                    self.input = input;
+                    self.input_degraded = degraded;
+                    self.input_retry_at = None;
+                } else {
+                    let (previous_input, previous_degraded) = start_input(
+                        self.profile,
+                        old.input,
+                        trigger_for(&old),
+                        &old.map,
+                        old.gesture,
+                    );
+                    let restored = previous_input.is_some();
+                    self.input = previous_input;
+                    self.input_degraded = previous_degraded;
+                    self.input_retry_at =
+                        (!restored).then(|| Instant::now() + Duration::from_secs(2));
+                    return Err(format!(
+                        "the input runtime did not accept the new configuration: {}",
+                        degraded.join("; ")
+                    ));
+                }
+            } else {
+                self.input_retry_at = Some(Instant::now());
+            }
+        }
+
+        self.gain = gain_factor(next.gain_db);
+        self.config = next;
+        self.publish_config_document();
+        Ok(())
+    }
+
+    fn publish_config_document(&self) {
+        let document = ConfigDocument::from_config(&self.config);
+        *crate::status::lock_config(&self.config_cell) = document;
     }
 
     /// Start the input runtime when its HID node is present.
@@ -669,11 +795,17 @@ impl Daemon {
     /// The link can come up before the HID-over-GATT node, and the node is
     /// recreated on every reconnect, so a failed discovery is retried.
     fn attach_input(&mut self, now: Instant) {
-        if !self.input_enabled || self.input.is_some() {
+        if !self.config.input || self.input.is_some() {
             return;
         }
-        let trigger = self.input_voice_trigger();
-        let (input, degraded) = start_input(self.profile, true, trigger);
+        let trigger = trigger_for(&self.config).map(str::to_string);
+        let (input, degraded) = start_input(
+            self.profile,
+            true,
+            trigger.as_deref(),
+            &self.config.map,
+            self.config.gesture,
+        );
         let attached = input.is_some();
         self.input = input;
         self.input_degraded = degraded;
@@ -689,12 +821,24 @@ impl Daemon {
         });
     }
 
-    /// Synthetic key passed to the input runtime, if trigger mode is active.
-    fn input_voice_trigger(&self) -> Option<&str> {
-        if self.vinput_mode == VinputMode::Trigger {
-            self.trigger_key.as_deref()
-        } else {
-            None
+    fn poll_exec(&mut self) {
+        let Some(engine) = &self.exec else {
+            return;
+        };
+        let mut results = Vec::new();
+        while let Some(result) = engine.try_recv() {
+            results.push(result);
+        }
+        for result in results {
+            match result.outcome {
+                Ok(()) => self.trace(format!("exec {:?} finished", result.command)),
+                Err(error) => {
+                    let message = format!("exec {:?}: {error}", result.command);
+                    self.last_error = Some(message.clone());
+                    self.trace(message);
+                    self.publish_status();
+                }
+            }
         }
     }
 
@@ -733,6 +877,16 @@ impl Daemon {
                 if let Some(error) = error {
                     self.note_input_degraded(error);
                 }
+                if capture::is_active(&self.capture) {
+                    self.signals.publish(DaemonEvent::ButtonEvent {
+                        button: button.to_string(),
+                        trigger: gesture
+                            .trigger()
+                            .map_or("release", atvv_input::Trigger::name)
+                            .to_string(),
+                        pressed: gesture.trigger().is_some(),
+                    });
+                }
                 match action {
                     Some(Action::Dictation(DictationMode::Start)) => self.request_voice(true),
                     Some(Action::Dictation(DictationMode::Stop)) => self.request_voice(false),
@@ -743,6 +897,7 @@ impl Daemon {
                         );
                         self.request_voice(!active);
                     }
+                    Some(Action::Exec { command }) => self.run_exec(&command),
                     _ => {}
                 }
             }
@@ -769,7 +924,9 @@ impl Daemon {
             if pressed { "pressed" } else { "released" }
         ));
         self.request_voice(pressed);
-        if let Some(vinput) = &mut self.vinput {
+        if self.config.vinput == VinputMode::Dbus
+            && let Some(vinput) = &mut self.vinput
+        {
             let result = if pressed {
                 vinput.start()
             } else {
@@ -778,6 +935,26 @@ impl Daemon {
             if let Err(error) = result {
                 self.trace(format!("{error}"));
             }
+        }
+    }
+
+    fn run_exec(&mut self, command: &str) {
+        if !self.config.allow_exec {
+            let message = "exec action rejected: allow_exec is false".to_string();
+            self.last_error = Some(message.clone());
+            self.trace(message);
+            return;
+        }
+        if self.exec.is_none() {
+            self.exec = Some(ExecEngine::start());
+        }
+        let result = self.exec.as_ref().map(|engine| engine.run(command));
+        if let Some(Err(error)) = result {
+            let message = format!("exec {command:?}: {error}");
+            self.last_error = Some(message.clone());
+            self.trace(message);
+        } else {
+            self.trace(format!("exec queued: {command:?}"));
         }
     }
 
@@ -860,7 +1037,7 @@ impl Daemon {
         if let Some(deadline) = self.input_retry_at {
             if now >= deadline {
                 self.input_retry_at = None;
-                if self.input_enabled && self.input.is_none() {
+                if self.config.input && self.input.is_none() {
                     self.attach_input(now);
                 }
                 changed = true;
@@ -912,7 +1089,7 @@ impl Daemon {
             frame_size: caps.frame_size,
         });
         let input = InputView {
-            enabled: self.input_enabled,
+            enabled: self.config.input,
             available: self.input.is_some(),
             keyboard: self
                 .input
@@ -924,8 +1101,8 @@ impl Daemon {
             voice_key: self.voice_key,
         };
         let vinput = VinputView {
-            mode: self.vinput_mode.name().to_string(),
-            trigger: self.trigger_key.clone(),
+            mode: self.config.vinput.name().to_string(),
+            trigger: self.config.trigger_key.clone(),
             available: self
                 .vinput
                 .as_ref()
@@ -954,7 +1131,7 @@ impl Daemon {
                 available: self.audio.is_available(),
                 streaming: self.session.state() == SessionState::Streaming,
                 queued_samples: self.audio.queued_samples(),
-                gain_db: self.gain_db,
+                gain_db: self.config.gain_db,
                 frames: self.frames,
                 samples: self.samples,
                 dropped_frames: self.dropped_frames,
@@ -966,8 +1143,9 @@ impl Daemon {
             config: ConfigView {
                 path: Some(self.config_path.display().to_string()),
                 loaded: self.config_loaded,
-                gain_db: self.gain_db,
-                input: self.input_enabled,
+                gain_db: self.config.gain_db,
+                input: self.config.input,
+                allow_exec: self.config.allow_exec,
             },
             last_error: self.last_error.clone(),
         }
@@ -992,19 +1170,31 @@ fn start_input(
     profile: DeviceProfile,
     enabled: bool,
     voice_trigger: Option<&str>,
+    map: &ActionMap,
+    gesture: atvv_protocol::profile::GestureTiming,
 ) -> (Option<InputRuntime>, Vec<String>) {
     if !enabled {
         return (None, Vec::new());
     }
     let options = InputOptions {
         voice_trigger: voice_trigger.map(str::to_string),
+        gesture: Some(gesture),
     };
-    match InputRuntime::start_with_options(profile, ActionMap::defaults(), options) {
+    match InputRuntime::start_with_options(profile, map.clone(), options) {
         Ok(runtime) => {
             let degraded = runtime.degraded().to_vec();
             (Some(runtime), degraded)
         }
         Err(error) => (None, vec![error.to_string()]),
+    }
+}
+
+/// Synthetic key passed to the input runtime, if trigger mode is active.
+fn trigger_for(config: &Config) -> Option<&str> {
+    if config.vinput == VinputMode::Trigger {
+        config.trigger_key.as_deref()
+    } else {
+        None
     }
 }
 
@@ -1048,7 +1238,7 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    use atvv_protocol::profile::RC003;
+    use atvv_protocol::profile::{RC003, RemoteButton};
 
     use crate::transport::{MockConfig, MockHandle, MockTransport};
 
@@ -1143,7 +1333,7 @@ mod tests {
         let (transport, mock) = MockTransport::new(MockConfig::default());
         let signals = Arc::new(RecordingSink::default());
         let mut config = DaemonConfig::new(RC003, mock_address(&transport));
-        config.input_enabled = false;
+        config.config.input = false;
         config.tick = Duration::from_millis(5);
         config.keepalive_interval = Duration::from_millis(40);
         config.frame_timeout = Duration::from_millis(80);
@@ -1238,7 +1428,7 @@ mod tests {
             connecting: false,
         };
         let mut config = DaemonConfig::new(RC003, "02:00:00:00:00:01");
-        config.input_enabled = false;
+        config.config.input = false;
         config.tick = Duration::from_millis(5);
         config.caps_timeout = Duration::from_millis(200);
         config.reconnect_delay = Duration::from_millis(10);
@@ -1260,8 +1450,8 @@ mod tests {
     fn voice_key_drives_vinput_in_dbus_mode() {
         let (transport, mock) = MockTransport::new(MockConfig::default());
         let mut config = DaemonConfig::new(RC003, mock_address(&transport));
-        config.input_enabled = false;
-        config.vinput = VinputMode::Dbus;
+        config.config.input = false;
+        config.config.vinput = VinputMode::Dbus;
         let calls = Arc::new(Mutex::new(Vec::new()));
         let vinput = RecordingVinput {
             calls: Arc::clone(&calls),
@@ -1289,11 +1479,261 @@ mod tests {
     #[test]
     fn trigger_mode_is_the_default() {
         let config = DaemonConfig::new(RC003, "02:00:00:00:00:01");
-        assert_eq!(config.vinput, VinputMode::Trigger);
+        assert_eq!(config.config.vinput, VinputMode::Trigger);
         assert_eq!(
-            config.trigger_key.as_deref(),
-            Some(config::DEFAULT_TRIGGER_KEY)
+            config.config.trigger_key.as_deref(),
+            Some(atvv_config::DEFAULT_TRIGGER_KEY)
         );
+    }
+
+    fn config_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("atvv-daemon-{name}-{}.toml", std::process::id()))
+    }
+
+    fn config_daemon(name: &str) -> (Daemon, DaemonHandle, MockHandle, PathBuf) {
+        let (transport, mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let path = config_path(name);
+        let _ = std::fs::remove_file(&path);
+        config.config_path = path.clone();
+        let (daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        (daemon, handle, mock, path)
+    }
+
+    #[test]
+    fn set_config_applies_and_persists_with_validation() {
+        let (mut daemon, handle, _mock, path) = config_daemon("set");
+        let mut document = ConfigDocument::from_config(&Config::defaults(&RC003));
+        document.gain_db = 6;
+        document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
+        daemon
+            .set_config(&serde_json::to_string(&document).unwrap())
+            .unwrap();
+
+        let config_cell = handle.config();
+        {
+            let active = crate::status::lock_config(&config_cell);
+            assert_eq!(active.gain_db, 6);
+            assert_eq!(active.buttons["up"].single.as_deref(), Some("key:KEY_F13"));
+        }
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("gain_db = 6"), "{written}");
+        assert!(written.contains("[buttons.up]"), "{written}");
+        assert!(written.contains("single = \"key:KEY_F13\""), "{written}");
+
+        let before = crate::status::lock_config(&handle.config()).clone();
+        let mut invalid = document.clone();
+        invalid.buttons.get_mut("up").unwrap().single = Some("key:not-a-key".into());
+        let error = daemon
+            .set_config(&serde_json::to_string(&invalid).unwrap())
+            .unwrap_err();
+        assert!(error.contains("not-a-key"), "{error}");
+        assert_eq!(crate::status::lock_config(&handle.config()).clone(), before);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), written);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reload_applies_button_overrides_and_keeps_the_old_map_on_error() {
+        let (mut daemon, handle, _mock, path) = config_daemon("reload");
+        std::fs::write(&path, "[buttons.up]\nsingle = \"key:KEY_F13\"\n").unwrap();
+        daemon.reload_config().unwrap();
+        let config_cell = handle.config();
+        {
+            let active = crate::status::lock_config(&config_cell);
+            assert_eq!(active.buttons["up"].single.as_deref(), Some("key:KEY_F13"));
+            assert_eq!(
+                active.buttons["ok"].single.as_deref(),
+                Some("key:KEY_ENTER")
+            );
+        }
+
+        std::fs::write(&path, "[buttons.up]\nsingle = \"key:not-a-key\"\n").unwrap();
+        let error = daemon.reload_config().unwrap_err();
+        assert!(error.contains("not-a-key"), "{error}");
+        assert_eq!(
+            crate::status::lock_config(&handle.config()).buttons["up"]
+                .single
+                .as_deref(),
+            Some("key:KEY_F13")
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn exec_requires_allow_exec_and_runs_the_command() {
+        let (mut daemon, handle, _mock, config_path) = config_daemon("exec");
+        let marker =
+            std::env::temp_dir().join(format!("atvv-daemon-exec-marker-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let command = format!("touch {}", marker.display());
+        let event = RemoteEvent::Button {
+            button: RemoteButton::Ok,
+            gesture: atvv_input::Gesture::SingleClick(RemoteButton::Ok),
+            action: Some(Action::Exec {
+                command: command.clone(),
+            }),
+            error: None,
+        };
+
+        daemon.on_input_event(event.clone());
+        assert!(
+            daemon
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.contains("allow_exec"))
+        );
+        assert!(!marker.exists());
+
+        let mut document = ConfigDocument::from_config(&Config::defaults(&RC003));
+        document.allow_exec = true;
+        daemon
+            .set_config(&serde_json::to_string(&document).unwrap())
+            .unwrap();
+        daemon.on_input_event(event);
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !marker.exists() && Instant::now() < deadline {
+            daemon.poll_exec();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(marker.exists(), "exec command did not run");
+        let _ = std::fs::remove_file(&marker);
+        let _ = std::fs::remove_file(&config_path);
+        let _ = handle;
+    }
+
+    #[test]
+    fn capture_emits_button_events_only_while_active() {
+        let signals = Arc::new(RecordingSink::default());
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            signals.clone(),
+            None,
+        );
+        let event = RemoteEvent::Button {
+            button: RemoteButton::Ok,
+            gesture: atvv_input::Gesture::SingleClick(RemoteButton::Ok),
+            action: None,
+            error: None,
+        };
+        let button_events = || {
+            signals
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|event| matches!(event, DaemonEvent::ButtonEvent { .. }))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        daemon.on_input_event(event.clone());
+        assert!(button_events().is_empty());
+
+        let cell = handle.capture();
+        capture::begin(&cell, None);
+        daemon.on_input_event(event);
+        assert_eq!(
+            button_events(),
+            vec![DaemonEvent::ButtonEvent {
+                button: "ok".to_string(),
+                trigger: "single".to_string(),
+                pressed: true,
+            }]
+        );
+
+        capture::end(&cell);
+        daemon.on_input_event(RemoteEvent::Button {
+            button: RemoteButton::Ok,
+            gesture: atvv_input::Gesture::Release(RemoteButton::Ok),
+            action: None,
+            error: None,
+        });
+        assert_eq!(button_events().len(), 1);
+    }
+
+    #[test]
+    #[ignore = "needs /dev/uinput and evdev read access"]
+    fn live_map_change_reaches_the_fake_remote() {
+        use atvv_input::{FAKE_REMOTE, FakeRemote};
+        use evdevil::Evdev;
+        use evdevil::event::{EventKind, Key, KeyState};
+
+        let mut fake = FakeRemote::open().expect("fake remote");
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let path = config_path("live");
+        let _ = std::fs::remove_file(&path);
+        let mut config = DaemonConfig::new(FAKE_REMOTE, mock_address(&transport));
+        config.config.input = true;
+        config.config_path = path.clone();
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        assert!(daemon.input.is_some(), "input runtime did not attach");
+
+        let mut document = ConfigDocument::from_config(&Config::defaults(&FAKE_REMOTE));
+        document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
+        daemon
+            .set_config(&serde_json::to_string(&document).unwrap())
+            .expect("live SetConfig");
+
+        let keyboard = daemon
+            .input
+            .as_ref()
+            .expect("input runtime after reload")
+            .keyboard_path()
+            .expect("virtual keyboard")
+            .to_path_buf();
+        // udev applies the seat ACL after the node appears.
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let device = loop {
+            match Evdev::open(&keyboard) {
+                Ok(device) => break device,
+                Err(_) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("cannot open {}: {error}", keyboard.display()),
+            }
+        };
+        device.set_nonblocking(true).unwrap();
+        let mut reader = device.into_reader().unwrap();
+
+        fake.tap(RemoteButton::Up).expect("tap up");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut found = false;
+        while Instant::now() < deadline && !found {
+            for event in reader.events() {
+                let Ok(event) = event else {
+                    continue;
+                };
+                if let EventKind::Key(event) = event.kind()
+                    && event.key() == Key::KEY_F13
+                    && event.state() == KeyState::PRESSED
+                {
+                    found = true;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(found, "the new map did not reach the fake remote");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -1390,7 +1830,7 @@ mod tests {
             ..MockConfig::default()
         });
         let mut config = DaemonConfig::new(RC003, mock_address(&transport));
-        config.input_enabled = false;
+        config.config.input = false;
         config.tick = Duration::from_millis(5);
         config.caps_timeout = Duration::from_millis(30);
         let (daemon, handle) = Daemon::new(
@@ -1413,7 +1853,7 @@ mod tests {
     fn missing_input_is_degraded_not_fatal() {
         let (transport, mock) = MockTransport::new(MockConfig::default());
         let mut config = DaemonConfig::new(RC003, mock_address(&transport));
-        config.input_enabled = false;
+        config.config.input = false;
         let (daemon, handle) = Daemon::new(
             config,
             Box::new(transport),
@@ -1433,7 +1873,7 @@ mod tests {
     fn missing_pipewire_is_degraded_not_fatal() {
         let (transport, mock) = MockTransport::new(MockConfig::default());
         let mut config = DaemonConfig::new(RC003, mock_address(&transport));
-        config.input_enabled = false;
+        config.config.input = false;
         let (daemon, handle) = Daemon::new(
             config,
             Box::new(transport),
