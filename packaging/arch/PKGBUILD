@@ -2,7 +2,7 @@
 
 pkgname=atvv-linux
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/YangtseSu/atvv-linux"

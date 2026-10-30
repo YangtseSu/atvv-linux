@@ -70,14 +70,16 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **09 remaining acceptance**: `sudo pacman -U` into `/usr`, a post-reboot
-  `atvvctl doctor` + source check, and a live fcitx text commit. These need
-  root/the operator and are event-driven; do not put them on a timer.
-- **10 vinput zero-config (planned)**: upstream fcitx5-vinput
-  `SetCaptureDevice` plus trigger get/set and scene-id PR, daemon
-  auto-selection that preserves an explicit user device, and a default mode
-  that never assumes `Alt_R` (`auto`/`dbus`). Until it lands, the one-time
-  `vinput device use` step remains. See
+- **09 remaining acceptance**: `sudo pacman -U` for `0.1.0-3` into `/usr`, a
+  post-reboot `atvvctl doctor` + source check, and a live fcitx text commit.
+  These need root/the operator and are event-driven; do not put them on a
+  timer.
+- **10 vinput zero-config (in progress)**: the daemon now defaults to the
+  dedicated `F24` trigger (`0.1.0-3`), a regular key that normal keyboards do
+  not have, so no user shortcut is assumed. vinput keeps its existing
+  `[TriggerKey]` entries and adds `1=F24`. Upstream `SetCaptureDevice` /
+  `AddTriggerKey` and automatic device selection remain. Until then, the
+  one-time `vinput device use` step remains. See
   `docs/plans/10-vinput-zero-config.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
@@ -156,7 +158,8 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   user unit copy whose `ExecStart` was the staged packaged binary, then
   removed.
 - `makepkg -f` in `packaging/arch` → `atvv-linux 0.1.0-1` (5.8 MiB) plus a
-  debug package; after the connect fix, rebuilt `atvv-linux 0.1.0-2`.
+  debug package; after the connect fix, rebuilt `atvv-linux 0.1.0-2`, and
+  after the F24 change, `atvv-linux 0.1.0-3`.
   Contents: three binaries, user unit, udev rule, modules-load, 24 man pages,
   bash/zsh/fish completions, LICENSE, third-party notices, README,
   device-support matrix.
@@ -173,6 +176,11 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `daemon`, `source`, and `pipewire` ok; the daemon stays active and logs
   `reconnect failed: connect timed out after 10s` per retry. The remote must
   be woken for the physical link.
+- Dedicated `F24` trigger (2026-10-30): daemon `trigger_key = "F24"`, vinput
+  `[TriggerKey] 0=Alt_R, 1=F24`; the operator confirmed the voice key starts
+  recording. A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2;
+  the `Control+Control_R` chord remains an alternative. `DEFAULT_TRIGGER_KEY`
+  is now `F24` (`0.1.0-3`).
 - Real RC003 (`C0:5D:39:F8:2D:4C`, `hci0`, 2026-10-30): release and packaged
   `atvvd` → CAPS `0b 01 00 02 03 00 78 00 00`; `atvvctl doctor` all green;
   `Audio/Source` at 16 kHz; 1 s capture = 16,000 samples; `MIC_OPEN` →
@@ -192,7 +200,7 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 **09 packaging-and-acceptance** remains. Do these in order, without a timer:
 
 1. Install the built package as root:
-   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-2-x86_64.pkg.tar.zst`
+   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-3-x86_64.pkg.tar.zst`
    (the deterministically generated source tarball and pinned checksum are
    already in place; rebuild with `makepkg -f` if the package file is absent).
 2. `systemctl --user daemon-reload && systemctl --user enable --now atvvd`;
@@ -209,12 +217,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 6. Sign the acceptance record and mark step 09 done only when every exit
    criterion has a recorded command/output.
 
-Then **10 vinput-zero-config**: upstream fcitx5-vinput `SetCaptureDevice` plus
-trigger get/set and scene-id PR, daemon auto-selection that never overrides an
-explicit user device, and a default mode that never assumes `Alt_R`
-(`auto`/`dbus`). See
-[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md). Until
-it lands, `vinput device use atvv-miremote-rc003` remains a one-time step.
+Then **10 vinput-zero-config** (in progress): the dedicated `F24` trigger
+default is in `0.1.0-3`; vinput keeps its existing `[TriggerKey]` and adds
+`1=F24`. Upstream `SetCaptureDevice` / `AddTriggerKey` and automatic device
+selection remain; the manual `vinput device use atvv-miremote-rc003` step is
+still needed. See
+[`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
 
 ## Commands
 

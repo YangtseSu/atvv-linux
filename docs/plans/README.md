@@ -39,7 +39,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10 | 08 **done**; 10 **planned**: upstream vinput capture-device API and zero-config selection |
+| D — Integration | 08, 10 | 08 **done**; 10 **in progress**: dedicated F24 trigger and upstream capture/trigger API |
 | E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
@@ -58,7 +58,7 @@ step 08 is complete and verified; step 09 is next.
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | 🚧 in-progress | all of 01–08 |
-| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⬜ not-started | 08 |
+| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
 
 ## Architecture contract
 
@@ -113,23 +113,25 @@ Step 08 verified the voice-edge mic control, the synthetic trigger, the
 `org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
 the same evidence document records the real-press and automated runs.
 
-Step 09 packaging is implemented: `atvv-linux 0.1.0-2` builds from the
+Step 09 packaging is implemented: `atvv-linux 0.1.0-3` builds from the
 deterministic source tarball and installs the binaries, user unit, udev rule,
-modules-load file, man pages, and completions. `0.1.0-2` adds a lazy BlueZ
+modules-load file, man pages, and completions. `0.1.0-2` added a lazy BlueZ
 transport so `atvvd` owns `org.atvv.Daemon` and reports `disconnected` while
-the remote is asleep, instead of exiting into a systemd restart loop. The
-release and staged-package binaries passed `atvvctl doctor`, 16 kHz source,
-reconnect, and PipeWire restart checks on the real RC003. Remaining acceptance
-work is the root `pacman -U` install, a post-reboot run, and the end-to-end
-fcitx text commit; see
+the remote is asleep, instead of exiting into a systemd restart loop;
+`0.1.0-3` makes the dedicated `F24` trigger the default so a user shortcut is
+not assumed. The release and staged-package binaries passed `atvvctl doctor`,
+16 kHz source, reconnect, and PipeWire restart checks on the real RC003.
+Remaining acceptance work is the root `pacman -U` install, a post-reboot run,
+and the end-to-end fcitx text commit; see
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily. Step 09 stays in progress until those operator checks
 and the sign-off are recorded.
 
-Step 10 is planned to remove the remaining manual vinput setup. It proposes an
-upstream fcitx5-vinput `SetCaptureDevice` D-Bus method plus trigger get/set and
-scene-id improvements, daemon-side auto-selection that never overrides an
-explicit user device, and a default mode that never assumes `Alt_R`
-(`auto`/`dbus`). Until that lands, the one-time `vinput device use` step
-remains.
+Step 10 is in progress. The daemon now defaults to a dedicated `F24` trigger:
+a regular key that normal PC keyboards do not have, so it does not replace or
+collide with the user's vinput shortcut. vinput keeps its existing
+`[TriggerKey]` entries and adds `1=F24`; the real RC003 test confirmed this
+path. The upstream `SetCaptureDevice` and `AddTriggerKey` work, automatic
+device selection that preserves an explicit choice, and the remaining manual
+`vinput device use` step are still open.

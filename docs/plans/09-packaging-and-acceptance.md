@@ -169,3 +169,5 @@ need the installed paths or root; the syntax checks above do not.
   bumped `pkgrel` to 2. Verified with the release binary while the remote was
   disconnected (`daemon`/`source`/`pipewire` ok, daemon stays active). The
   remote still needs to be woken for the physical link.
+- 2026-10-30 — step 10 changed the default trigger to the dedicated `F24`
+  key so no user shortcut is assumed; bumped the package to `0.1.0-3`.

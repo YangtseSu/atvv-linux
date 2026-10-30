@@ -185,7 +185,7 @@ pub fn resolve_key(name: &str) -> Option<KeyCode> {
     KeyCode::from_str(&format!("KEY_{}", base.to_uppercase())).ok()
 }
 
-/// Parse a synth expression: a single key (`Alt_R`, `F18`) or a chord
+/// Parse a synth expression: a single key (`F24`, `F18`) or a chord
 /// (`ctrl+alt+v`). Modifiers are pressed first and released in reverse.
 ///
 /// Chords exist for compositors that refuse bare modifier or bare function
@@ -297,6 +297,7 @@ mod tests {
         assert_eq!(resolve_key("f5"), Some(KeyCode::KEY_F5));
         assert_eq!(resolve_key("key_f5"), Some(KeyCode::KEY_F5));
         assert_eq!(resolve_key("F5"), Some(KeyCode::KEY_F5));
+        assert_eq!(resolve_key("F24"), Some(KeyCode::KEY_F24));
         assert_eq!(resolve_key("ctrl"), Some(KeyCode::KEY_LEFTCTRL));
         assert_eq!(resolve_key("super"), Some(KeyCode::KEY_LEFTMETA));
         assert_eq!(resolve_key("alt_r"), Some(KeyCode::KEY_RIGHTALT));
@@ -316,9 +317,9 @@ mod tests {
 
     #[test]
     fn parses_single_keys_and_chords() {
-        let single = parse_key_program("Alt_R").unwrap();
-        assert_eq!(single.press, vec![KeyCode::KEY_RIGHTALT]);
-        assert_eq!(single.release, vec![KeyCode::KEY_RIGHTALT]);
+        let single = parse_key_program("F24").unwrap();
+        assert_eq!(single.press, vec![KeyCode::KEY_F24]);
+        assert_eq!(single.release, vec![KeyCode::KEY_F24]);
 
         let chord = parse_key_program("ctrl+alt+v").unwrap();
         assert_eq!(

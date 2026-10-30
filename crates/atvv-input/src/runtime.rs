@@ -63,8 +63,9 @@ pub enum InputError {
 /// Optional synthetic key emitted while the voice key is held.
 ///
 /// The voice key is grabbed for the ATVV session, so applications would
-/// otherwise never see F5. A synthetic trigger key (vinput defaults to
-/// `Alt_R`) preserves the IME input-context path.
+/// otherwise never see F5. A dedicated synthetic trigger key (`F24` by
+/// default) preserves the IME input-context path without colliding with a
+/// normal keyboard key.
 #[derive(Debug, Clone, Default)]
 pub struct InputOptions {
     /// Key name resolved with [`resolve_key`]. `None` disables the trigger.
@@ -577,7 +578,7 @@ mod kernel_tests {
             FAKE_REMOTE,
             ActionMap::defaults(),
             InputOptions {
-                voice_trigger: Some("Alt_R".to_string()),
+                voice_trigger: Some("F24".to_string()),
             },
         )
         .expect("input runtime");
@@ -601,13 +602,13 @@ mod kernel_tests {
 
         fake.press(RemoteButton::Voice).expect("voice press");
         assert!(
-            wait_for(&mut keyboard, KeyCode::KEY_RIGHTALT, 1),
-            "voice press did not synthesize Alt_R down"
+            wait_for(&mut keyboard, KeyCode::KEY_F24, 1),
+            "voice press did not synthesize F24 down"
         );
         fake.release(RemoteButton::Voice).expect("voice release");
         assert!(
-            wait_for(&mut keyboard, KeyCode::KEY_RIGHTALT, 0),
-            "voice release did not lift Alt_R"
+            wait_for(&mut keyboard, KeyCode::KEY_F24, 0),
+            "voice release did not lift F24"
         );
 
         let mut edges = Vec::new();

@@ -18,9 +18,12 @@ pub const MAX_GAIN_DB: i8 = 24;
 
 /// fcitx5-vinput trigger key used while the voice key is held.
 ///
-/// `Alt_R` is the vinput default and does not collide with common desktop
-/// bindings; the target application must be configured to the same key.
-pub const DEFAULT_TRIGGER_KEY: &str = "Alt_R";
+/// Dedicated ATVV trigger key. `F24` is a regular key that normal PC
+/// keyboards do not have, so it does not collide with a user shortcut and is
+/// not a bare modifier. fcitx5-vinput should keep the user's own
+/// `[TriggerKey]` entries and add `1=F24`; the 2026-10-30 run verified this
+/// path. The target IME must be configured to the same key.
+pub const DEFAULT_TRIGGER_KEY: &str = "F24";
 
 /// How the daemon reaches fcitx5-vinput.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]

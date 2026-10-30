@@ -101,7 +101,7 @@ installed: the daemon uses the session bus.
 | Source missing | `pw-cli info atvv-miremote-rc003`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
 | Remote not connected or CAPS missing | `bluetoothctl info <MAC>`; `atvvctl doctor`; `atvvctl monitor` |
-| Voice key does not trigger fcitx | `trigger_key` must match vinput's trigger; see the integration doc |
+| Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "F24"`. Keep the user's `[TriggerKey]` entries and add `1=F24`; restart fcitx5. A commented `[TriggerKey]` section disables the trigger. |
 | F5 reaches the focused application | The RC003 node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
 | No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
 | Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |

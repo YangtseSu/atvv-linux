@@ -328,6 +328,27 @@ each retry. Waking the remote remains necessary for the physical link.
 
 
 
-Still pending: install `0.1.0-2` into `/usr` (root), rerun the post-reboot
+## Dedicated F24 trigger (2026-10-30)
+
+Follow-up to the package and trigger tests on the same RC003
+(`C0:5D:39:F8:2D:4C`, `hci0`), fcitx5-vinput 2.4.2, fcitx5 5.1.23:
+
+- The RC003 voice key produced 104 decoded frames / 24,960 samples in
+  `atvvctl status`, so the ATVV path was live.
+- `evtest /dev/input/event26` (the daemon's `atvv-virtual-keyboard`) showed
+  `KEY_RIGHTALT` press/release for the configured `Alt_R` trigger.
+- vinput stayed `idle` with an explicit `[TriggerKey] 0=Alt_R`, and also with
+  the section commented. The `Control+Control_R` chord with daemon
+  `trigger_key = "ctrl+rightctrl"` worked.
+- The chosen design is a dedicated key: daemon `trigger_key = "F24"` and
+  vinput `[TriggerKey] 0=Alt_R, 1=F24`. The operator confirmed that the voice
+  key starts recording with this pair. `F24` is a regular key that normal PC
+  keyboards do not have; keeping the user's `0=` entry means the dedicated key
+  is added, not substituted.
+- `atvv-input` resolves `F24` to `KEY_F24` (evdev 194); `0.1.0-3` makes it the
+  default trigger key. The `Control+Control_R` chord remains a verified
+  alternative.
+
+Still pending: install `0.1.0-3` into `/usr` (root), rerun the post-reboot
 check, and verify the end-to-end fcitx text commit. The acceptance record is
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).

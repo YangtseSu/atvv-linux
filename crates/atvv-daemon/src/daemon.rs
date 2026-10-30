@@ -1280,7 +1280,10 @@ mod tests {
     fn trigger_mode_is_the_default() {
         let config = DaemonConfig::new(RC003, "02:00:00:00:00:01");
         assert_eq!(config.vinput, VinputMode::Trigger);
-        assert_eq!(config.trigger_key.as_deref(), Some("Alt_R"));
+        assert_eq!(
+            config.trigger_key.as_deref(),
+            Some(config::DEFAULT_TRIGGER_KEY)
+        );
     }
 
     #[test]
