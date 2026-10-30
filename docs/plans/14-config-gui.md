@@ -183,3 +183,15 @@ Manual:
 - 2026-10-31 — split `PKGBUILD` into `atvv-linux` and `atvv-linux-gui`;
   added desktop entry, AppStream metadata, scalable icon, `docs/gui.md`, an
   embedded remote asset, and the dark/light theme check.
+- 2026-10-31 — `makepkg -f` produced `atvv-linux 0.1.0-7` (6.2 MiB, sha256
+  `7b4d8e50…6063db0`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
+  `54e0d573…d5f666`) from source tarball `712e6782…7469a0`. The base package
+  still depends only on `pipewire`, `bluez`, and `dbus`; the GUI package adds
+  `gtk4`, `libadwaita`, `librsvg`, and `atvv-linux`. Extracted packages were
+  run under Xvfb with `atvvd --mock`; the packaged `atvv-config` renders the
+  diagram. `namcap` reports only expected implicit-library and runtime-service
+  notes. Packages are not installed because `pacman -U` requires the
+  operator's password.
+- 2026-10-31 — a second real Test-mode window (45 s) again saw no physical
+  press; the remote was idle. Save/persistence and the daemon capture API are
+  verified, but step 14 stays in progress until one press is recorded.

@@ -193,7 +193,7 @@ mappings, gesture overrides, `exec:` opt-in, and live D-Bus
 `GetConfig`/`SetConfig`/capture are implemented and verified with the fake
 remote.
 
-Step 14 is implemented: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
+Step 14 is implemented and packaged: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
 client with an embedded SVG remote diagram, twelve accessible hotspots, a
 per-slot action editor, keyboard and remote learning, test mode with an
 explicit Run once, `exec` confirmation, banners/toasts, and a daemon-unavailable
@@ -203,7 +203,7 @@ test drives the window. A real RC003 run saved a mapping through the GUI and
 verified it after a daemon restart. The physical test-mode press is still
 open. Packaging is a split `atvv-linux-gui` package with desktop entry,
 AppStream metadata, icon, and GTK runtime dependencies kept out of
-`atvv-linux`. The GUI decision is recorded in
+`atvv-linux`; `0.1.0-7` is built and staged but not installed. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 10 remains blocked on
 upstream review.
 
