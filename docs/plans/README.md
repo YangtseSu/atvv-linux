@@ -40,10 +40,11 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: dedicated F24 trigger and upstream capture/trigger API; 11 **planned**: evdevil input backend |
-| E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
+| E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
-step 08 is complete and verified; step 09 is next.
+step 08 is complete and verified; step 09 is complete. Step 10 is in progress;
+step 11 is planned.
 
 ## Step files
 
@@ -57,7 +58,7 @@ step 08 is complete and verified; step 09 is next.
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
-| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | 🚧 in-progress | all of 01–08 |
+| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ⬜ not-started | 05, 08, 10 |
 
@@ -114,20 +115,14 @@ Step 08 verified the voice-edge mic control, the synthetic trigger, the
 `org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
 the same evidence document records the real-press and automated runs.
 
-Step 09 packaging is implemented: `atvv-linux 0.1.0-3` builds from the
-deterministic source tarball and installs the binaries, user unit, udev rule,
-modules-load file, man pages, and completions. `0.1.0-2` added a lazy BlueZ
-transport so `atvvd` owns `org.atvv.Daemon` and reports `disconnected` while
-the remote is asleep, instead of exiting into a systemd restart loop;
-`0.1.0-3` makes the dedicated `F24` trigger the default so a user shortcut is
-not assumed. The release and staged-package binaries passed `atvvctl doctor`,
-16 kHz source, reconnect, and PipeWire restart checks on the real RC003.
-Remaining acceptance work is the root `pacman -U` install, a post-reboot run,
-and the end-to-end fcitx text commit; see
+Step 09 packaging and acceptance is complete: `atvv-linux 0.1.0-3` is
+root-installed, the enabled user unit started `/usr/bin/atvvd` after the
+2026-10-30 reboot, and `atvvctl doctor` reports all green on the real RC003.
+The end-to-end fcitx text commit is operator-confirmed and the vinput journal
+records the ATVV source at 16 kHz. The completed record is
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
-GitHub Actions daily. Step 09 stays in progress until those operator checks
-and the sign-off are recorded.
+GitHub Actions daily.
 
 Step 10 is in progress. The daemon now defaults to a dedicated `F24` trigger:
 a regular key that normal PC keyboards do not have, so it does not replace or

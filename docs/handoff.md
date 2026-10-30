@@ -55,25 +55,19 @@ per-session copies; `docs/plans/` remains the canonical plan.
   with fast name-owner failure, `atvv-mcp` stdio server (`status`,
   `voice_start`, `voice_stop`, `voice_toggle`, `list_devices`, `reload`),
   isolated-bus mock tests, and `docs/integrations/`.
-- **09 packaging (implemented, acceptance partial)**: version `0.1.0`; clap
+- **09 packaging and acceptance (complete)**: version `0.1.0-3`; clap
   `completions`/`manpages`; `atvvd` CLI in `atvv-daemon/src/cli.rs`; packaged
   user unit, udev `uaccess` rule, `modules-load.d`; deterministic Arch source
   tarball and PKGBUILD; cargo-deny, REUSE, third-party notices; CI with
   fmt/clippy/test/cargo-deny/REUSE; daily Dependabot PRs; README
-  install/troubleshooting; device support matrix; acceptance record
-  `docs/acceptance/rc003-2026-10-30.md`. Built `atvv-linux 0.1.0-1`,
-  staged-installed it, and found the post-reboot connect loop on the installed
-  unit. `0.1.0-2` fixes it with a lazy BlueZ transport, `InProgress` handling,
-  and a bounded connect; the packaged binary is rebuilt and verified with
-  `atvvctl doctor` while the remote is disconnected. Remaining: root install,
-  post-reboot run, end-to-end fcitx text commit, sign-off.
+  install/troubleshooting; device support matrix. `0.1.0-3` is root-installed
+  (Install Date 2026-10-30 17:36:53); after the 21:15 reboot the enabled unit
+  started `/usr/bin/atvvd`, `atvvctl doctor` was all green, and the end-to-end
+  fcitx text commit was operator-confirmed. Completed record:
+  `docs/acceptance/rc003-2026-10-30.md`.
 
 ## Not implemented
 
-- **09 remaining acceptance**: `sudo pacman -U` for `0.1.0-3` into `/usr`, a
-  post-reboot `atvvctl doctor` + source check, and a live fcitx text commit.
-  These need root/the operator and are event-driven; do not put them on a
-  timer.
 - **10 vinput zero-config (in progress)**: the daemon now defaults to the
   dedicated `F24` trigger (`0.1.0-3`), a regular key that normal keyboards do
   not have, so no user shortcut is assumed. vinput keeps its existing
@@ -206,25 +200,10 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**09 packaging-and-acceptance** remains. Do these in order, without a timer:
-
-1. Install the built package as root:
-   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-3-x86_64.pkg.tar.zst`
-   (the deterministically generated source tarball and pinned checksum are
-   already in place; rebuild with `makepkg -f` if the package file is absent).
-2. `systemctl --user daemon-reload && systemctl --user enable --now atvvd`;
-   `atvvctl doctor` must be all green. Check that `systemctl --user status
-   atvvd` uses `/usr/bin/atvvd`.
-3. Run `udevadm test /sys/class/input/eventX` as root for the RC003 node and
-   record the `uaccess` tag; re-login if the ACL is missing.
-4. Reboot, log in, and verify `atvvctl doctor`, the source, and a real voice
-   press. Record the result in `docs/acceptance/rc003-2026-10-30.md`.
-5. Hold the voice key in a focused fcitx input context and commit text; record
-   the systemd unit, source, and text result. This is the last open exit
-   criterion. If it cannot be done now, leave the step in progress; do not
-   fabricate a result.
-6. Sign the acceptance record and mark step 09 done only when every exit
-   criterion has a recorded command/output.
+**09 packaging-and-acceptance is complete.** The root install, post-reboot
+start, all-green `atvvctl doctor`, 16 kHz ATVV source, and end-to-end fcitx
+text commit are recorded in
+[`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-2026-10-30.md).
 
 Then **10 vinput-zero-config** (in progress): the dedicated `F24` trigger
 default is in `0.1.0-3`; vinput keeps its existing `[TriggerKey]` and adds

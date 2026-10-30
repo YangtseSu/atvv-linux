@@ -1,6 +1,6 @@
 # Step 09 — packaging and acceptance
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: all of 01–08
 Touches: `packaging/`, `docs/`, `README.md`, `.github/workflows/`
 
@@ -30,11 +30,10 @@ hardware acceptance run.
   `THIRD-PARTY-NOTICES.md`.
 - ✅ Man pages (generated from clap), bash/zsh/fish completions, README
   install/troubleshooting, and a device support matrix.
-- ⬜ Hardware acceptance record: device model/address, CAPS, 16 kHz capture,
+- ✅ Hardware acceptance record: device model/address, CAPS, 16 kHz capture,
   key mapping, fcitx5-vinput output, reconnect, PipeWire restart, 60-second
-  keepalive, and package install. The record exists and the daemon/source/
-  reconnect/PipeWire-restart parts are verified; package install, post-reboot,
-  and the end-to-end fcitx text commit are pending.
+  keepalive, package install, post-reboot start, and end-to-end text commit.
+  The completed record is `docs/acceptance/rc003-2026-10-30.md`.
 - ✅ CI: fmt, clippy, test, cargo-deny, REUSE.
 - ✅ Dependabot: daily Cargo and GitHub Actions checks that open grouped
   update PRs automatically; no auto-merge.
@@ -77,7 +76,7 @@ reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 makepkg -f                          # in packaging/arch
 systemd-analyze verify packaging/systemd/atvvd.service   # after install, or with a temp copy whose ExecStart is the built binary
-sudo pacman -U atvv-linux-0.1.0-2-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-0.1.0-3-x86_64.pkg.tar.zst
 udevadm test /sys/class/input/eventX  # root; after the rule is installed
 ```
 
@@ -99,7 +98,8 @@ need the installed paths or root; the syntax checks above do not.
 - `systemd-analyze verify --user` with a temp copy whose `ExecStart` is
   `target/release/atvvd`: pass.
 - `makepkg -f`: built `atvv-linux 0.1.0-1` (5.8 MiB) and a debug package;
-  after the connect fix, rebuilt `atvv-linux 0.1.0-2` with the same contents.
+  after the connect fix, rebuilt `atvv-linux 0.1.0-2`; after the F24 default,
+  rebuilt `atvv-linux 0.1.0-3` with the same contents.
   Contents: three binaries, user unit, udev rule, modules-load file, 24 man
   pages, bash/zsh/fish completions, LICENSE, third-party notices, README,
   device-support matrix.
@@ -125,22 +125,36 @@ need the installed paths or root; the syntax checks above do not.
 - 60-second keepalive and key mapping are the step 07/08 real-device results
   recorded in `docs/research/rc003-hardware-evidence.md`; the step 09 run did
   not repeat the 60 s hold.
-- Pending: `pacman -U` into `/usr` (root), post-reboot run, end-to-end fcitx
-  text commit.
+- Root install: `pacman -Q atvv-linux` → `atvv-linux 0.1.0-3`;
+  `pacman -Qi` records Install Date `2026-10-30 17:36:53`.
+- Post-reboot: the host booted at `21:15:15`; `systemctl --user show
+  atvvd.service` reports `ActiveState=active`, `UnitFileState=enabled`,
+  `ExecStart=/usr/bin/atvvd`, and `ActiveEnterTimestamp=21:15:27`.
+  `atvvctl doctor` reports all nine checks `ok`, RC003 is connected, and the
+  source is available.
+- End-to-end fcitx text commit: operator-confirmed on 2026-10-30 while holding
+  the RC003 voice key in a focused fcitx input context. The vinput journal at
+  `21:56:22` records `target.object=atvv-miremote-rc003` and
+  `rate=16000 channels=1 fmt=259`; the transcript text is not captured by the
+  daemon logs.
+- Pending: none. The root install, post-reboot run, and end-to-end fcitx text
+  commit are complete; see the completed record in
+  `docs/acceptance/rc003-2026-10-30.md`.
 
 ## Exit criteria
 
-- ⬜ The Arch package installs and `atvvd` starts as the user. Staged install
-  and packaged-binary user-service start pass; the host install needs root.
+- ✅ The Arch package installs and `atvvd` starts as the user. `atvv-linux
+  0.1.0-3` is installed; the enabled user unit starts `/usr/bin/atvvd`.
 - ✅ `atvvctl doctor` reports all green on a real RC003.
-- ⬜ RC003 works after reboot, reconnect, and PipeWire restart. Reconnect and
-  PipeWire restart pass; reboot is pending.
-- ⬜ fcitx5-vinput receives text from voice input. The source and trigger legs
-  are verified; the joint text commit is pending.
+- ✅ RC003 works after reboot, reconnect, and PipeWire restart. The post-reboot
+  service start and doctor pass; reconnect and PipeWire restart pass.
+- ✅ fcitx5-vinput receives text from voice input. The source and trigger legs
+  are verified; the joint text commit is operator-confirmed and the vinput
+  journal records the ATVV source at 16 kHz.
 - ✅ CI and license checks are clean locally (`cargo deny`, `reuse lint`); the
   GitHub Actions run starts on the next push.
-- ⬜ The hardware acceptance record is signed and dated. The record is drafted
-  and dated; operator sign-off and the three pending checks remain.
+- ✅ The hardware acceptance record is signed and dated. The completed record
+  is `docs/acceptance/rc003-2026-10-30.md`.
 
 ## Risks
 
@@ -171,3 +185,8 @@ need the installed paths or root; the syntax checks above do not.
   remote still needs to be woken for the physical link.
 - 2026-10-30 — step 10 changed the default trigger to the dedicated `F24`
   key so no user shortcut is assumed; bumped the package to `0.1.0-3`.
+- 2026-10-30 — `0.1.0-3` root-installed (Install Date 17:36:53). After the
+  21:15 reboot the enabled user unit started `/usr/bin/atvvd`; `atvvctl
+  doctor` all green, RC003 connected, source available. The end-to-end fcitx
+  text commit was operator-confirmed; vinput negotiated the ATVV source at
+  16 kHz. Step 09 complete.
