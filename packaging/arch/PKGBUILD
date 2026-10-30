@@ -10,7 +10,7 @@ license=('GPL-3.0-or-later')
 depends=('pipewire' 'bluez' 'dbus')
 makedepends=('clang' 'pkgconf' 'rust')
 source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('eacdbcc8d5c443d678d7fcb23ff058ceaee8e70f79113b51a0a278d8fa204ac4')
+sha256sums=('b36c45491fb43997abf5890b1181aed4583f1319360b1d25c91f9ab1a3547b20')
 
 build() {
   cd "$pkgname-$pkgver"
