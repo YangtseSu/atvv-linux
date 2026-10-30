@@ -63,9 +63,12 @@ pub enum InputError {
 /// Optional synthetic key emitted while the voice key is held.
 ///
 /// The voice key is grabbed for the ATVV session, so applications would
-/// otherwise never see F5. A dedicated synthetic trigger key (`DICTATE` by
-/// default) preserves the IME input-context path without colliding with a
-/// normal keyboard key.
+/// otherwise never see F5. A dedicated synthetic trigger key preserves the
+/// IME input-context path without colliding with a normal keyboard key.
+///
+/// The daemon config supplies the key (`DEFAULT_TRIGGER_KEY`, `DICTATE`, when
+/// the file does not set `trigger_key`); `InputOptions::default()` leaves the
+/// trigger disabled.
 #[derive(Debug, Clone, Default)]
 pub struct InputOptions {
     /// Key name resolved with [`resolve_key`]. `None` disables the trigger.
