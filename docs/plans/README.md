@@ -41,7 +41,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
-| F — Configuration | 13–14 | 13 **done**: persistent keymap, live config API, capture; 14 **in progress**: GTK4/libadwaita GNOME-HIG app implemented, physical test-mode press pending |
+| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **in progress**: GTK4/libadwaita GNOME-HIG app implemented, physical test-mode press pending; 15 **planned**: sayall-style mapping board |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -65,6 +65,7 @@ on approval/upstream; steps 11–13 are complete.
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 |
 | 14 | F | [config-gui](14-config-gui.md) | 🚧 in-progress | 13 |
+| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 |
 
 ## Architecture contract
 
@@ -204,8 +205,11 @@ verified it after a daemon restart. The physical test-mode press is still
 open. Packaging is a split `atvv-linux-gui` package with desktop entry,
 AppStream metadata, icon, and GTK runtime dependencies kept out of
 `atvv-linux`; `0.1.0-7` is built and staged but not installed. The GUI decision is recorded in
-[ADR 0008](../decisions/0008-gui-toolkit.md). Step 10 remains blocked on
-upstream review.
+[ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
+sayall-style mapping board (central remote + per-button cards with all three
+slots) that keeps the same GTK4/libadwaita model, D-Bus API, and original SVG;
+no SayAll/Open Voice Bridge code or screenshots are copied. Step 10 remains
+blocked on upstream review.
 
 ## Backlog after 14
 

@@ -204,6 +204,9 @@ Manual:
 - 2026-10-31 — rebuilt `0.1.0-7` after the diagram fix; the staged package
   now renders the RC003 layout. The third physical Test-mode window (45 s)
   also saw no key event; the operator was not at the remote.
+- 2026-10-31 — layout direction decided after reviewing SayAll (`remote-mic-app`)
+  and Open Voice Bridge: step 14 keeps the GNOME split view and finishes; the
+  central-remote, per-key three-slot board is planned as step 15.
 - 2026-10-31 — fixed hotspot pointer input. `GtkOverlay` allocated the
   overlay `GtkFixed` at `0×0`, so no button had a hit area; the diagram was
   visually present but unclickable. Replaced the overlay with a `GtkFixed`

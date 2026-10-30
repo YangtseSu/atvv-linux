@@ -171,6 +171,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
+- **15 sayall-style mapping board (planned)**: replace the single-key
+  inspector with a central remote and per-button cards showing all three
+  slots; the action editor becomes a modal dialog. GTK4/libadwaita and the
+  original SVG stay; SayAll/Open Voice Bridge assets and code are not copied.
+  Depends on step 14; see `docs/plans/15-mapping-board.md`.
 - **14 GTK4 configuration GUI (in progress)**: all deliverables are
   implemented and the split `0.1.0-7` packages are built and staged. The only
   open item is a recorded physical test-mode press on the real RC003; the
@@ -417,7 +422,9 @@ active; the step-14 tree is built as `atvv-linux 0.1.0-7` plus
 them with `pacman -U` when the GUI should be available system-wide.
 
 **Step 14 GTK4/libadwaita GUI is implemented; only the physical test-mode
-press is unrecorded.** Install the staged packages with
+press is unrecorded.** The sayall-style mapping board (central remote +
+per-button single/double/long cards) is planned as step 15 and is not part of
+step 14. Install the staged packages with
 `sudo pacman -U packaging/arch/atvv-linux-0.1.0-7-x86_64.pkg.tar.zst
 packaging/arch/atvv-linux-gui-0.1.0-7-x86_64.pkg.tar.zst`, restart the user
 unit, and press a remote key in Test mode. The GUI is a separate D-Bus client:
