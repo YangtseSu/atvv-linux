@@ -1,7 +1,7 @@
 # Step 12 — provider contract and consumer integration
 
 Status: ✅ done
-Depends on: 10 (vinput consumer recipe); can start earlier
+Depends on: 03, 06; consumer recipe: 10 (blocked); can start earlier
 Touches: `crates/atvv-audio/src/source.rs`, `crates/atvv-cli/`,
 `crates/atvv-mcp/`, `docs/integrations/`, `docs/plans/10-vinput-zero-config.md`
 
@@ -27,8 +27,9 @@ per-application branches or per-application diagnostics.
   declared keys, the active key, and whether the live node advertises
   `atvv.*`.
 - `atvv-mcp` exposes the same object as the `contract` tool.
-- Consumer docs cover fcitx5-vinput, coding agents, browser AI chat pages, and
-  IM applications.
+- Consumer docs cover fcitx5-vinput, coding agents, a browser AI chat recipe,
+  and generic IM guidance. The manual fcitx5-vinput path is verified; the
+  automatic trigger binding remains step 10.
 
 ## Deliverables
 
@@ -43,13 +44,14 @@ per-application branches or per-application diagnostics.
   generic diagnostic does not need application-specific code.
 - ✅ `atvv-mcp`: add a `contract` tool returning the same JSON, and keep
   `status` backward compatible.
-- ✅ Consumer docs: browser AI chat and IM recipes as first-class documents or
-  sections; coding-agent doc updated with the contract and the declared keys.
+- ✅ Consumer docs: browser AI chat recipe and generic IM guidance as
+  first-class documents; coding-agent doc updated with the contract and the
+  declared keys.
 - ✅ Tests: contract metadata serialization; `atvvctl contract` output;
   MCP `contract` tool; no writes to another application's configuration.
 - ✅ Real check: `pw-cli info` exposes the contract on the real source; a
-  generic `pw-cat` recording works; fcitx5-vinput auto-binds after the upstream
-  feature (or the docs path is verified manually).
+  generic `pw-cat` recording works; the manual fcitx5-vinput path is verified.
+  Automatic trigger binding is step 10 and is not claimed here.
 
 ## Design notes
 
@@ -106,8 +108,8 @@ Recorded 2026-10-31:
 - ✅ `atvvctl contract` reports source, format, declared keys, active key, and
   the generic consumer instructions without reading any consumer config.
 - ✅ `atvv-mcp` exposes the same contract to coding agents.
-- ✅ Browser and IM recipes are documented; per-application diagnostics are
-  explicitly absent.
+- ✅ The browser recipe and generic IM guidance are documented;
+  per-application diagnostics are explicitly absent.
 - ✅ The fcitx5-vinput recipe uses the declared keys and the default-install
   index (`1=Dictate`), with the historical `2=` explained.
 - ✅ No provider code writes another application's configuration.
@@ -140,3 +142,9 @@ Recorded 2026-10-31:
   composition does not read or write any consumer configuration; the CLI
   integration test asserts an empty temporary `XDG_CONFIG_HOME` after
   `contract`/`status`.
+
+- 2026-10-31 — documentation correction after review: the dependency is
+  `03, 06` (the vinput consumer recipe is step 10 and is blocked), not step
+  10. The real-check wording now states that the manual fcitx5-vinput path is
+  verified; automatic trigger binding remains step 10. IM guidance is marked
+  generic rather than claiming per-client shortcuts.

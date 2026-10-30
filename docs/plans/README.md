@@ -39,12 +39,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract and consumer recipes |
+| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on operator approval and upstream review: local consumer patches ready; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
-step 08 is complete and verified; step 09 is complete. Step 10 is in progress;
-steps 11 and 12 are complete.
+step 08 is complete and verified; step 09 is complete. Step 10 is blocked
+on approval/upstream; steps 11 and 12 are complete.
 
 ## Step files
 
@@ -59,9 +59,9 @@ steps 11 and 12 are complete.
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
-| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
+| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
-| 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 10 |
+| 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
 
 ## Architecture contract
 
@@ -134,12 +134,14 @@ records the ATVV source at 16 kHz. The completed record is
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily.
 
-Step 10 is in progress. ATVV is the provider: it exposes the resident
-`Audio/Source` and the standard `Dictate` key. vinput is the consumer and owns
-source selection and trigger binding. Local consumer patches exist in the
-`YangtseSu/fcitx5-vinput` fork on three stacked branches (auto selection,
-recording-key metadata, and `device use` binding); they are not pushed or
-submitted and need explicit push/PR approval. The primary upstream request is a
+Step 10 is blocked on operator approval and upstream review. ATVV is the
+provider: it exposes the resident `Audio/Source` and the standard `Dictate`
+key. vinput is the consumer and owns source selection and trigger binding.
+Local consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three
+stacked branches (auto selection, recording-key metadata, and `device use`
+binding); they are not pushed or submitted. The manual `device use` plus
+`Dictate` path is verified; automatic binding and the post-merge real check
+remain. The primary upstream request is a
 consumer-side capture-device auto-selection/priority list plus auto-binding of
 the declared recording keys; until it exists, the one-time
 `vinput device use` plus `Dictate` at the next free index (default
@@ -156,10 +158,12 @@ Step 12 is complete: the provider contract
 source and documented in
 [`docs/integrations/provider-contract.md`](../integrations/provider-contract.md).
 `atvvctl contract [--json]`, the `contract` object in `atvvctl status`, the
-`atvv-mcp` `contract` tool, and the browser/IM recipes are implemented. The
-target consumers are fcitx5-vinput, browser AI chat pages, coding agents
-(Claude Code, Codex, OMP), and IM applications (Telegram, WeChat). No
-per-application diagnostics are provided.
+`atvv-mcp` `contract` tool, the browser recipe, and generic IM guidance are
+implemented. The dependency is `03, 06`; the vinput consumer recipe is step 10
+and is blocked. Automatic fcitx5-vinput binding is not claimed here. The target
+consumers are fcitx5-vinput, browser AI chat pages, coding agents (Claude Code,
+Codex, OMP), and IM applications (Telegram, WeChat). No per-application
+diagnostics are provided.
 
 Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
 `evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and

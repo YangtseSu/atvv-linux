@@ -94,7 +94,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **10 vinput zero-config (in progress)**: ATVV is the provider; vinput owns
+- **10 vinput zero-config (blocked)**: ATVV is the provider; vinput owns
   source selection and trigger binding (ADR 0007). The primary upstream
   request is a consumer-side capture-device auto-selection/priority list and
   auto-binding of the declared recording keys. Until it exists, the one-time
@@ -103,7 +103,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
   setup, not a workaround. The ATVV-side `SetCaptureDevice` push and
   `vinput_device` policy are dropped. `vinput = "trigger"` remains the
   default; `vinput = "dbus"` is an explicit fallback. The live `daemon.toml`
-  already sets `trigger_key = "DICTATE"`; the installed `0.1.0-4` service
+  already sets `trigger_key = "DICTATE"`; the installed `0.1.0-5` service
   accepts it. The primary upstream request is still consumer-side source
   auto-selection plus auto-binding of `atvv.recording_keys`; it is not
   submitted. Local consumer patches are implemented in the
@@ -297,12 +297,14 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 **Step 12 is complete.** The provider contract is available through
 `atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
-`atvvctl doctor`, and the `atvv-mcp` `contract` tool. Browser and IM recipes
-are documented. `atvv-linux 0.1.0-5` is installed and active; the resident
+`atvvctl doctor`, and the `atvv-mcp` `contract` tool. The browser recipe and
+generic IM guidance are documented; step 12's dependency is `03, 06`, while
+the vinput consumer recipe is the blocked step 10. `atvv-linux 0.1.0-5` is installed and active; the resident
 source advertises the contract and `atvvctl doctor` is all green.
 
-**Step 10 vinput-zero-config remains** (in progress, upstream-bound): ATVV is
-the provider and vinput is the consumer. The primary path is the resident
+**Step 10 vinput-zero-config is blocked** on operator approval (push, issues,
+draft PRs) and upstream review/merge: ATVV is the provider and vinput is the
+consumer. The primary path is the resident
 PipeWire source plus the standard `Dictate` key; the one-time
 `vinput device use` and `Dictate` at the next free index (default install:
 `1=Dictate`) setup is correct layering. A consumer-side

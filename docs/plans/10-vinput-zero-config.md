@@ -1,10 +1,9 @@
 # Step 10 — zero-config vinput integration
 
-Status: 🚧 in-progress
-Depends on: 08 (integration); can start before 09 acceptance
-Touches: `crates/atvv-daemon/src/config.rs`,
-`crates/atvv-input/src/keymap.rs`, `crates/atvv-daemon/src/status.rs`,
-`crates/atvv-cli/src/main.rs`, `docs/`, upstream fcitx5-vinput
+Status: ⛔ blocked
+Depends on: 08 (integration); blocked on operator approval and upstream
+review
+Touches: `docs/`, upstream fcitx5-vinput
 
 ## Goal
 
@@ -18,81 +17,89 @@ setter called by ATVV (ADR 0007).
 
 ## Current state
 
-- vinput discovers the resident `atvv-miremote-rc003` source. Selecting it is
-  the consumer's job: run `vinput device use atvv-miremote-rc003` once. The
-  daemon re-reads `global.capture_device` at every `StartRecordingInternal`
-  and calls `capture_->SetTargetObject`, so the next recording already uses
-  the new device; the CLI's "Restart daemon to apply changes" sentence is
-  stale. The selected device is `global.capture_device` in
-  `~/.config/vinput/config.json`. `org.fcitx.Vinput.Service` has no
-  capture-device setter or getter; ATVV does not need one.
-- The fcitx addon trigger key is `[TriggerKey]` in
-  `~/.config/fcitx5/conf/vinput.conf`. It is a multi-entry list owned by the
-  addon; the daemon and `org.fcitx.Vinput` cannot change it. fcitx's
-  `org.fcitx.Fcitx.Controller1` `GetConfig`/`SetConfig` can apply an addon
-  config change live without a direct file write; that is an optional
-  consumer-side management path, not part of the primary flow.
-- A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2 on 2026-10-30.
-  A dedicated consumer key did, with the user's existing `0=` entry kept.
-  The `Control+Control_R` chord also worked.
-- Step 11 changed the daemon default to `DEFAULT_TRIGGER_KEY = "DICTATE"`;
-  vinput keeps the user's entries and adds `Dictate` at the next free index.
-  On a default vinput install (`[TriggerKey] 0=Alt_R`) that is `1=Dictate`.
-  `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks. The live
-  installed `0.1.0-3` unit still reads `trigger_key = "ASSISTANT"` until the
-  new build is installed.
-- External `StartRecording` (D-Bus fallback only) reaches the daemon
-  correctly, but the addon resolves its target input context from
-  `last_active_ic_`, which is not updated on focus-in. A mouse-only focus
-  change before the next key press can leave it stale.
-  `fcitx::Instance::mostRecentInputContext()` is the correct fallback.
-- `StopRecording("")` is a valid contract for the D-Bus fallback:
-  `scene::Resolve` falls back to the configured active scene.
-  `StartRecording` does not return a scene id, and external callers do not
-  need one for dictation.
+- ATVV is installed as `atvv-linux 0.1.0-5`; the enabled user unit runs
+  `/usr/bin/atvvd` with `trigger_key = "DICTATE"`. The live source advertises
+  `atvv.contract_version=1`, `atvv.profile`, and
+  `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`; step 12 exposes the
+  same contract through `atvvctl contract`, `atvvctl status.contract`, and the
+  `atvv-mcp` `contract` tool.
+- The manual consumer path is verified: `vinput device use
+  atvv-miremote-rc003` selects the source, the daemon re-reads
+  `global.capture_device` at every recording, and a physical voice press
+  records from `atvv-miremote-rc003` at 16 kHz. The one-time setup is
+  `vinput device use atvv-miremote-rc003` plus `Dictate` at the next free
+  `[TriggerKey]` index (default install: `1=Dictate`).
+- The fcitx addon owns `[TriggerKey]`; `org.fcitx.Vinput` cannot change it.
+  fcitx's `org.fcitx.Fcitx.Controller1` `GetConfig`/`SetConfig` is the correct
+  consumer-side path and is now implemented in the local vinput patches.
+- Local consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three
+  stacked branches, all based on upstream `bd7dd43`:
+  - `feat/auto-capture-device` (`f0b04d5`): `auto` and comma-separated
+    wildcard priority lists; exact names win; unmatched patterns use the
+    system default; CLI/GUI Auto.
+  - `feat/recording-keys-metadata` (`8f621ab`): read `atvv.recording_keys`
+    from node info (not the registry global) and map canonical names to
+    fcitx names.
+  - `feat/bind-recording-keys` (`d2fc40b`): on `device use`, append missing
+    keys through fcitx's controller, preserving entries and using the next
+    free indices; no direct file write and no D-Bus activation; fallback
+    prints the exact entries.
+  The branches are local-only: nothing is pushed, and no upstream issue or PR
+  exists.
+- The opt-in `vinput = "dbus"` fallback still has the addon
+  `mostRecentInputContext` focus gap. That fallback is not part of the primary
+  path and is deferred; see Deferred below.
 
 ## Deliverables
 
 - ✅ Recording-key support: `DICTATE` is the default active key;
   `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks, all resolved by
   `atvv-input`. Never assume a user shortcut.
-- ⬜ Keep the user's existing `[TriggerKey]` entries: document `Dictate` at
-  the next free index; never replace the user's entry. On a default install
-  (`0=Alt_R`) that is `1=Dictate`.
-- ⬜ Document the one-time consumer setup: select the source with
+- ✅ Keep the user's existing `[TriggerKey]` entries: `Dictate` goes at the
+  next free index and never replaces the user's entry. Documented in
+  [`../integrations/provider-contract.md`](../integrations/provider-contract.md)
+  and [`../integrations/fcitx5-vinput.md`](../integrations/fcitx5-vinput.md).
+- ✅ Document the one-time consumer setup: select the source with
   `vinput device use atvv-miremote-rc003` and append `Dictate` at the next
   free index without replacing the user's trigger.
-- ⬜ Do not add an ATVV-side device push. Drop the `SetCaptureDevice` call from
-  `atvvd` and the `vinput_device = "auto" | "none"` policy; source selection
-  belongs to the consumer (ADR 0007).
-- ⬜ Upstream vinput issue/PR: consumer-side capture-device auto-selection.
-  - Add a generic priority/pattern list (for example `atvv-*`, then
-    `default`) or an equivalent; vinput picks the first available source.
-  - ATVV only exposes standard node metadata (`node.name=atvv-<profile>`,
-    description, rate). It does not call a setter.
-  - On `device use`, read the source's `atvv.recording_keys` (canonical
-    evdev names), map them to fcitx names, and append them to `[TriggerKey]`
-    while preserving existing entries. If auto-apply is rejected, print the
-    exact entries to add.
-  - Optional: a generic `GetCaptureDevice`/`SetCaptureDevice` control API only
-    if upstream wants it for other consumers; it is not required by step 10.
-  - Optional: include `Dictate` in vinput's default trigger list or document
-    the one-entry addition. Do not change the upstream default without
-    maintainer agreement.
-- ⬜ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
-  explicit fallback for environments where the virtual keyboard cannot reach
-  the IME. Do not make D-Bus the zero-config default.
-- ⬜ Add generic provider diagnostics: extend `atvvctl status`/`doctor` with
-  the declared `atvv.recording_keys`, the active key, and the source/consumer
-  state. Step 12 owns the cross-consumer contract output.
-- ⬜ Tests: ATVV never writes vinput's `config.json`/`vinput.conf`; the
-  provider diagnostics report the declared keys; the D-Bus fallback still
-  starts/stops; the source name and `DICTATE` mapping are stable.
-- ⬜ Real vinput check: one-time `device use` plus `Dictate` at the next free
-  index (default install: `1=Dictate`), hold the voice key, record, commit
-  text. If the upstream auto-selection lands, repeat without the manual
-  device step.
-- ⬜ Record the default-mode decision and the layering rationale (ADR 0007).
+- ✅ No ATVV-side device push. The `SetCaptureDevice` call and
+  `vinput_device = "auto" | "none"` policy are absent; ADR 0007 records the
+  decision. Source selection belongs to the consumer.
+- ⬜ Upstream issue/PR A: consumer-side capture-device auto-selection and
+  priority list. Code is ready on `feat/auto-capture-device`; not pushed and
+  no upstream issue/PR exists.
+- ⬜ Upstream issue/PR B: read `atvv.recording_keys` and append missing trigger
+  keys on `device use`. Code is ready on the stacked
+  `feat/recording-keys-metadata` and `feat/bind-recording-keys` branches; not
+  pushed and no upstream issue/PR exists.
+- ✅ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
+  explicit fallback. Do not make D-Bus the zero-config default.
+- ✅ Generic provider diagnostics: `atvvctl status.contract`,
+  `atvvctl contract`, `atvvctl doctor` (declared keys, active key, live
+  `atvv.*` properties), and the `atvv-mcp` `contract` tool. Step 12 owns the
+  cross-consumer contract output.
+- ✅ Tests: source contract metadata, declared-key mapping, fcitx trigger
+  update, CLI/MCP contract output, D-Bus fallback start/stop, and the
+  no-consumer-config-write check. The CLI integration test leaves an empty
+  temporary `XDG_CONFIG_HOME`; no ATVV code path writes `vinput.conf` or
+  `config.json`.
+- ✅ Manual real check: `device use` plus `Dictate` records from
+  `atvv-miremote-rc003`; the end-to-end fcitx text commit was
+  operator-confirmed with the prior trigger. The local auto-bind test added
+  `VoiceCommand` at the next free index and was idempotent on a second run.
+- ⬜ Real auto-bind check after upstream merge/release: no manual device step
+  and no manual trigger entry.
+- ✅ Record the default-mode decision and the layering rationale (ADR 0007).
+
+## Deferred
+
+- The generic `GetCaptureDevice`/`SetCaptureDevice` control API is not
+  pursued. ATVV does not call a setter (ADR 0007).
+- The addon `mostRecentInputContext` focus fallback is not implemented. It
+  only affects the opt-in `vinput = "dbus"` mode; keep it as an optional
+  upstream follow-up.
+- Including `Dictate` in vinput's upstream default trigger list is not
+  pursued; the documented one-entry addition remains.
 
 ## Design notes
 
@@ -133,46 +140,55 @@ setter called by ATVV (ADR 0007).
 ## Verification
 
 ```text
-cargo test -p atvv-input
-cargo test -p atvv-daemon
 cargo test --workspace
-dbus-run-session -- <mock-vinput test>
-# manual one-time consumer setup:
+cargo test -p atvv-cli --test contract
+cargo test -p atvv-mcp --test stdio
+# vinput fork, local branches (not pushed):
+cmake --build build
+ctest --test-dir build --output-on-failure --timeout 60
+python3 scripts/check-i18n.py
+clang-format --dry-run --Werror <changed files>
+# manual consumer path:
 vinput device list
 vinput device use atvv-miremote-rc003
-# add Dictate at the next free index while fcitx5 is stopped
-# (default install: 0=Alt_R, so 1=Dictate)
-# real device, done 2026-10-30:
-# daemon trigger_key=DICTATE; vinput [TriggerKey] Dictate; voice press records
-vinput daemon status                   # recording on voice press
-journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
-# if a consumer-side auto-selection feature lands:
-# capture_device = auto/priority; repeat without the manual device step
+# hold the voice key and record
 ```
 
-- `DICTATE` real-device path verified 2026-10-30 after step 11: fcitx
-  received `Key(Dictate)` and vinput recorded from the ATVV source. The
-  `Control+Control_R` chord was an earlier verified alternative.
-- The manual one-time setup is the expected path until vinput selects the
-  source itself; ATVV must not perform that selection.
+Recorded 2026-10-31:
+
+- ATVV `cargo test --workspace` → 126 passed, 2 ignored;
+  `atvv-cli --test contract` and `atvv-mcp --test stdio` each → 1 passed.
+- vinput fork `cmake --build` and `ctest` → 40/40 passed;
+  `scripts/check-i18n.py` → 0 missing/obsolete/untranslated; clang-format
+  clean.
+- Local vinput check: `vinput device use auto` resolved to
+  `atvv-miremote-rc003`; live fcitx5 5.1.23 added `VoiceCommand` at
+  `3=VoiceCommand`, a second run was idempotent, and a private bus without
+  fcitx5 printed the exact entries without writing the config.
+- The local vinput build used `WERROR=OFF` because the host's fcitx5 5.1.23
+  deprecates `StandardPath` in pre-existing code; CI runs its own Werror
+  configuration.
 
 ## Exit criteria
 
-- ⬜ Fresh install + pair + one-time vinput configuration (`device use` and
-  `Dictate` at the next free index; default install: `1=Dictate`):
-  fcitx5-vinput records from the ATVV source and commits text. `atvvd` does
-  not write vinput's configuration.
-- ⬜ If a consumer-side auto-selection/auto-bind feature lands, the same run
+- ✅ Manual one-time setup (`device use` plus `Dictate` at the next free
+  index): fcitx5-vinput records from the ATVV source and `atvvd` does not
+  write vinput's configuration. The Dictate text-commit leg is
+  recording-verified; the full text commit was operator-confirmed with the
+  prior trigger and remains an operator spot check.
+- ⬜ Full Dictate text commit (operator spot check).
+- ⬜ If the consumer-side auto-selection/auto-bind feature lands, the same run
   works without manual entries; this is the only path to true zero-config.
-- ⬜ A user with a customized trigger key keeps it and can use `Dictate`
+- ✅ A user with a customized trigger key keeps it and can use `Dictate`
   (or `VOICECOMMAND`/`ASSISTANT`) as an additional ATVV trigger.
-- ⬜ A user's explicit non-ATVV device is preserved; ATVV never selects it or
+- ✅ A user's explicit non-ATVV device is preserved; ATVV never selects it or
   overrides it.
-- ⬜ The primary path has no `atvvd` -> `org.fcitx.Vinput` call; the D-Bus mode
+- ✅ The primary path has no `atvvd` -> `org.fcitx.Vinput` call; the D-Bus mode
   remains an explicit fallback.
-- ⬜ Real-device run recorded with date, address, vinput version, and the
-  relevant upstream commit/feature state.
-- ⬜ The default-mode decision and the layering rationale are recorded
+- ✅ Real-device run recorded with date, address, vinput version, and the
+  relevant upstream feature state (`C0:5D:39:F8:2D:4C`, vinput 2.4.2,
+  branches local-only).
+- ✅ The default-mode decision and the layering rationale are recorded
   (ADR 0007).
 
 ## Risks
@@ -182,15 +198,15 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   `1=Dictate`) remains the documented setup; do not claim zero-config.
 - If auto-selection lands, it must not fight an explicit user choice or the
   system default.
-- The D-Bus fallback still needs an end-to-end real-device text-commit run. Its
-  focus caveat remains, and it is opt-in only.
+- Some applications may bind the declared consumer keys; the active key is
+  configurable. `DICTATE` is semantically owned by dictation software, so a
+  future app may claim it.
 - The source is created before the daemon loop; `PipeWireSink::start` failure
   currently has no in-process retry. If PipeWire is late, the source is absent
   and no consumer can select it. That is a separate reliability gap, not an
   ATVV-to-vinput control problem.
-- Some applications may bind the declared consumer keys; the active key is
-  configurable. `DICTATE` is semantically owned by dictation software, so a
-  future app may claim it.
+- Step completion is gated by operator approval (push, issues, draft PRs),
+  upstream review/merge, and the post-merge auto-bind run.
 
 ## Progress log
 
@@ -246,3 +262,12 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   idempotent, and the no-fcitx fallback printed the exact entries without
   writing. The branches are not pushed and no upstream issue/PR exists; push
   and PR creation need the operator's explicit approval.
+
+- 2026-10-31 — plan corrected after review. The 2026-10-30 "PR A / PR B"
+  entry above is historical and superseded by ADR 0007: the actual work is
+  the three stacked branches listed under Current state. Completed ATVV-side
+  deliverables and tests are checked; the remaining items are the two
+  upstream issues/PRs and the post-merge auto-bind check. Status is blocked
+  on operator approval (push, issues, draft PRs) and upstream review/merge.
+  The D-Bus focus fallback and the generic capture-device setter are explicitly
+  deferred rather than left as vague risks.

@@ -1,11 +1,12 @@
 # IM applications
 
-Messaging clients consume the ATVV source through their own microphone
-settings. There is no ATVV-specific integration or protocol. The application
-owns the call or voice-message button; the remote owns the microphone gate.
+Status: generic guidance. Messaging clients consume the ATVV source through
+their own microphone settings. There is no ATVV-specific integration,
+per-client shortcut, or per-application diagnostic.
 
-Typical clients: Telegram Desktop, WeChat, Element/Matrix clients, and any
-other application with a voice-message or call feature.
+Typical clients include Telegram Desktop, WeChat, and Matrix clients. Their
+menus, shortcuts, and recording modes are owned by those clients and are not
+documented here.
 
 ## Setup
 
@@ -16,36 +17,23 @@ other application with a voice-message or call feature.
    atvvctl contract
    ```
 
-2. Open the application's audio or voice settings and select the ATVV source
-   by name (`atvv-miremote-rc003`). Do not make it the system default; other
-   applications should keep their normal microphone.
-3. Record as usual while holding the remote's voice key. Release the key to
-   stop; the daemon closes the microphone.
+2. Select the ATVV source by name (`atvv-miremote-rc003`) in the client's
+   audio or voice-message settings. If the client has no source picker, the
+   fix belongs in that client or in its desktop portal permissions; ATVV does
+   not change the system default.
+3. Hold the remote's voice key while recording, and release it to stop. The
+   remote key gates the microphone; it does not send the message. Use the
+   client's own send control.
 
-The source is resident and silent while the remote is idle. A voice message
-that records silence usually means the voice key was not held during the
-recording.
+The source is resident and silent while the remote is idle. A recording that
+captures only silence usually means the voice key was not held.
 
 ## Sandboxed clients
 
 A Flatpak or portal-sandboxed client sees only the devices the desktop portal
-exposes. If the ATVV source is missing from its picker, grant the application
-microphone access in the desktop settings or run the non-sandboxed build. Do
-not set the ATVV source as the system default to work around the portal.
-
-## Telegram Desktop
-
-Telegram uses the PipeWire microphone selected in **Settings → Calls and
-Messages → Input device**. Select the ATVV source there, then hold the voice
-key while recording a voice message. Telegram's own echo cancellation may
-alter the stream; disable it if the transcript quality is poor.
-
-## WeChat
-
-WeChat's Linux builds and compatibility layers often use the system default
-microphone. If the source cannot be selected, use the client's own audio
-settings when available; otherwise record the voice message with a client that
-can select the source. ATVV does not write another application's configuration.
+exposes. If the ATVV source is missing from its picker, grant microphone access
+in the desktop settings or run a build that can select a PipeWire source. Do
+not set the ATVV source as the system default as a workaround.
 
 ## Verify
 
