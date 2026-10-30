@@ -81,6 +81,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `AddTriggerKey` and automatic device selection remain. Until then, the
   one-time `vinput device use` step remains. See
   `docs/plans/10-vinput-zero-config.md`.
+- **11 evdevil input backend (planned, not started)**: replace `evdev` 0.13.2
+  with `evdevil` 0.5.0 in `atvv-input`, making `VOICECOMMAND`, `ASSISTANT`,
+  and `DICTATE` resolvable and emittable. The evdev fork was abandoned. See
+  `docs/plans/11-input-evdevil.md`, ADR 0006, and
+  `docs/research/consumer-keys.md`. Context-dependent key mapping is deferred.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -134,7 +139,11 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   it does not auto-merge.
 - `deny.toml` allows GPL-3.0-or-later, MIT, Apache-2.0 (including the LLVM
   exception), BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, and Zlib.
-  GPL-3.0-only is deliberately absent.
+  GPL-3.0-only is deliberately absent. Step 11 will add 0BSD for `evdevil`.
+- Input backend: migrate `atvv-input` to `evdevil` 0.5.0 and abandon the
+  `evdev` fork (`docs/decisions/0006-evdevil-input-backend.md`). The three
+  consumer keys are available in `evdevil`; context-dependent mapping remains
+  undecided (`docs/research/consumer-keys.md`).
 
 ## Verified
 
@@ -223,6 +232,13 @@ default is in `0.1.0-3`; vinput keeps its existing `[TriggerKey]` and adds
 selection remain; the manual `vinput device use atvv-miremote-rc003` step is
 still needed. See
 [`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
+
+Then **11 input-evdevil** (planned): migrate `atvv-input` to `evdevil` 0.5.0
+on `main`, remove the `evdev` dependency, and add the 0BSD license to
+`deny.toml`. The evdev fork experiment is abandoned. The plan and research
+are in [`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md),
+[ADR 0006](decisions/0006-evdevil-input-backend.md), and
+[`docs/research/consumer-keys.md`](research/consumer-keys.md).
 
 ## Commands
 

@@ -12,6 +12,9 @@ not a second plan and it does not override `docs/plans/`.
   interface.
 - [`reference-projects.md`](reference-projects.md) — exact source URLs, pinned
   snapshots, licenses, reuse boundaries, and upstream references.
+- [`consumer-keys.md`](consumer-keys.md) — `KEY_VOICECOMMAND`,
+  `KEY_ASSISTANT`, and `KEY_DICTATE`: kernel/XKB/fcitx5 names, desktop usage,
+  `evdev`/`evdevil` support, and the deferred context-dependent mapping.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -42,6 +45,7 @@ not a second plan and it does not override `docs/plans/`.
 | 07 RC003 hardware | `protocol-and-device.md` §2–§5, `reference-projects.md`, `rc003-hardware-evidence.md` |
 | 08 fcitx/MCP | `protocol-and-device.md` §8, `landscape.md` §6, `rc003-hardware-evidence.md` §Step 08 |
 | 09 packaging | `reference-projects.md` §License boundaries, `landscape.md` §4 |
+| 11 input backend | `consumer-keys.md`, `reference-projects.md` §License boundaries |
 
 ## Current deltas after the research snapshot
 
@@ -68,6 +72,14 @@ implementation direction:
   post-reboot run, and end-to-end fcitx text commit are pending. The verified
   facts are in [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) and
   [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
+- **Input backend.** `evdev` 0.13.2's manual key table is stale and lacks
+  `KEY_DICTATE`; the fork experiment was abandoned. Step 11 will migrate
+  `atvv-input` to `evdevil` 0.5.0, which includes the three consumer keys and
+  the required evdev/uinput surface. The evdev names used by the daemon
+  (`VOICECOMMAND`, `ASSISTANT`, `DICTATE`) and the fcitx5-vinput names
+  (`VoiceCommand`, `Assistant`, `Dictate`) remain distinct. See
+  [`consumer-keys.md`](consumer-keys.md) and
+  [`../decisions/0006-evdevil-input-backend.md`](../decisions/0006-evdevil-input-backend.md).
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens
   `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input
@@ -92,6 +104,10 @@ These cannot be closed by reading code or by synthetic tests:
   record from the ATVV source at 16 kHz. A future joint spot check is useful
   but must not be time-boxed.
 - fcitx5-vinput warm-stream behavior with the real daemon.
+- Which physical RC003 controls map to `VOICECOMMAND`, `ASSISTANT`, and
+  `DICTATE`, and whether the mapping should change with the active
+  application/workflow. The current plan makes the codes available; the
+  policy is deliberately undecided.
 - The root-installed unit after a real reboot. The unit's `PartOf` restart
   behavior was verified with a transient unit using the packaged properties;
   `pacman -U` into `/usr` and the post-reboot run remain operator actions.
