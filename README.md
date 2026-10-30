@@ -96,6 +96,7 @@ installed: the daemon uses the session bus.
 | Symptom | Check |
 |---|---|
 | `cannot connect to the session D-Bus` | `systemctl --user status atvvd`; `systemctl --user enable --now atvvd` |
+| `The name is not activatable` | `atvvd` is not running; check `systemctl --user status atvvd`. `0.1.0-2` keeps the daemon up while the remote is disconnected and retries the link. |
 | `no device address` | `atvvctl pair <MAC>` writes `~/.config/atvv/daemon.toml` |
 | Source missing | `pw-cli info atvv-miremote-rc003`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |

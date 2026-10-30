@@ -309,6 +309,25 @@ atvvd: state: ready
   implicitly satisfied, and `pipewire`/`bluez` are runtime services rather
   than link-time dependencies.
 
-Still pending: `pacman -U` into `/usr` (needs root), the post-reboot run, and
-the end-to-end fcitx text commit. The acceptance record is
+## Post-reboot lazy-connect fix (2026-10-30)
+
+The first installed package (`0.1.0-1`) entered a systemd restart loop after
+reboot: `BluezLink::connect` returned `org.bluez.Error.InProgress` from a
+pending BlueZ connect, `atvvd` exited, and `org.atvv.Daemon` never became
+activatable. The remote was asleep, so the loop repeated.
+
+`0.1.0-2` makes `BluezTransport` lazy (the daemon starts without a link),
+schedules an immediate reconnect, treats `InProgress`/`AlreadyConnected` as a
+pending/successful connect, and bounds the whole connect operation. The input
+runtime is attached when the HID-over-GATT node appears (retried every 2 s if
+discovery is early), and dropping it releases the synthetic trigger. With the
+release binary and the remote still disconnected, `atvvctl doctor` reported
+`daemon ok state=disconnected`, `source ok`, and `pipewire ok`; the daemon
+stayed active and logged `reconnect failed: connect timed out after 10s` on
+each retry. Waking the remote remains necessary for the physical link.
+
+
+
+Still pending: install `0.1.0-2` into `/usr` (root), rerun the post-reboot
+check, and verify the end-to-end fcitx text commit. The acceptance record is
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).

@@ -183,6 +183,8 @@ pub struct InputRuntime {
     stop: Arc<AtomicBool>,
     threads: Vec<JoinHandle<()>>,
     vkbd: Option<VirtualKeyboard>,
+    /// Parsed synthetic trigger, released when the runtime is dropped.
+    voice_trigger: Option<KeyProgram>,
 }
 
 impl InputRuntime {
@@ -343,6 +345,7 @@ impl InputRuntime {
         let engine_map = map.clone();
         let timing = profile.gesture_timing;
         let engine_event_tx = event_tx.clone();
+        let drop_trigger = voice_trigger.clone();
         let engine_trigger = voice_trigger;
         let engine = thread::Builder::new()
             .name("atvv-gesture".into())
@@ -414,6 +417,7 @@ impl InputRuntime {
             stop,
             threads,
             vkbd,
+            voice_trigger: drop_trigger,
         })
     }
 
@@ -462,6 +466,12 @@ impl InputRuntime {
 
 impl Drop for InputRuntime {
     fn drop(&mut self) {
+        // The engine may not process a queued `Lost` edge before the stop
+        // flag ends its loop; release the synthetic key here so a held
+        // modifier cannot stick.
+        if let (Some(keyboard), Some(program)) = (&self.vkbd, &self.voice_trigger) {
+            let _ = keyboard.release(program);
+        }
         self.stop.store(true, Ordering::Relaxed);
         for handle in self.threads.drain(..) {
             let _ = handle.join();

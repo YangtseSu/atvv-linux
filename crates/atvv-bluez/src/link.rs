@@ -7,6 +7,7 @@
 //! supports it and fall back to `StartNotify` with the acquisition error
 //! recorded in [`BluezLink::notification_mode`].
 
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -123,18 +124,24 @@ impl BluezLink {
         let adapter_name = config.adapter.clone();
         let connect_timeout = config.connect_timeout;
         let services_timeout = config.services_timeout;
+        // Bound the whole operation, not only the BlueZ `Connect` call: a
+        // pending `Connect` can make property reads wait behind it.
+        let total = connect_timeout + services_timeout + Duration::from_secs(5);
         let (session, device, device_name, characteristics) = runtime.block_on(async {
-            let session = BluezSession::new().await?;
-            let adapter = select_adapter(&session, adapter_name.as_deref()).await?;
-            if !adapter.is_powered().await? {
-                adapter.set_powered(true).await?;
-            }
-            let device = adapter.device(address)?;
-            let device_name = device_name(&device, &address_text).await;
-            wait_connected(&device, connect_timeout).await?;
-            wait_services_resolved(&device, services_timeout).await?;
-            let characteristics = resolve_atvv(&device).await?;
-            Ok::<_, BluezError>((session, device, device_name, characteristics))
+            bounded(total, "connect", async {
+                let session = BluezSession::new().await?;
+                let adapter = select_adapter(&session, adapter_name.as_deref()).await?;
+                if !adapter.is_powered().await? {
+                    adapter.set_powered(true).await?;
+                }
+                let device = adapter.device(address)?;
+                let device_name = device_name(&device, &address_text).await;
+                wait_connected(&device, connect_timeout).await?;
+                wait_services_resolved(&device, services_timeout).await?;
+                let characteristics = resolve_atvv(&device).await?;
+                Ok::<_, BluezError>((session, device, device_name, characteristics))
+            })
+            .await
         })?;
 
         let mut link = Self {
@@ -215,12 +222,16 @@ impl BluezLink {
         let connect_timeout = self.connect_timeout;
         let services_timeout = self.services_timeout;
         let address_text = self.address.clone();
+        let total = connect_timeout + services_timeout + Duration::from_secs(5);
         let (device_name, characteristics) = self.runtime.block_on(async {
-            wait_connected(&device, connect_timeout).await?;
-            wait_services_resolved(&device, services_timeout).await?;
-            let characteristics = resolve_atvv(&device).await?;
-            let device_name = device_name(&device, &address_text).await;
-            Ok::<_, BluezError>((device_name, characteristics))
+            bounded(total, "connect", async {
+                wait_connected(&device, connect_timeout).await?;
+                wait_services_resolved(&device, services_timeout).await?;
+                let characteristics = resolve_atvv(&device).await?;
+                let device_name = device_name(&device, &address_text).await;
+                Ok::<_, BluezError>((device_name, characteristics))
+            })
+            .await
         })?;
 
         self.device_name = device_name;
@@ -449,8 +460,15 @@ async fn wait_connected(device: &Device, limit: Duration) -> Result<()> {
     if device.is_connected().await? {
         return Ok(());
     }
+    let deadline = Instant::now() + limit;
     match timeout(limit, device.connect()).await {
-        Ok(result) => result?,
+        Ok(Ok(())) => return Ok(()),
+        Ok(Err(error)) if connect_in_progress(&error) => {
+            // Another client, or a previous call, owns the connection
+            // attempt. Wait for the property to settle instead of failing the
+            // whole reconnect.
+        }
+        Ok(Err(error)) => return Err(error.into()),
         Err(_) => {
             return Err(BluezError::Timeout {
                 operation: "connect",
@@ -458,19 +476,42 @@ async fn wait_connected(device: &Device, limit: Duration) -> Result<()> {
             });
         }
     }
-    // BlueZ resolves `Connect` when the link is up; the property should be
-    // visible immediately, but allow one scheduling round.
-    let deadline = Instant::now() + Duration::from_secs(1);
     while !device.is_connected().await? {
         if Instant::now() >= deadline {
             return Err(BluezError::Timeout {
-                operation: "connect state",
-                timeout: Duration::from_secs(1),
+                operation: "connect",
+                timeout: limit,
             });
         }
         sleep(Duration::from_millis(50)).await;
     }
     Ok(())
+}
+
+/// BlueZ reports `InProgress` while another `Connect` call is pending. A
+/// `AlreadyConnected` result is equally a successful outcome for the caller.
+fn connect_in_progress(error: &bluer::Error) -> bool {
+    matches!(
+        error.kind,
+        bluer::ErrorKind::InProgress | bluer::ErrorKind::AlreadyConnected
+    )
+}
+
+/// Run one BlueZ operation under a deadline. A pending `Connect` can keep
+/// property reads waiting, so the outer deadline is what actually bounds a
+/// reconnect attempt.
+async fn bounded<T>(
+    limit: Duration,
+    operation: &'static str,
+    future: impl Future<Output = Result<T>>,
+) -> Result<T> {
+    match timeout(limit, future).await {
+        Ok(result) => result,
+        Err(_) => Err(BluezError::Timeout {
+            operation,
+            timeout: limit,
+        }),
+    }
 }
 
 async fn wait_services_resolved(device: &Device, limit: Duration) -> Result<()> {
@@ -603,6 +644,34 @@ mod tests {
         assert_eq!(write_operation(request_only), Some(WriteOp::Request));
 
         assert_eq!(write_operation(CharacteristicFlags::default()), None);
+    }
+
+    #[test]
+    fn in_progress_and_already_connected_are_retryable() {
+        let error = |kind| bluer::Error {
+            kind,
+            message: String::new(),
+        };
+        assert!(connect_in_progress(&error(bluer::ErrorKind::InProgress)));
+        assert!(connect_in_progress(&error(
+            bluer::ErrorKind::AlreadyConnected
+        )));
+        assert!(!connect_in_progress(&error(bluer::ErrorKind::Failed)));
+    }
+
+    #[test]
+    fn bounded_operation_times_out() {
+        let runtime = build_runtime().unwrap();
+        let result = runtime.block_on(bounded(Duration::from_millis(10), "test", async {
+            std::future::pending::<Result<()>>().await
+        }));
+        assert!(matches!(
+            result,
+            Err(BluezError::Timeout {
+                operation: "test",
+                ..
+            })
+        ));
     }
 
     #[test]

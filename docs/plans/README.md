@@ -112,13 +112,16 @@ Step 08 verified the voice-edge mic control, the synthetic trigger, the
 `org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
 the same evidence document records the real-press and automated runs.
 
-Step 09 packaging is implemented: `atvv-linux 0.1.0-1` builds from the
+Step 09 packaging is implemented: `atvv-linux 0.1.0-2` builds from the
 deterministic source tarball and installs the binaries, user unit, udev rule,
-modules-load file, man pages, and completions. The release and staged-package
-binaries passed `atvvctl doctor`, 16 kHz source, reconnect, and PipeWire
-restart checks on the real RC003. Remaining acceptance work is the root
-`pacman -U` install, a post-reboot run, and the end-to-end fcitx text commit;
-see [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
+modules-load file, man pages, and completions. `0.1.0-2` adds a lazy BlueZ
+transport so `atvvd` owns `org.atvv.Daemon` and reports `disconnected` while
+the remote is asleep, instead of exiting into a systemd restart loop. The
+release and staged-package binaries passed `atvvctl doctor`, 16 kHz source,
+reconnect, and PipeWire restart checks on the real RC003. Remaining acceptance
+work is the root `pacman -U` install, a post-reboot run, and the end-to-end
+fcitx text commit; see
+[`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily. Step 09 stays in progress until those operator checks
 and the sign-off are recorded.

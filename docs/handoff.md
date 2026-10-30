@@ -7,7 +7,7 @@ Updated: 2026-10-30
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 111 passed (12 test binaries),
+- Tests: `cargo test --workspace` → 114 passed (12 test binaries),
   2 ignored kernel-uinput tests.
 
 ## Read first
@@ -61,10 +61,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   tarball and PKGBUILD; cargo-deny, REUSE, third-party notices; CI with
   fmt/clippy/test/cargo-deny/REUSE; daily Dependabot PRs; README
   install/troubleshooting; device support matrix; acceptance record
-  `docs/acceptance/rc003-2026-10-30.md`. Built `atvv-linux 0.1.0-1` and
-  staged-installed it; the packaged `atvvd` started as a user service and
-  `atvvctl doctor` was all green. Remaining: root install, post-reboot run,
-  end-to-end fcitx text commit, sign-off.
+  `docs/acceptance/rc003-2026-10-30.md`. Built `atvv-linux 0.1.0-1`,
+  staged-installed it, and found the post-reboot connect loop on the installed
+  unit. `0.1.0-2` fixes it with a lazy BlueZ transport, `InProgress` handling,
+  and a bounded connect; the packaged binary is rebuilt and verified with
+  `atvvctl doctor` while the remote is disconnected. Remaining: root install,
+  post-reboot run, end-to-end fcitx text commit, sign-off.
 
 ## Not implemented
 
@@ -137,24 +139,34 @@ reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 ```
 
-- `cargo test --workspace` → 111 passed, 2 ignored.
+- `cargo test --workspace` → 114 passed, 2 ignored.
 - `cargo deny check` → advisories, bans, licenses, sources ok; zbus 5
   unmaintained advisories `RUSTSEC-2026-0370/0371/0372` ignored with a
   migration note.
-- `reuse lint` → REUSE 3.3 compliant, 89 files.
+- `reuse lint` → REUSE 3.3 compliant, 92 files.
 - `udevadm verify` → 1 rule file, 0 failures.
 - `systemd-analyze verify --user` with a temp copy pointing at the built
   binary → pass. The packaged unit was enabled and started from a temporary
   user unit copy whose `ExecStart` was the staged packaged binary, then
   removed.
 - `makepkg -f` in `packaging/arch` → `atvv-linux 0.1.0-1` (5.8 MiB) plus a
-  debug package. Contents: three binaries, user unit, udev rule,
-  modules-load, 24 man pages, bash/zsh/fish completions, LICENSE,
-  third-party notices, README, device-support matrix.
+  debug package; after the connect fix, rebuilt `atvv-linux 0.1.0-2`.
+  Contents: three binaries, user unit, udev rule, modules-load, 24 man pages,
+  bash/zsh/fish completions, LICENSE, third-party notices, README,
+  device-support matrix.
 - Staged `pacman --root`/`fakeroot` install → succeeded; packaged
   `atvvctl --version` = `0.1.0`. `namcap` only warns that glibc/libpipewire/
   libgcc are implicit and that `pipewire`/`bluez` may not be needed (they are
   runtime services).
+- Post-reboot `0.1.0-1` failure and fix: the installed unit looped on
+  `org.bluez.Error.InProgress`; `0.1.0-2` starts `atvvd` and owns
+  `org.atvv.Daemon` before connecting, treats `InProgress`/`AlreadyConnected`
+  as pending/success, and bounds the whole connect. The HID input runtime is
+  attached when its node appears and retried; dropping it releases the
+  synthetic trigger. With the remote disconnected, `atvvctl doctor` reports
+  `daemon`, `source`, and `pipewire` ok; the daemon stays active and logs
+  `reconnect failed: connect timed out after 10s` per retry. The remote must
+  be woken for the physical link.
 - Real RC003 (`C0:5D:39:F8:2D:4C`, `hci0`, 2026-10-30): release and packaged
   `atvvd` → CAPS `0b 01 00 02 03 00 78 00 00`; `atvvctl doctor` all green;
   `Audio/Source` at 16 kHz; 1 s capture = 16,000 samples; `MIC_OPEN` →
@@ -174,7 +186,7 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 **09 packaging-and-acceptance** remains. Do these in order, without a timer:
 
 1. Install the built package as root:
-   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-1-x86_64.pkg.tar.zst`
+   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-2-x86_64.pkg.tar.zst`
    (the deterministically generated source tarball and pinned checksum are
    already in place; rebuild with `makepkg -f` if the package file is absent).
 2. `systemctl --user daemon-reload && systemctl --user enable --now atvvd`;

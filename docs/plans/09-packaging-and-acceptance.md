@@ -77,7 +77,7 @@ reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
 makepkg -f                          # in packaging/arch
 systemd-analyze verify packaging/systemd/atvvd.service   # after install, or with a temp copy whose ExecStart is the built binary
-sudo pacman -U atvv-linux-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-0.1.0-2-x86_64.pkg.tar.zst
 udevadm test /sys/class/input/eventX  # root; after the rule is installed
 ```
 
@@ -89,16 +89,17 @@ need the installed paths or root; the syntax checks above do not.
 
 - `cargo fmt --all -- --check`: clean.
 - `cargo clippy --workspace --all-targets -- -D warnings`: clean.
-- `cargo test --workspace`: 111 passed, 2 ignored (uinput kernel tests).
+- `cargo test --workspace`: 114 passed, 2 ignored (uinput kernel tests).
 - `cargo deny check`: advisories, bans, licenses, sources all ok. Three zbus 5
   unmaintained advisories (`RUSTSEC-2026-0370/0371/0372`) are ignored with a
   documented zbus 6 migration note.
-- `reuse lint`: compliant with REUSE 3.3; 89 files with copyright/license
+- `reuse lint`: compliant with REUSE 3.3; 92 files with copyright/license
   information.
 - `udevadm verify packaging/udev/70-atvv-linux.rules`: 1 rule file, success.
 - `systemd-analyze verify --user` with a temp copy whose `ExecStart` is
   `target/release/atvvd`: pass.
-- `makepkg -f`: built `atvv-linux 0.1.0-1` (5.8 MiB) and a debug package.
+- `makepkg -f`: built `atvv-linux 0.1.0-1` (5.8 MiB) and a debug package;
+  after the connect fix, rebuilt `atvv-linux 0.1.0-2` with the same contents.
   Contents: three binaries, user unit, udev rule, modules-load file, 24 man
   pages, bash/zsh/fish completions, LICENSE, third-party notices, README,
   device-support matrix.
@@ -109,6 +110,12 @@ need the installed paths or root; the syntax checks above do not.
   `atvvctl doctor` all `ok`. A temporary copy of the packaged user unit with
   `ExecStart` pointing at the staged binary was `enable`d and `start`ed, then
   removed.
+- Post-reboot fix: the installed `0.1.0-1` unit looped on
+  `org.bluez.Error.InProgress`. `0.1.0-2` uses a lazy `BluezTransport`,
+  handles `InProgress`/`AlreadyConnected` as pending/success, and bounds the
+  whole connect. With the remote disconnected, `atvvctl doctor` reports
+  `daemon`, `source`, and `pipewire` ok; the daemon stays active and retries
+  instead of exiting.
 - Real RC003 (`C0:5D:39:F8:2D:4C`, `hci0`): `atvvctl doctor` all `ok`; CAPS
   `0b 01 00 02 03 00 78 00 00`; source `Audio/Source` 16 kHz; 1 s capture
   16,000 samples; `AUDIO_START 04 00 02 00` then frame timeout without the key;
@@ -155,3 +162,10 @@ need the installed paths or root; the syntax checks above do not.
   restart checks.
 - 2026-10-30 — remaining: root install, post-reboot check, end-to-end fcitx
   text commit, and operator sign-off. Step stays in progress.
+- 2026-10-30 — post-reboot regression on the installed `0.1.0-1` unit:
+  `org.bluez.Error.InProgress` made `atvvd` exit and systemd restart-loop it,
+  so `org.atvv.Daemon` was not activatable. Added a lazy BlueZ transport,
+  retryable `InProgress`/`AlreadyConnected` handling, and a bounded connect;
+  bumped `pkgrel` to 2. Verified with the release binary while the remote was
+  disconnected (`daemon`/`source`/`pipewire` ok, daemon stays active). The
+  remote still needs to be woken for the physical link.

@@ -49,6 +49,11 @@ pub trait Transport: Send {
     fn kind(&self) -> &'static str;
     fn address(&self) -> &str;
     fn device_name(&self) -> &str;
+    /// Whether the transport must connect before it can emit events. The
+    /// daemon schedules an immediate reconnect for a lazy transport.
+    fn needs_connect(&self) -> bool {
+        false
+    }
     /// Return one event, or `None` when `timeout` expires.
     fn poll(&mut self, timeout: Duration) -> Result<Option<TransportEvent>, TransportError>;
     /// Write to the ATVV command characteristic.
@@ -414,21 +419,51 @@ impl Transport for MockTransport {
 
 /// BlueZ-backed transport for `atvvd`.
 ///
-/// This adapter only translates events and errors; the session path is shared
-/// with the mock transport.
+/// The link is created on the first [`Transport::reconnect`], so the daemon can
+/// start, own `org.atvv.Daemon`, and report `disconnected` while the remote is
+/// asleep or BlueZ is still connecting. This adapter only translates events and
+/// errors; the session path is shared with the mock transport.
 pub struct BluezTransport {
-    link: atvv_bluez::BluezLink,
+    config: atvv_bluez::BluezConfig,
+    link: Option<atvv_bluez::BluezLink>,
+    verbose: bool,
 }
 
 impl BluezTransport {
     #[must_use]
-    pub fn new(link: atvv_bluez::BluezLink) -> Self {
-        Self { link }
+    pub fn new(config: atvv_bluez::BluezConfig, verbose: bool) -> Self {
+        Self {
+            config,
+            link: None,
+            verbose,
+        }
     }
 
     #[must_use]
-    pub fn notification_mode(&self) -> &atvv_bluez::NotificationMode {
-        self.link.notification_mode()
+    pub fn notification_mode(&self) -> Option<&atvv_bluez::NotificationMode> {
+        self.link
+            .as_ref()
+            .map(atvv_bluez::BluezLink::notification_mode)
+    }
+
+    fn connect(&mut self) -> Result<(), TransportError> {
+        // Drop the old link first: its notification tasks must not publish
+        // events for the new link generation.
+        self.link = None;
+        let link = atvv_bluez::BluezLink::connect(self.config.clone())
+            .map_err(|error| TransportError::Other(error.to_string()))?;
+        if self.verbose {
+            eprintln!(
+                "atvvd: notifications via {}",
+                link.notification_mode().label()
+            );
+            if let atvv_bluez::NotificationMode::Start { acquire_error } = link.notification_mode()
+            {
+                eprintln!("atvvd: AcquireNotify fallback: {acquire_error}");
+            }
+        }
+        self.link = Some(link);
+        Ok(())
     }
 }
 
@@ -438,15 +473,25 @@ impl Transport for BluezTransport {
     }
 
     fn address(&self) -> &str {
-        self.link.address()
+        &self.config.address
     }
 
     fn device_name(&self) -> &str {
-        self.link.device_name()
+        self.link.as_ref().map_or("not connected", |link| {
+            atvv_bluez::BluezLink::device_name(link)
+        })
+    }
+
+    fn needs_connect(&self) -> bool {
+        self.link.is_none()
     }
 
     fn poll(&mut self, timeout: Duration) -> Result<Option<TransportEvent>, TransportError> {
-        match self.link.poll(timeout) {
+        let Some(link) = &mut self.link else {
+            std::thread::sleep(timeout);
+            return Ok(None);
+        };
+        match link.poll(timeout) {
             Ok(Some(atvv_bluez::BluezEvent::Connected { address, name })) => {
                 Ok(Some(TransportEvent::Connected { address, name }))
             }
@@ -465,15 +510,13 @@ impl Transport for BluezTransport {
     }
 
     fn write_command(&mut self, bytes: &[u8]) -> Result<(), TransportError> {
-        self.link
-            .write_command(bytes)
+        let link = self.link.as_mut().ok_or(TransportError::NotConnected)?;
+        link.write_command(bytes)
             .map_err(|error| TransportError::Other(error.to_string()))
     }
 
     fn reconnect(&mut self) -> Result<(), TransportError> {
-        self.link
-            .reconnect()
-            .map_err(|error| TransportError::Other(error.to_string()))
+        self.connect()
     }
 }
 

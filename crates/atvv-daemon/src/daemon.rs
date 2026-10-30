@@ -158,6 +158,7 @@ pub struct Daemon {
     config_path: PathBuf,
     config_loaded: bool,
     input_enabled: bool,
+    input_retry_at: Option<Instant>,
 
     connected: bool,
     last_status_at: Instant,
@@ -256,6 +257,10 @@ impl Daemon {
             commands: sender,
             status: Arc::clone(&status),
         };
+        // A lazy transport (BlueZ) starts disconnected. Ask for an immediate
+        // reconnect so the daemon owns D-Bus and reports status even when the
+        // remote is asleep or BlueZ is still connecting.
+        let reconnect_at = transport.needs_connect().then(Instant::now);
         let daemon = Self {
             profile: config.profile,
             address: config.address,
@@ -278,6 +283,7 @@ impl Daemon {
             config_path: config.config_path,
             config_loaded: config.config_loaded,
             input_enabled: config.input_enabled,
+            input_retry_at: None,
             connected: false,
             last_status_at: Instant::now(),
             last_error: None,
@@ -286,7 +292,7 @@ impl Daemon {
             last_audio: None,
             next_keepalive: None,
             discard_until: None,
-            reconnect_at: None,
+            reconnect_at,
             frames: 0,
             samples: 0,
             dropped_frames: 0,
@@ -420,6 +426,9 @@ impl Daemon {
         self.discard_until = None;
         self.reconnect_at = None;
         self.last_error = None;
+        // The HID-over-GATT event node appears at or shortly after the link;
+        // try now and retry from `on_timers` if discovery is not ready yet.
+        self.attach_input(Instant::now());
         self.trace(format!("connected to {name} ({address})"));
         let get_caps = commands::get_caps();
         self.write(&get_caps);
@@ -641,15 +650,38 @@ impl Daemon {
     fn apply_input_enabled(&mut self) {
         if self.input_enabled {
             if self.input.is_none() {
-                let trigger = self.input_voice_trigger();
-                let (input, degraded) = start_input(self.profile, true, trigger);
-                self.input = input;
-                self.input_degraded = degraded;
+                self.attach_input(Instant::now());
             }
         } else {
             self.input = None;
             self.input_degraded.clear();
+            self.input_retry_at = None;
         }
+    }
+
+    /// Start the input runtime when its HID node is present.
+    ///
+    /// The link can come up before the HID-over-GATT node, and the node is
+    /// recreated on every reconnect, so a failed discovery is retried.
+    fn attach_input(&mut self, now: Instant) {
+        if !self.input_enabled || self.input.is_some() {
+            return;
+        }
+        let trigger = self.input_voice_trigger();
+        let (input, degraded) = start_input(self.profile, true, trigger);
+        let attached = input.is_some();
+        self.input = input;
+        self.input_degraded = degraded;
+        self.input_retry_at = if attached {
+            None
+        } else {
+            Some(now + Duration::from_secs(2))
+        };
+        self.trace(if attached {
+            "input attached"
+        } else {
+            "input node not ready; retrying"
+        });
     }
 
     /// Synthetic key passed to the input runtime, if trigger mode is active.
@@ -712,6 +744,12 @@ impl Daemon {
             RemoteEvent::Degraded { message } => self.note_input_degraded(message),
             RemoteEvent::DeviceLost { path, error } => {
                 self.note_input_degraded(format!("lost {}: {error}", path.display()));
+                // Drop the dead readers/keyboard, then re-grab the node when it
+                // reappears after a reconnect.
+                self.input = None;
+                self.input_retry_at = self
+                    .connected
+                    .then(|| Instant::now() + Duration::from_secs(2));
             }
         }
         self.publish_status();
@@ -761,6 +799,7 @@ impl Daemon {
             self.caps_deadline,
             self.next_keepalive,
             self.reconnect_at,
+            self.input_retry_at,
             frame_deadline,
         ]
         .into_iter()
@@ -810,6 +849,16 @@ impl Daemon {
                     self.execute(actions);
                     changed = true;
                 }
+            }
+        }
+
+        if let Some(deadline) = self.input_retry_at {
+            if now >= deadline {
+                self.input_retry_at = None;
+                if self.input_enabled && self.input.is_none() {
+                    self.attach_input(now);
+                }
+                changed = true;
             }
         }
 
@@ -1117,6 +1166,84 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    /// A transport that only starts producing events after the daemon asks for
+    /// its first connection, like the lazy BlueZ transport.
+    struct LazyTransport {
+        inner: MockTransport,
+        connected: bool,
+        connecting: bool,
+    }
+
+    impl Transport for LazyTransport {
+        fn kind(&self) -> &'static str {
+            "lazy-mock"
+        }
+
+        fn address(&self) -> &str {
+            self.inner.address()
+        }
+
+        fn device_name(&self) -> &str {
+            self.inner.device_name()
+        }
+
+        fn needs_connect(&self) -> bool {
+            !self.connected
+        }
+
+        fn poll(
+            &mut self,
+            timeout: Duration,
+        ) -> Result<Option<TransportEvent>, crate::transport::TransportError> {
+            if !self.connected && !self.connecting {
+                std::thread::sleep(timeout);
+                return Ok(None);
+            }
+            let event = self.inner.poll(timeout);
+            if matches!(&event, Ok(Some(TransportEvent::Connected { .. }))) {
+                self.connected = true;
+                self.connecting = false;
+            }
+            event
+        }
+
+        fn write_command(&mut self, bytes: &[u8]) -> Result<(), crate::transport::TransportError> {
+            self.inner.write_command(bytes)
+        }
+
+        fn reconnect(&mut self) -> Result<(), crate::transport::TransportError> {
+            self.connecting = true;
+            self.inner.reconnect()
+        }
+    }
+
+    #[test]
+    fn initial_lazy_connect_reaches_ready() {
+        let (inner, _mock) = MockTransport::new(MockConfig::default());
+        let transport = LazyTransport {
+            inner,
+            connected: false,
+            connecting: false,
+        };
+        let mut config = DaemonConfig::new(RC003, "02:00:00:00:00:01");
+        config.input_enabled = false;
+        config.tick = Duration::from_millis(5);
+        config.caps_timeout = Duration::from_millis(200);
+        config.reconnect_delay = Duration::from_millis(10);
+        let (daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        std::thread::spawn(move || daemon.run());
+
+        let status = wait_for(&handle, |status| status.state == "ready");
+        assert!(status.connected);
+        handle.send(Command::Shutdown).unwrap();
     }
 
     #[test]

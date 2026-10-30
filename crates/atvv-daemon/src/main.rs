@@ -48,30 +48,19 @@ fn run() -> Result<(), Box<dyn Error>> {
     } else {
         let address =
             address.ok_or("no device address: pass --device or run `atvvctl pair <MAC>` first")?;
-        let link = atvv_bluez::BluezLink::connect(atvv_bluez::BluezConfig {
-            address,
-            adapter,
-            ..atvv_bluez::BluezConfig::default()
-        })?;
-        if args.verbose {
-            eprintln!(
-                "atvvd: notifications via {}",
-                link.notification_mode().label()
-            );
-            if let atvv_bluez::NotificationMode::Start { acquire_error } = link.notification_mode()
-            {
-                eprintln!("atvvd: AcquireNotify fallback: {acquire_error}");
-            }
-        }
-        (Box::new(BluezTransport::new(link)), None)
+        let transport = BluezTransport::new(
+            atvv_bluez::BluezConfig {
+                address,
+                adapter,
+                ..atvv_bluez::BluezConfig::default()
+            },
+            args.verbose,
+        );
+        (Box::new(transport), None)
     };
 
     let address = transport.address().to_string();
-    let transport_label = format!(
-        "{} transport ({})",
-        transport.kind(),
-        transport.device_name()
-    );
+    let transport_label = format!("{} transport for {}", transport.kind(), transport.address());
 
     let mut config = DaemonConfig::new(profile, address.clone());
     config.source_name = dbus::source_name(profile);
