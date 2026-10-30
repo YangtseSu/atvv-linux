@@ -14,8 +14,9 @@ not a second plan and it does not override `docs/plans/`.
   snapshots, licenses, reuse boundaries, and upstream references.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
-  PipeWire behavior, the step 08 trigger/compositor run, and the fixes found.
-  The live fcitx capture from the ATVV source remains unverified.
+  PipeWire behavior, the step 08 trigger/compositor run and the automated
+  fcitx/source check, and the fixes found. The combined real-press fcitx
+  recording was not observed; its legs were verified separately.
 
 ## Evidence rules
 
@@ -81,9 +82,10 @@ These cannot be closed by reading code or by synthetic tests:
   capture is non-silent with peaks near full scale.)
 - Pairing gesture and LE Secure Connections numeric-comparison behavior. (The
   device was already bonded during step 07.)
-- Whether a live fcitx5-vinput recording starts from `atvv-miremote-rc003`
-  when the operator presses the key in a focused editor. The trigger path and
-  the source are verified separately; the combined leg is open and must not be
-  time-boxed.
+- Whether a single real-device press (voice key → daemon → synthetic trigger →
+  fcitx) records from `atvv-miremote-rc003`. The legs were verified separately:
+  a real press produced ATVV audio and the trigger reached the compositor, and
+  an automated focused-entry test made fcitx record from the ATVV source at
+  16 kHz. A future joint spot check is useful but must not be time-boxed.
 - fcitx5-vinput warm-stream behavior with the real daemon.
 - PipeWire service restart behavior of the installed systemd unit.

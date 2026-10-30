@@ -137,6 +137,13 @@ Focus an editor that uses fcitx, press and hold the voice key, speak, release.
 `atvvctl status` should show `streaming` and growing `audio.frames` during the
 press. Repeat the press as often as needed; the check does not expire.
 
+An automated version was used during step 08: a mock-transport daemon plus the
+real session services, a focused `zenity --entry`, and `ydotool` delivering the
+configured trigger chord. The vinput-daemon journal named
+`target.object=atvv-miremote-rc003` and negotiated
+`rate=16000 channels=1 fmt=259`. Details are in
+[`docs/research/rc003-hardware-evidence.md`](../research/rc003-hardware-evidence.md).
+
 The trigger must match vinput's `[TriggerKey]` (`~/.config/fcitx5/conf/vinput.conf`).
 If the desktop uses a chord (for example `Control+Control_R`), set the daemon to
 the same program, e.g. `trigger_key = "Control_R"` or `trigger_key =

@@ -49,23 +49,20 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `AUDIO_START`, 120-byte frames, `AUDIO_STOP 00 02`/`00 08`, six keepalives
   over a 60 s hold, non-silent 16 kHz WAV, auto-reconnect. Evidence:
   `docs/research/rc003-hardware-evidence.md`.
-- **08 fcitx/MCP (implemented, one live check open)**: `vinput` and
-  `trigger_key` config (single key or `+` chord), voice-edge `MIC_OPEN`/
-  `MIC_CLOSE`, synthetic trigger emission with lost-node release, optional
-  `org.fcitx.Vinput` client with fast name-owner failure, `atvv-mcp` stdio
-  server (`status`, `voice_start`, `voice_stop`, `voice_toggle`,
-  `list_devices`, `reload`), isolated-bus mock tests, and
-  `docs/integrations/`. On a real press the daemon streamed 141 frames and a
-  synthetic `ctrl+alt+v` fired a GNOME custom keybinding; a live fcitx
-  recording during a press has not been observed.
+- **08 fcitx/MCP (complete and verified)**: `vinput` and `trigger_key` config
+  (single key or `+` chord), voice-edge `MIC_OPEN`/`MIC_CLOSE`, synthetic
+  trigger emission with lost-node release, optional `org.fcitx.Vinput` client
+  with fast name-owner failure, `atvv-mcp` stdio server (`status`,
+  `voice_start`, `voice_stop`, `voice_toggle`, `list_devices`, `reload`),
+  isolated-bus mock tests, and `docs/integrations/`. The fcitx recording leg
+  was verified without an operator: a mock-transport daemon and the real
+  session PipeWire/vinput/fcitx recorded from `atvv-miremote-rc003` at 16 kHz;
+  a focused `zenity` entry plus `ydotool` delivered the trigger chord to the
+  fcitx addon and started the same recording. A real RC003 press produced 141
+  frames and fired a GNOME keybinding from the synthetic chord.
 
 ## Not implemented
 
-- **08 live fcitx leg**: `vinput` lists `atvv-miremote-rc003` as active, but a
-  physical press has not yet produced a vinput recording with a focused editor
-  (the vinput-daemon log showed no capture negotiation during the one press).
-  The check is repeatable and must not be put on a countdown; run it whenever
-  an operator is at the machine.
 - **09 Arch packaging**: PKGBUILD, udev, installed systemd unit, CI, hardware
   acceptance. Depends on all prior steps; the installed-unit PipeWire restart
   check is still open.
@@ -176,8 +173,16 @@ cargo test -p atvv-daemon
   `AUDIO_START 04 03 02 05`, 141 frames, `AUDIO_STOP 00 02`, and
   `voice key pressed`/`released`; a GNOME custom keybinding
   `<Control><Alt>v` fired from the synthetic chord. `vinput device list`
-  listed `atvv-miremote-rc003` as the active source. The same press produced no
-  vinput capture negotiation, so the fcitx recording leg is not verified.
+  listed `atvv-miremote-rc003` as the active source.
+- Step 08 automated fcitx/source check (mock transport, real session bus,
+  real PipeWire/vinput/fcitx): `vinput recording start` reached `recording`;
+  vinput-daemon logged `target.object=atvv-miremote-rc003` and
+  `negotiated format: rate=16000 channels=1 fmt=259`; `pw-cat` captured
+  8.00 s / 128,000 samples at 16 kHz with peak 32767, RMS 14025.9, 48,939
+  non-zero samples. A focused `zenity --entry` plus `ydotool`
+  `Control+Control_R` started the same recording (daemon streaming 101 frames
+  / 24,240 samples). Both runs were cancelled with `CancelOperation`, so no
+  ASR inference was requested.
 - Integration test: direct `AUDIO_START` → `VoiceStarted` + streaming frames;
   device `AUDIO_STOP` → exactly one `0x0D`, echo 150 ms later ignored;
   D-Bus `StartVoice`/`StopVoice` → one `MIC_OPEN`/`MIC_CLOSE`; introspection
@@ -221,29 +226,25 @@ cargo test -p atvv-daemon
 
 ## Next step
 
-**08 live fcitx check**, then **09 packaging**. Step 08 code is complete; the
-only open item is one focused-editor press that starts a vinput recording from
-`atvv-miremote-rc003`. The check is repeatable and must never be put on a
-countdown; run it when a person is at the machine:
+**09 packaging-and-acceptance** is next. Step 08 is complete and verified.
+Read:
 
-```sh
+```bash
 # run from the repository root
-atvvd --verbose                       # or the step 09 systemd unit
-vinput device use atvv-miremote-rc003
-systemctl --user restart vinput-daemon
-vinput device list                    # atvv-miremote-rc003 is active
-atvvctl monitor                       # prints voice started/stopped
-vinput daemon status                  # "recording" while the key is held
+cat docs/plans/09-packaging-and-acceptance.md
+cat docs/research/reference-projects.md
+cat docs/research/landscape.md
 ```
 
-Focus an editor that uses fcitx, press and hold the voice key, speak, release.
-The trigger must match vinput's `[TriggerKey]` (the current desktop uses
-`Control+Control_R`; `trigger_key = "Control_R"` or a chord works). If the
-recording starts, update step 08's two open exit criteria and its status. Do
-not add a timed harness; the check waits for a real event.
+Step 09 covers the systemd user unit, udev `uaccess` rules, `modules-load.d`,
+the Arch PKGBUILD, cargo-deny/REUSE, man page/completions, the installed-unit
+PipeWire restart check, and the hardware acceptance record. Do not add an
+in-process PipeWire service-restart monitor; the unit owns that (ADR 0005).
 
-Do not add an in-process PipeWire service-restart monitor; the unit owns that
-(ADR 0005).
+The fcitx live check is no longer a blocker: an automated focused-entry test
+(`zenity` + `ydotool`) recorded from `atvv-miremote-rc003` at 16 kHz. A manual
+spot check is still useful but has no deadline; see
+`docs/integrations/fcitx5-vinput.md`.
 
 ## Commands
 

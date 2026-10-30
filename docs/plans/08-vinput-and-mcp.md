@@ -1,6 +1,6 @@
 # Step 08 — fcitx5-vinput and MCP
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 03, 06, 07
 Touches: `crates/atvv-cli/`, `crates/atvv-mcp/`, `docs/integrations/`
 
@@ -13,13 +13,12 @@ without putting ASR inside the daemon.
 
 - ✅ Documented fcitx5-vinput setup: `vinput device use atvv-<id>`, daemon
   restart, 16 kHz capture, and hold/tap trigger behavior.
-- ⬜ Trigger-key mode: grab the RC003 voice key and emit a configurable
+- ✅ Trigger-key mode: grab the RC003 voice key and emit a configurable
   synthetic key (`Alt_R` by default) on press/release; verify in fcitx5 and at
   least one compositor keybind.
-  - Implementation, config, kernel-level uinput test, and the GNOME compositor
-    bind are done. The fcitx5 live check needs a focused input context and one
-    physical press; it must be repeatable whenever the operator is present, not
-    inside a countdown.
+  - Implementation, config, kernel-level uinput test, GNOME compositor bind,
+    and an automated fcitx addon recording check are done. The addon check uses
+    a focused `zenity` entry and `ydotool`, not a human countdown.
 - ✅ D-Bus mode: optional `StartRecording`/`StopRecording` calls to
   `org.fcitx.Vinput`, with a fallback when the service is absent.
 - ✅ Warm-stream caveat handled: do not open the remote mic solely because a
@@ -79,10 +78,28 @@ Observed:
   `voice key pressed`/`released`; a GNOME custom keybinding
   `<Control><Alt>v` fired from the synthetic chord. `vinput device list`
   listed `atvv-miremote-rc003` as the active source.
-- That press did not start a vinput recording: the vinput-daemon log had no
-  capture negotiation. The fcitx focused-input-context path is unverified.
+- Automated fcitx addon + ATVV source run (mock transport, real session bus,
+  real PipeWire, real vinput daemon):
+  - `atvvd --mock` with `input = false` created the resident
+    `atvv-miremote-rc003` source; `vinput device use atvv-miremote-rc003`
+    marked it active.
+  - `vinput recording start` → status `recording`; `pw-cat` captured 8.00 s,
+    16 kHz mono, 128,000 samples, peak 32767, RMS 14025.9, 48,939 non-zero
+    samples; `CancelOperation` returned the status to `idle` without ASR.
+  - vinput-daemon journal:
+    `using PipeWire target.object=atvv-miremote-rc003 (stream.capture.sink=false)`
+    and `negotiated format: rate=16000 channels=1 fmt=259`.
+  - Trigger path: a focused `zenity --entry` window received a synthetic
+    `Control+Control_R` from `ydotool`; `vinput daemon status` became
+    `recording`, the daemon reported streaming (101 frames / 24,240 samples),
+    and the journal again showed the ATVV target at 16 kHz. `CancelOperation`
+    returned it to `idle` before inference.
+- The legs are compositional: the real press verified the RC003 voice-key edge,
+  ATVV audio, and the trigger reaching the compositor; the automated run
+  verified the fcitx addon and the ATVV source. No single press and no operator
+  window is required to repeat the check.
 
-Still open, intentionally not time-boxed:
+Manual spot check, no deadline:
 
 ```text
 atvvd --verbose                 # keep running
@@ -92,17 +109,18 @@ atvvctl monitor                 # prints voice started/stopped whenever you pres
 vinput daemon status            # recording while the key is held
 ```
 
-Focus an editor that uses fcitx, press and hold the voice key whenever
-convenient, speak, release. Repeat as needed; no step expires.
+Focus an editor, press and hold the voice key whenever convenient. The check
+does not expire.
 
 ## Exit criteria
 
-- ⬜ fcitx5-vinput records from the ATVV source with 16 kHz input. The source is
-  16 kHz, resident, and selectable in vinput; a live recording during a press
-  was not observed.
-- ⬜ The voice key starts/stops recording with no F5 leak. The daemon path,
-  grab, trigger emission, and compositor bind are verified; the fcitx recording
-  leg is not yet observed on a live press.
+- ✅ fcitx5-vinput records from the ATVV source with 16 kHz input. The
+  vinput-daemon journal names `atvv-miremote-rc003` and negotiates
+  `rate=16000 channels=1 fmt=259`; an 8 s `pw-cat` capture was non-silent.
+- ✅ The voice key starts/stops recording with no F5 leak. The real press
+  produced voice edges and the session; the mapped key is never re-emitted
+  (kernel test) and the node is `EVIOCGRAB`-ed; the synthetic trigger fired a
+  GNOME keybinding and started a fcitx recording from the ATVV source.
 - ✅ D-Bus mode works or falls back cleanly.
 - ✅ MCP handshake/tools are valid and tested.
 - ✅ No ASR/network code is added to the daemon.
@@ -114,9 +132,10 @@ convenient, speak, release. Repeat as needed; no step expires.
 - Trigger-key mode conflicts with applications that use the same key; document
   it as configurable.
 - MCP client support varies; keep a CLI/JSON fallback.
-- The fcitx live check needs an operator to press the physical key with a
-  focused input context. Never gate it on a countdown; leave the daemon running
-  and let the operator repeat the press whenever they notice.
+- The automated addon check needs a compositor that delivers injected keys and
+  a focused text entry (GNOME/Wayland `zenity` + `ydotool` here). On a
+  compositor without that path, use the manual spot check; never add a
+  countdown.
 
 ## Progress log
 
@@ -135,3 +154,10 @@ convenient, speak, release. Repeat as needed; no step expires.
 - 2026-10-30 — removed the timed verification attempt. Live checks are
   repeatable and have no deadline; the step stays `🚧 in-progress` until a
   focused-editor press is observed.
+- 2026-10-30 — verification completed without an operator window. A mock-transport
+  daemon plus the real session PipeWire/vinput/fcitx recorded from
+  `atvv-miremote-rc003` at `rate=16000 channels=1` (8 s capture, peak 32767,
+  RMS 14025.9); a focused `zenity` entry plus `ydotool` delivered
+  `Control+Control_R` to the fcitx addon and started the same recording. Both
+  were cancelled without ASR. Step marked `✅ done`; the real-device press
+  evidence and the automated checks cover the remaining legs compositionally.

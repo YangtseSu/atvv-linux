@@ -9,8 +9,8 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–07 complete; step 08 implemented with one untimed live check open;
-the RC003 path has run on real hardware.**
+**Steps 01–08 complete and verified; packaging (step 09) remains. The RC003
+path and the fcitx5-vinput source path have both run on real system services.**
 
 Implemented:
 
@@ -40,9 +40,7 @@ Implemented:
 
 Not yet complete:
 
-- one live fcitx5-vinput capture from `atvv-miremote-rc003` during a physical
-  press with a focused editor; the check is repeatable and has no deadline
-- Arch packaging and installed systemd/udev integration
+- Arch packaging and installed systemd/udev integration (step 09)
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run

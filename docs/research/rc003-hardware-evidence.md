@@ -234,11 +234,30 @@ so fcitx did not consume the trigger in that run. An earlier test with the
 desktop's existing vinput trigger `Control+Control_R` (with the default source
 still selected) did start recording and negotiated
 `rate=16000 channels=1 fmt=259`; that is evidence for the fcitx trigger path,
-not for the ATVV source. The missing live fcitx capture from
-`atvv-miremote-rc003` is the one open step 08 item.
+not for the ATVV source.
 
-No time-boxed verification was used or should be added. The daemon stays
-running and the check can be repeated whenever an operator happens to press
-the key with a focused editor. All temporary changes (fcitx trigger, daemon
-`trigger_key`, vinput capture device, GNOME custom keybinding, `ydotoold`) were
-restored after the run.
+The fcitx + ATVV-source leg was then verified automatically, without an
+operator and without a time window, by running a mock-transport daemon
+(`input = false`) alongside the real session PipeWire, vinput-daemon, and
+fcitx:
+
+- `vinput device use atvv-miremote-rc003` marked the resident source active.
+- `vinput recording start` reported `recording`; the journal showed
+  `using PipeWire target.object=atvv-miremote-rc003 (stream.capture.sink=false)`
+  and `negotiated format: rate=16000 channels=1 fmt=259`.
+- A concurrent `pw-cat` capture was 8.00 s / 128,000 samples at 16 kHz with
+  peak 32767, RMS 14025.9, and 48,939 non-zero samples (the mock's
+  deterministic ADPCM pattern).
+- `CancelOperation` returned the daemon to `idle` without requesting ASR.
+- A focused `zenity --entry` window received a synthetic
+  `Control+Control_R` from `ydotool`; `vinput daemon status` became
+  `recording`, the ATVV daemon was streaming (101 frames / 24,240 samples),
+  and the journal repeated the `target.object=atvv-miremote-rc003` and 16 kHz
+  negotiation. `CancelOperation` stopped it before inference.
+
+The real press and the automated run are complementary: the press verifies the
+RC003 voice-key edge, real ATVV audio, and the synthetic trigger reaching the
+compositor; the automated run verifies the fcitx addon and the ATVV source.
+No time-boxed verification was used or should be added. All temporary changes
+(fcitx trigger, daemon `trigger_key`, vinput capture device, GNOME custom
+keybinding, `ydotoold`, mock daemon) were restored after the runs.
