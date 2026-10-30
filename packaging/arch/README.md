@@ -1,7 +1,9 @@
 # Arch package
 
-`PKGBUILD` builds the three binaries and installs the user unit, udev rule,
-modules-load file, man pages, and completions.
+`PKGBUILD` builds a split package: `atvv-linux` contains the daemon, CLI, and
+MCP binaries, the user unit, udev rule, modules-load file, man pages, and
+completions; `atvv-linux-gui` contains the optional `atvv-config` app plus its
+desktop entry, AppStream metadata, and icon.
 
 ## Build the release tarball
 
@@ -21,10 +23,14 @@ not change it.
 
 ```sh
 cd packaging/arch
-makepkg -si
+makepkg
+sudo pacman -U atvv-linux-0.1.0-7-x86_64.pkg.tar.zst
+# optional GUI:
+sudo pacman -U atvv-linux-gui-0.1.0-7-x86_64.pkg.tar.zst
 ```
 
-The package does not enable a user service. After installing:
+`makepkg -si` installs both packages. The packages do not enable a user
+service. After installing:
 
 ```sh
 systemctl --user daemon-reload

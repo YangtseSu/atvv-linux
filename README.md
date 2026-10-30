@@ -75,8 +75,14 @@ cd atvv-linux
 # committed tree first; the script prints its SHA-256.
 ./packaging/arch/make-source.sh
 cd packaging/arch
-makepkg -si
+makepkg
+sudo pacman -U atvv-linux-0.1.0-7-x86_64.pkg.tar.zst
+# optional GUI:
+sudo pacman -U atvv-linux-gui-0.1.0-7-x86_64.pkg.tar.zst
 ```
+
+`makepkg -si` installs both packages. The GUI app is optional; the daemon and
+CLI do not depend on GTK.
 
 Pair the remote, then enable the user service:
 
