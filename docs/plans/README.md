@@ -128,7 +128,8 @@ GitHub Actions daily. Step 09 stays in progress until those operator checks
 and the sign-off are recorded.
 
 Step 10 is planned to remove the remaining manual vinput setup. It proposes an
-upstream fcitx5-vinput `SetCaptureDevice` D-Bus method (plus optional trigger
-API), daemon-side auto-selection that never overrides an explicit user device,
-and a recorded decision on the `trigger` vs `dbus` default. Until that lands,
-the one-time `vinput device use` step remains.
+upstream fcitx5-vinput `SetCaptureDevice` D-Bus method plus trigger get/set and
+scene-id improvements, daemon-side auto-selection that never overrides an
+explicit user device, and a default mode that never assumes `Alt_R`
+(`auto`/`dbus`). Until that lands, the one-time `vinput device use` step
+remains.

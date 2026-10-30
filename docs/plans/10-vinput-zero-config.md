@@ -19,17 +19,27 @@ After `atvvctl pair`, a user starts `atvvd` and fcitx5-vinput records from
   capture-device setter.
 - The fcitx addon trigger key is `[TriggerKey]` in
   `~/.config/fcitx5/conf/vinput.conf`. It is not exposed over D-Bus.
+- Users commonly change the trigger key; `Alt_R` is only vinput's default.
+  A daemon that always synthesizes `Alt_R` silently fails for any customized
+  setup, so the default must not assume it.
 - `vinput = "dbus"` avoids trigger-key matching, but still uses whatever
   capture device vinput has selected; it does not solve device selection.
+- Defaulting to `dbus` before the device-selection API is unsafe: a voice edge
+  would start vinput on `global.capture_device`. With the initial `default`,
+  that is the system microphone, not `atvv-miremote-rc003`.
 
 ## Deliverables
 
 - ⬜ Upstream proposal/PR to fcitx5-vinput:
   - `SetCaptureDevice(s name)` (apply live; validate that the PipeWire node
     exists) and `GetCaptureDevice() -> s`.
-  - Optional `SetTriggerKey(s chord)` / `GetTriggerKey()`, or a
-    "follow source name" option.
-  - Tests and documentation in the upstream project.
+  - `GetTriggerKey() -> s` and `SetTriggerKey(s chord)`, or a
+    "follow source name" option, applied without a daemon restart.
+  - `StartRecording() -> s` returning the scene id, or an explicit documented
+    empty-id contract, so `StopRecording` does not require guessing.
+  - Tests and documentation in the upstream project. These additions are
+    acceptable PR scope because they make the atvv integration work without
+    assuming user defaults.
 - ⬜ Record the pinned upstream snapshot and the final API contract in
   `docs/research/reference-projects.md` and
   `docs/research/protocol-and-device.md` §8.
@@ -40,12 +50,19 @@ After `atvvctl pair`, a user starts `atvvd` and fcitx5-vinput records from
   - Define the source-disappears/reconnect transition and test it.
 - ⬜ Config policy: `vinput_device = "auto" | "none"` or equivalent. Never
   make the ATVV source the system default.
-- ⬜ Decide and record the default `vinput` mode:
-  - `trigger`: primary fcitx input-context path; default `Alt_R` matches
-    vinput's default; no scene-id coupling.
-  - `dbus`: no trigger-key matching, but uses the last active input context
-    and the `StopRecording(scene_id)` contract; it does not select the device.
-  - `auto`: prefer D-Bus when the new API is present, fall back to trigger.
+- ⬜ Change the default mode so it never assumes a trigger key:
+  - `auto` (target): if vinput exposes `GetTriggerKey`, synthesize the actual
+    key; else if `org.fcitx.Vinput` is present, use D-Bus; else leave the ATVV
+    session usable and report a diagnostic.
+  - `dbus`: no trigger-key dependency; still uses the selected device and the
+    scene-id contract.
+  - `auto` must refuse to start on a non-ATVV device when it cannot select the
+    source; report the mismatch instead of silently recording the system
+    microphone.
+  - `trigger`: only when the key is explicitly configured or discovered.
+    Never assume `Alt_R` or any other default.
+  - Record the migration: an explicit `vinput = "trigger"` keeps its behavior;
+    configuration without `vinput` moves to the new default.
 - ⬜ Add a read-only `atvvctl vinput` diagnostic: report
   `global.capture_device`, `[TriggerKey]`, daemon mode/trigger, and the exact
   one-line fix.
@@ -65,6 +82,10 @@ After `atvvctl pair`, a user starts `atvvd` and fcitx5-vinput records from
 - The trigger key is addon-local. A daemon cannot infer a custom key unless
   the addon exposes it; the alternatives are D-Bus mode or one manual
   alignment.
+- Do not assume `Alt_R` or any user default. Changing shortcuts is normal;
+  the daemon must discover the active key or use D-Bus.
+- Upstream additions beyond device selection are acceptable when they improve
+  the integration; keep them additive and documented.
 - The source is resident and vinput may cache the device list;
   `SetCaptureDevice` should apply without a daemon restart, or the upstream
   API should expose a reload method.
@@ -83,10 +104,15 @@ vinput daemon status                   # recording on voice press
 journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 ```
 
+- Mock vinput with a non-default trigger key: D-Bus mode records; trigger mode
+  works only when the key is discovered or explicitly configured.
+
 ## Exit criteria
 
 - ⬜ Fresh install + pair + start `atvvd`: fcitx5-vinput records from the ATVV
   source without editing atvv or vinput configuration.
+- ⬜ A user with a customized trigger key records without editing atvv or
+  vinput configuration.
 - ⬜ A user's explicit non-ATVV device is preserved.
 - ⬜ No direct writes to another application's configuration; upstream API
   only.
@@ -107,3 +133,6 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 ## Progress log
 
 - 2026-10-30 — step planned after the zero-config review; no implementation.
+- 2026-10-30 — revised after review: the daemon must not assume `Alt_R` or any
+  default trigger key. The upstream PR may add trigger get/set, live apply,
+  and scene-id improvements; the default mode moves to `auto`/`dbus`.
