@@ -106,7 +106,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   already sets `trigger_key = "DICTATE"`; the installed `0.1.0-4` service
   accepts it. The primary upstream request is still consumer-side source
   auto-selection plus auto-binding of `atvv.recording_keys`; it is not
-  submitted. See `docs/plans/10-vinput-zero-config.md`,
+  submitted. Local consumer patches are implemented in the
+  `YangtseSu/fcitx5-vinput` fork on three stacked branches
+  (`feat/auto-capture-device`, `feat/recording-keys-metadata`,
+  `feat/bind-recording-keys`); see the step 10 progress log for verification.
+  See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
@@ -307,9 +311,11 @@ ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). The upstream issue
 and PR are not submitted. `vinput = "trigger"` stays the default;
 `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: proceed with the step 10 upstream issue/PR and the real
-vinput auto-bind check. The fork `YangtseSu/fcitx5-vinput` exists but has no
-code changes; no upstream issue or PR has been submitted.
+Immediate action: approve pushing the three local vinput branches and
+creating the two issues plus three draft PRs. The fork
+`YangtseSu/fcitx5-vinput` has the patches locally; nothing has been pushed and
+no upstream issue or PR has been submitted. After upstream review/merge,
+rebuild vinput and record the real auto-bind acceptance.
 
 ## Commands
 

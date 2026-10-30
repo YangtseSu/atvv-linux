@@ -233,3 +233,16 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
   fork at `YangtseSu/fcitx5-vinput` exists; no upstream issue or PR has been
   submitted. The installed `0.1.0-4` package predates the provider contract
   output.
+- 2026-10-31 — local consumer patches implemented in the
+  `YangtseSu/fcitx5-vinput` fork on three stacked branches:
+  `feat/auto-capture-device` (`auto` / comma-separated wildcard priority
+  lists, exact-name precedence, GUI/CLI Auto), `feat/recording-keys-metadata`
+  (read `atvv.recording_keys` from node info; canonical-to-fcitx mapping), and
+  `feat/bind-recording-keys` (`device use` appends missing keys through
+  `org.fcitx.Fcitx.Controller1` with no direct file write and no D-Bus
+  activation). Verification: `cmake --build`, 40/40 `ctest`,
+  `check-i18n.py` clean, clang-format clean; live fcitx5 5.1.23 added
+  `VoiceCommand` at `3=VoiceCommand` on `device use auto`, the second run was
+  idempotent, and the no-fcitx fallback printed the exact entries without
+  writing. The branches are not pushed and no upstream issue/PR exists; push
+  and PR creation need the operator's explicit approval.

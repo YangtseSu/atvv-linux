@@ -136,7 +136,10 @@ GitHub Actions daily.
 
 Step 10 is in progress. ATVV is the provider: it exposes the resident
 `Audio/Source` and the standard `Dictate` key. vinput is the consumer and owns
-source selection and trigger binding. The primary upstream request is a
+source selection and trigger binding. Local consumer patches exist in the
+`YangtseSu/fcitx5-vinput` fork on three stacked branches (auto selection,
+recording-key metadata, and `device use` binding); they are not pushed or
+submitted and need explicit push/PR approval. The primary upstream request is a
 consumer-side capture-device auto-selection/priority list plus auto-binding of
 the declared recording keys; until it exists, the one-time
 `vinput device use` plus `Dictate` at the next free index (default
