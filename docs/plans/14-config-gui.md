@@ -1,6 +1,6 @@
 # Step 14 — GTK4/libadwaita configuration app
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 13
 Touches: `crates/atvv-gui/` (new), `Cargo.toml`, `packaging/`, `docs/`
 
@@ -184,8 +184,8 @@ Manual:
   added desktop entry, AppStream metadata, scalable icon, `docs/gui.md`, an
   embedded remote asset, and the dark/light theme check.
 - 2026-10-31 — `makepkg -f` produced `atvv-linux 0.1.0-7` (6.2 MiB, sha256
-  `bbb82452…2dea233`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
-  `01551ac6…ebdbb27`) from source tarball `46154660…97b2fa`. The base package
+  `3b248084…02c35`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
+  `470cca59…064b3`) from source tarball `7c276027…a362e`. The base package
   still depends only on `pipewire`, `bluez`, and `dbus`; the GUI package adds
   `gtk4`, `libadwaita`, `librsvg`, and `atvv-linux`. Extracted packages were
   run under Xvfb with `atvvd --mock`; the packaged `atvv-config` renders the

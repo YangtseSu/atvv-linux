@@ -66,8 +66,12 @@ reloading the daemon document.
 
 Toggle **Test** in the header. The daemon reports logical button events while
 capture is active; the window highlights the pressed key, shows the resolved
-action, and enables **Run once**. Shell commands require a separate
-confirmation dialog with Cancel as the default response.
+action, and enables **Run once**. Capture suppresses automatic key/chord
+emission, `exec`, dictation, the synthetic voice trigger, and voice-session
+start/stop, so pressing OK or a volume key does not activate the focused app
+or change system volume. The voice key is reported as fixed; it does not start
+the microphone in Test mode. Shell commands require a separate confirmation
+dialog with Cancel as the default response.
 
 Capture ends when Test is toggled off, **Cancel** is clicked in the banner, or
 the GUI's bus connection disappears. The GUI never reads input devices; the

@@ -41,7 +41,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
-| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **in progress**: GTK4/libadwaita GNOME-HIG app implemented, physical test-mode press pending; 15 **planned**: sayall-style mapping board |
+| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -64,7 +64,7 @@ on approval/upstream; steps 11–13 are complete.
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 |
-| 14 | F | [config-gui](14-config-gui.md) | 🚧 in-progress | 13 |
+| 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 |
 | 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 |
 
 ## Architecture contract
@@ -194,17 +194,19 @@ mappings, gesture overrides, `exec:` opt-in, and live D-Bus
 `GetConfig`/`SetConfig`/capture are implemented and verified with the fake
 remote.
 
-Step 14 is implemented and packaged: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
+Step 14 is complete and packaged: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
 client with an embedded SVG remote diagram, twelve accessible hotspots, a
 per-slot action editor, keyboard and remote learning, test mode with an
 explicit Run once, `exec` confirmation, banners/toasts, and a daemon-unavailable
 state. `RunAction` was added to `org.atvv.Daemon` for test mode. The worker
 tests use a private bus and the real daemon service; a headless `xvfb-run`
 test drives the window. A real RC003 run saved a mapping through the GUI and
-verified it after a daemon restart. The physical test-mode press is still
-open. Packaging is a split `atvv-linux-gui` package with desktop entry,
-AppStream metadata, icon, and GTK runtime dependencies kept out of
-`atvv-linux`; `0.1.0-7` is built and staged but not installed. The GUI decision is recorded in
+verified it after a daemon restart. The physical test-mode run observed all
+thirteen keys, kept Test mode active after OK, and left system volume
+unchanged; Home/Menu use `KEY_HOME`/`KEY_COMPOSE`. Packaging is a split
+`atvv-linux-gui` package with desktop entry, AppStream metadata, icon, and GTK
+runtime dependencies kept out of `atvv-linux`; `0.1.0-7` is built and staged
+but not installed. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
 sayall-style mapping board (central remote + per-button cards with all three
 slots) that keeps the same GTK4/libadwaita model, D-Bus API, and original SVG;
