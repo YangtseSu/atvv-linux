@@ -15,7 +15,7 @@ use atvv_protocol::caps::{Codec, InteractionModel};
 use atvv_protocol::commands;
 use atvv_protocol::events::{AudioStopReason, CtlEvent};
 use atvv_protocol::frame::FrameAccumulator;
-use atvv_protocol::profile::{DeviceProfile, NibbleOrder};
+use atvv_protocol::profile::{DeviceProfile, NibbleOrder, RemoteButton};
 use atvv_protocol::session::{Session, SessionAction, SessionState};
 use thiserror::Error;
 
@@ -896,6 +896,9 @@ impl Daemon {
     fn poll_input(&mut self) {
         let mut events = Vec::new();
         if let Some(input) = &self.input {
+            // Capture/test mode observes mappings; it must not also emit the
+            // mapped keys, run exec, or start dictation.
+            input.set_actions_enabled(!capture::is_active(&self.capture));
             loop {
                 match input.try_recv() {
                     Ok(event) => events.push(event),
@@ -918,6 +921,7 @@ impl Daemon {
                 action,
                 error,
             } => {
+                let capturing = capture::is_active(&self.capture);
                 self.last_button = Some(format!("{button}:{gesture:?}"));
                 self.trace(format!(
                     "button {button} {gesture:?} -> {}",
@@ -928,7 +932,7 @@ impl Daemon {
                 if let Some(error) = error {
                     self.note_input_degraded(error);
                 }
-                if capture::is_active(&self.capture) {
+                if capturing {
                     self.signals.publish(DaemonEvent::ButtonEvent {
                         button: button.to_string(),
                         trigger: gesture
@@ -938,18 +942,22 @@ impl Daemon {
                         pressed: gesture.trigger().is_some(),
                     });
                 }
-                match action {
-                    Some(Action::Dictation(DictationMode::Start)) => self.request_voice(true),
-                    Some(Action::Dictation(DictationMode::Stop)) => self.request_voice(false),
-                    Some(Action::Dictation(DictationMode::Toggle)) => {
-                        let active = matches!(
-                            self.session.state(),
-                            SessionState::Opening | SessionState::Streaming
-                        );
-                        self.request_voice(!active);
+                if !capturing {
+                    // Test capture shows the action but never executes it;
+                    // `RunAction` is the explicit execution path.
+                    match action {
+                        Some(Action::Dictation(DictationMode::Start)) => self.request_voice(true),
+                        Some(Action::Dictation(DictationMode::Stop)) => self.request_voice(false),
+                        Some(Action::Dictation(DictationMode::Toggle)) => {
+                            let active = matches!(
+                                self.session.state(),
+                                SessionState::Opening | SessionState::Streaming
+                            );
+                            self.request_voice(!active);
+                        }
+                        Some(Action::Exec { command }) => self.run_exec(&command),
+                        _ => {}
                     }
-                    Some(Action::Exec { command }) => self.run_exec(&command),
-                    _ => {}
                 }
             }
             RemoteEvent::Degraded { message } => self.note_input_degraded(message),
@@ -974,6 +982,15 @@ impl Daemon {
             "voice key {}",
             if pressed { "pressed" } else { "released" }
         ));
+        if capture::is_active(&self.capture) {
+            self.signals.publish(DaemonEvent::ButtonEvent {
+                button: RemoteButton::Voice.name().to_string(),
+                trigger: if pressed { "single" } else { "release" }.to_string(),
+                pressed,
+            });
+            self.publish_status();
+            return;
+        }
         self.request_voice(pressed);
         if self.config.vinput == VinputMode::Dbus
             && let Some(vinput) = &mut self.vinput

@@ -65,8 +65,10 @@ keyboard.
 - `crates/atvv-input/src/fake.rs`: `FAKE_REMOTE` (VID `0x1209`, PID `0x0002`,
   name `atvv-fake-remote`) and its uinput device.
 - `DeviceProfile` now owns `button_keys` and `gesture_timing`; RC003 uses
-  `KEY_HOMEPAGE` for home and `KEY_ENTER`/`KEY_KPENTER` for OK. The old
-  `voice_key`/`tv_key` fields are gone.
+  `KEY_HOME` for home, `KEY_COMPOSE` for the application/menu key, and
+  `KEY_ENTER`/`KEY_KPENTER` for OK. The old `voice_key`/`tv_key` fields are
+  gone. The 2026-10-31 evdev descriptor corrected the earlier
+  `KEY_HOMEPAGE`/`KEY_MENU` assumption.
 
 ## Out of scope
 

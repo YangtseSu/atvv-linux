@@ -90,12 +90,21 @@ fn gui_against_real_daemon() {
         }),
         "capture did not start"
     );
-    eprintln!("ATVV_GUI_REAL: press a remote button now");
-    let pressed = wait_until(&window, Duration::from_secs(45), "a physical press", || {
-        window.test_result_text().contains('→')
-    });
+    eprintln!("ATVV_GUI_REAL: press voice, Home, Menu, OK, and volume now");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut last_text = window.test_result_text();
+    while Instant::now() < deadline {
+        pump(&window);
+        let text = window.test_result_text();
+        if text != last_text {
+            eprintln!("ATVV_GUI_REAL: event -> {text:?}");
+            last_text = text;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
     eprintln!(
-        "ATVV_GUI_REAL: press observed={pressed} result={:?}",
+        "ATVV_GUI_REAL: test_active={} result={:?}",
+        window.test_button().is_active(),
         window.test_result_text()
     );
     window.test_button().set_active(false);

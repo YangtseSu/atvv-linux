@@ -107,6 +107,8 @@ struct Dispatcher {
     resolver: KeyResolver,
     vkbd: Option<VirtualKeyboard>,
     events: Sender<RemoteEvent>,
+    /// Capture/test mode observes mappings without emitting them.
+    actions_enabled: Arc<AtomicBool>,
 }
 
 impl Dispatcher {
@@ -115,6 +117,9 @@ impl Dispatcher {
     }
 
     fn trigger(&self, program: &KeyProgram, pressed: bool) {
+        if !self.actions_enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let Some(keyboard) = &self.vkbd else {
             return;
         };
@@ -132,13 +137,13 @@ impl Dispatcher {
 
     fn dispatch(&self, gestures: Vec<Gesture>) {
         for gesture in gestures {
-            let Some(trigger) = gesture.trigger() else {
-                continue;
-            };
             let button = gesture.button();
-            let action = self.map.resolve(button, trigger).cloned();
+            let trigger = gesture.trigger();
+            let action = trigger.and_then(|trigger| self.map.resolve(button, trigger).cloned());
             let mut error = None;
-            if let Some(action) = &action {
+            if let Some(action) = &action
+                && self.actions_enabled.load(Ordering::Relaxed)
+            {
                 match action {
                     Action::Key { .. } | Action::Combo { .. } => {
                         match self.resolver.program(action) {
@@ -161,6 +166,8 @@ impl Dispatcher {
                     Action::None | Action::Exec { .. } | Action::Dictation(_) => {}
                 }
             }
+            // Release edges carry no action but still reach the daemon, so
+            // capture clients can clear their pressed highlight.
             let _ = self.events.send(RemoteEvent::Button {
                 button,
                 gesture,
@@ -180,6 +187,7 @@ pub struct InputRuntime {
     stop: Arc<AtomicBool>,
     threads: Vec<JoinHandle<()>>,
     vkbd: Option<VirtualKeyboard>,
+    actions_enabled: Arc<AtomicBool>,
     /// Parsed synthetic trigger, released when the runtime is dropped.
     voice_trigger: Option<KeyProgram>,
 }
@@ -246,6 +254,7 @@ impl InputRuntime {
         };
 
         let stop = Arc::new(AtomicBool::new(false));
+        let actions_enabled = Arc::new(AtomicBool::new(true));
         let (raw_tx, raw_rx) = mpsc::channel::<RawEdge>();
         let (event_tx, events) = mpsc::channel::<RemoteEvent>();
         let mut threads = Vec::new();
@@ -276,6 +285,7 @@ impl InputRuntime {
             let event_tx = event_tx.clone();
             let vkbd = vkbd.clone();
             let stop = Arc::clone(&stop);
+            let actions_enabled = Arc::clone(&actions_enabled);
             let keymap = keymap.clone();
             let reader = thread::Builder::new()
                 .name(format!("atvv-evdev-{name}"))
@@ -310,8 +320,11 @@ impl InputRuntime {
                                         None => {
                                             // Re-emit keys the profile does not map,
                                             // otherwise grabbing them loses input.
-                                            // Repeats are forwarded as well.
-                                            if let Some(keyboard) = &vkbd {
+                                            // Repeats are forwarded as well. Test
+                                            // capture suppresses this too.
+                                            if actions_enabled.load(Ordering::Relaxed)
+                                                && let Some(keyboard) = &vkbd
+                                            {
                                                 let _ = keyboard.emit_raw(key, state);
                                             }
                                         }
@@ -356,6 +369,7 @@ impl InputRuntime {
         drop(raw_tx);
 
         let engine_stop = Arc::clone(&stop);
+        let engine_actions_enabled = Arc::clone(&actions_enabled);
         let engine_vkbd = vkbd.clone();
         let engine_map = map.clone();
         let engine_timing = timing;
@@ -374,6 +388,7 @@ impl InputRuntime {
                     resolver: KeyResolver,
                     vkbd: engine_vkbd,
                     events: engine_event_tx,
+                    actions_enabled: engine_actions_enabled,
                 };
                 let mut voice_down = false;
                 while !engine_stop.load(Ordering::Relaxed) {
@@ -432,6 +447,7 @@ impl InputRuntime {
             stop,
             threads,
             vkbd,
+            actions_enabled,
             voice_trigger: drop_trigger,
         })
     }
@@ -466,6 +482,14 @@ impl InputRuntime {
         self.vkbd
             .as_ref()
             .is_some_and(VirtualKeyboard::is_available)
+    }
+
+    /// Enable or suppress automatic key/chord and trigger emission.
+    ///
+    /// Capture/test mode observes mappings without executing them. An explicit
+    /// [`Self::tap_action`] call for the GUI's Run once is not affected.
+    pub fn set_actions_enabled(&self, enabled: bool) {
+        self.actions_enabled.store(enabled, Ordering::Relaxed);
     }
 
     /// Receive the next event, waiting up to `timeout`.
@@ -520,6 +544,7 @@ mod tests {
             resolver: KeyResolver,
             vkbd: None,
             events: tx,
+            actions_enabled: Arc::new(AtomicBool::new(true)),
         };
         dispatcher.dispatch(vec![Gesture::SingleClick(RemoteButton::Ok)]);
         match rx.recv().expect("button event") {
@@ -537,6 +562,67 @@ mod tests {
                 );
             }
             other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn release_edges_are_forwarded_without_an_action() {
+        let (tx, rx) = mpsc::channel();
+        let dispatcher = Dispatcher {
+            map: ActionMap::defaults(),
+            resolver: KeyResolver,
+            vkbd: None,
+            events: tx,
+            actions_enabled: Arc::new(AtomicBool::new(true)),
+        };
+        dispatcher.dispatch(vec![Gesture::Release(RemoteButton::Back)]);
+        match rx.recv().expect("release event") {
+            RemoteEvent::Button {
+                button,
+                gesture,
+                action,
+                error,
+            } => {
+                assert_eq!(button, RemoteButton::Back);
+                assert_eq!(gesture, Gesture::Release(RemoteButton::Back));
+                assert!(action.is_none());
+                assert!(error.is_none());
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn capture_mode_observes_without_emitting_or_erroring() {
+        let (tx, rx) = mpsc::channel();
+        let dispatcher = Dispatcher {
+            map: ActionMap::defaults(),
+            resolver: KeyResolver,
+            vkbd: None,
+            events: tx,
+            actions_enabled: Arc::new(AtomicBool::new(false)),
+        };
+        dispatcher.dispatch(vec![
+            Gesture::SingleClick(RemoteButton::Ok),
+            Gesture::SingleClick(RemoteButton::Up),
+        ]);
+        for expected in [RemoteButton::Ok, RemoteButton::Up] {
+            match rx.recv().expect("button event") {
+                RemoteEvent::Button {
+                    button,
+                    action,
+                    error,
+                    ..
+                } => {
+                    assert_eq!(button, expected);
+                    assert!(action.is_some());
+                    assert!(
+                        error.is_none(),
+                        "suppressed dispatch must not report a missing uinput keyboard"
+                    );
+                }
+                other => panic!("unexpected event: {other:?}"),
+            }
         }
     }
 

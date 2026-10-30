@@ -289,14 +289,16 @@ pub const RC003: DeviceProfile = DeviceProfile {
             button: RemoteButton::Right,
             key: "KEY_RIGHT",
         },
-        // Field-measured: the home key arrives as AC Home, not KEY_HOME.
+        // Linux HID maps the RC003 home usage (0x4A) to KEY_HOME and the
+        // application/menu usage (0x65) to KEY_COMPOSE; the evdev descriptor
+        // advertises both and neither KEY_HOMEPAGE nor KEY_MENU.
         ButtonKey {
             button: RemoteButton::Home,
-            key: "KEY_HOMEPAGE",
+            key: "KEY_HOME",
         },
         ButtonKey {
             button: RemoteButton::Menu,
-            key: "KEY_MENU",
+            key: "KEY_COMPOSE",
         },
         // Field-measured: the TV key arrives as grave/tilde.
         ButtonKey {
@@ -363,7 +365,7 @@ mod tests {
         }
         assert_eq!(RC003.primary_key(RemoteButton::Voice), Some("KEY_F5"));
         assert_eq!(RC003.primary_key(RemoteButton::Tv), Some("KEY_GRAVE"));
-        assert_eq!(RC003.primary_key(RemoteButton::Home), Some("KEY_HOMEPAGE"));
+        assert_eq!(RC003.primary_key(RemoteButton::Home), Some("KEY_HOME"));
         assert_eq!(
             RC003.key_names(RemoteButton::Ok).collect::<Vec<_>>(),
             vec!["KEY_ENTER", "KEY_KPENTER"]

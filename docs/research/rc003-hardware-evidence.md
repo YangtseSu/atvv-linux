@@ -371,3 +371,26 @@ for the run and restarted afterwards.
   press or an evdevil-based emitter for consumer-key checks.
 - fcitx rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit; edit the
   file while fcitx is stopped or the change can be overwritten.
+
+## Test-mode capture and Home/Menu map (2026-10-31)
+
+Same RC003 (`C0:5D:39:F8:2D:4C`, `hci0`) with the workspace `atvvd` and
+`atvv-config` real-device test. The installed unit was stopped for the run
+and restarted afterwards.
+
+- `evtest /dev/input/event25` descriptor: `KEY_HOME` (102) and `KEY_COMPOSE`
+  (127) are advertised; `KEY_HOMEPAGE` and `KEY_MENU` are not. The profile now
+  maps the home usage (0x4A) to `KEY_HOME` and the application/menu usage
+  (0x65) to `KEY_COMPOSE`. Earlier `KEY_HOMEPAGE`/`KEY_MENU` assumptions never
+  matched the Linux HID node.
+- Test mode (`BeginCapture` plus `ButtonEvent`) observed all thirteen physical
+  keys: Power, OK, Voice, Up, Right, Left, Down, Back, Home, Volume up,
+  Volume down, Menu, and TV. The voice result was
+  `Voice · single → Microphone key (not remappable)`.
+- `test_active=true` after pressing OK, and `wpctl get-volume` stayed at
+  `0.37` across the volume presses. Capture now suppresses automatic
+  key/chord emission, `exec:`, `dictation:`, synthetic voice-trigger emission,
+  and voice-session start/stop; `RunAction` remains the explicit execution
+  path. Release edges are forwarded so the GUI clears the pressed highlight.
+- The first run with the old profile showed Up/Right/Left/Down/OK/Volume/Back/
+  TV/Power/Voice but no Home/Menu; the profile correction is the fix.

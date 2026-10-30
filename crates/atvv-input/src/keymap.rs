@@ -272,7 +272,8 @@ mod tests {
         let map = KeyMap::from_profile(&RC003).unwrap();
         assert_eq!(map.button(Key::KEY_F5), Some(RemoteButton::Voice));
         assert_eq!(map.button(Key::KEY_GRAVE), Some(RemoteButton::Tv));
-        assert_eq!(map.button(Key::KEY_HOMEPAGE), Some(RemoteButton::Home));
+        assert_eq!(map.button(Key::KEY_HOME), Some(RemoteButton::Home));
+        assert_eq!(map.button(Key::KEY_COMPOSE), Some(RemoteButton::Menu));
         assert_eq!(map.button(Key::KEY_ENTER), Some(RemoteButton::Ok));
         assert_eq!(map.button(Key::KEY_KPENTER), Some(RemoteButton::Ok));
         assert_eq!(map.button(Key::KEY_BACK), Some(RemoteButton::Back));

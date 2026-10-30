@@ -26,10 +26,17 @@ struct Hotspot {
     height: f64,
 }
 
-const HOTSPOTS: [Hotspot; 12] = [
+const HOTSPOTS: [Hotspot; 13] = [
     Hotspot {
         button: RemoteButton::Power,
         x: 0.275,
+        y: 0.060976,
+        width: 0.15,
+        height: 0.058537,
+    },
+    Hotspot {
+        button: RemoteButton::Voice,
+        x: 0.575,
         y: 0.060976,
         width: 0.15,
         height: 0.058537,
@@ -113,8 +120,9 @@ const HOTSPOTS: [Hotspot; 12] = [
     },
 ];
 
-const HOTSPOT_CSS: [&str; 12] = [
+const HOTSPOT_CSS: [&str; 13] = [
     "hotspot-power",
+    "hotspot-voice",
     "hotspot-tv",
     "hotspot-up",
     "hotspot-down",
@@ -189,10 +197,15 @@ impl RemoteDiagram {
         let mut buttons = BTreeMap::new();
         for (index, hotspot) in HOTSPOTS.iter().enumerate() {
             let label = button_label(hotspot.button);
+            let tooltip = if hotspot.button == RemoteButton::Voice {
+                "Voice key: drives the ATVV microphone and is not remappable".to_string()
+            } else {
+                format!("{label}: click to edit")
+            };
             let button = gtk::Button::builder()
                 .has_frame(false)
                 .focusable(true)
-                .tooltip_text(format!("{label}: click to edit"))
+                .tooltip_text(tooltip)
                 .build();
             button.add_css_class("remote-hotspot");
             button.add_css_class(HOTSPOT_CSS[index]);
@@ -268,18 +281,25 @@ impl RemoteDiagram {
     pub fn refresh(&self, model: &crate::model::GuiModel, pressed: Option<RemoteButton>) {
         let conflicts = model.conflicts();
         for (button, widget) in &self.buttons {
-            for class in ["selected", "bound", "unbound", "conflict", "pressed"] {
+            for class in [
+                "selected", "bound", "unbound", "conflict", "pressed", "voice",
+            ] {
                 widget.remove_css_class(class);
             }
-            if *button == model.selected {
-                widget.add_css_class("selected");
-            }
-            if conflicts.contains(button) {
-                widget.add_css_class("conflict");
-            } else if model.is_bound(*button) {
-                widget.add_css_class("bound");
+            let editable = *button != RemoteButton::Voice;
+            if editable {
+                if *button == model.selected {
+                    widget.add_css_class("selected");
+                }
+                if conflicts.contains(button) {
+                    widget.add_css_class("conflict");
+                } else if model.is_bound(*button) {
+                    widget.add_css_class("bound");
+                } else {
+                    widget.add_css_class("unbound");
+                }
             } else {
-                widget.add_css_class("unbound");
+                widget.add_css_class("voice");
             }
             if pressed == Some(*button) {
                 widget.add_css_class("pressed");
@@ -287,7 +307,9 @@ impl RemoteDiagram {
             widget.update_property(&[gtk::accessible::Property::Label(&format!(
                 "{} key{}",
                 button_label(*button),
-                if conflicts.contains(button) {
+                if !editable {
+                    ", not remappable"
+                } else if conflicts.contains(button) {
                     ", conflicting action"
                 } else {
                     ""
@@ -326,6 +348,7 @@ mod tests {
         for button in RemoteButton::LOGICAL {
             assert!(seen.contains(&button), "{button} has no hotspot");
         }
-        assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
+        assert!(seen.contains(&RemoteButton::Voice));
+        assert_eq!(seen.len(), RemoteButton::LOGICAL.len() + 1);
     }
 }

@@ -30,7 +30,7 @@ const CSS: &str = r#"
 .remote-hotspot {
   background: transparent;
   border: 1.5px solid transparent;
-  border-radius: 10px;
+  border-radius: 999px;
   box-shadow: none;
   padding: 0;
   min-width: 0;
@@ -51,6 +51,10 @@ const CSS: &str = r#"
   border-style: dashed;
   border-color: alpha(currentColor, 0.32);
 }
+.remote-hotspot.voice {
+  border-style: dotted;
+  border-color: alpha(currentColor, 0.30);
+}
 .remote-hotspot.selected {
   background: alpha(@accent_bg_color, 0.38);
   border: 2px solid @accent_color;
@@ -61,8 +65,13 @@ const CSS: &str = r#"
   border-color: @warning_color;
 }
 .remote-hotspot.pressed {
-  background: alpha(@accent_bg_color, 0.52);
-  border-color: @accent_color;
+  background: alpha(@accent_bg_color, 0.62);
+  border: 2px solid @accent_color;
+  box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
+}
+.remote-hotspot.voice.pressed {
+  background: alpha(@accent_bg_color, 0.62);
+  border: 2px solid @accent_color;
 }
 label.error {
   color: @error_color;
@@ -88,7 +97,6 @@ pub fn install_css() {
 
 /// Start the application.
 pub fn run() -> glib::ExitCode {
-    install_css();
     let app = adw::Application::builder().application_id(APP_ID).build();
     let quit = gio::SimpleAction::new("quit", None);
     let weak = app.downgrade();
@@ -100,6 +108,9 @@ pub fn run() -> glib::ExitCode {
     app.add_action(&quit);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
     app.connect_activate(|app| {
+        // GTK/GDK must be initialized before a display exists; installing the
+        // stylesheet here is what makes the hotspot states render.
+        install_css();
         apply_color_scheme_override();
         let window = build_window(Some(app), Backend::start(None));
         window.window().present();
@@ -594,6 +605,10 @@ impl AppWindow {
     }
 
     fn select_button(&self, button: RemoteButton) {
+        if button == RemoteButton::Voice {
+            self.toast("The voice key drives the ATVV microphone and is not remappable.");
+            return;
+        }
         if let Some(model) = self.model.borrow_mut().as_mut() {
             model.selected = button;
         }
@@ -668,6 +683,13 @@ impl AppWindow {
         match self.capture_mode.get() {
             CaptureMode::Learn => {
                 if event.pressed {
+                    if button == RemoteButton::Voice {
+                        self.force_capture_off();
+                        self.toast(
+                            "The voice key drives the ATVV microphone and is not remappable.",
+                        );
+                        return;
+                    }
                     if let Some(model) = self.model.borrow_mut().as_mut() {
                         model.selected = button;
                     }
@@ -684,19 +706,27 @@ impl AppWindow {
             CaptureMode::Test => {
                 if event.pressed {
                     self.pressed.set(Some(button));
-                    let action = self
-                        .model
-                        .borrow()
-                        .as_ref()
-                        .and_then(|model| model.action_for_event(button, &event.trigger));
-                    let shown = action.clone().unwrap_or_else(|| "No action".to_string());
+                    let action = if button == RemoteButton::Voice {
+                        None
+                    } else {
+                        self.model
+                            .borrow()
+                            .as_ref()
+                            .and_then(|model| model.action_for_event(button, &event.trigger))
+                    };
+                    let shown = if button == RemoteButton::Voice {
+                        "Microphone key (not remappable)".to_string()
+                    } else {
+                        action.clone().unwrap_or_else(|| "No action".to_string())
+                    };
                     self.test_result_row.set_subtitle(&format!(
                         "{} · {} → {}",
                         button_label(button),
                         event.trigger,
                         shown
                     ));
-                    let runnable = action.as_deref().is_some_and(|value| value != "none");
+                    let runnable = button != RemoteButton::Voice
+                        && action.as_deref().is_some_and(|value| value != "none");
                     *self.last_action.borrow_mut() = action;
                     self.run_once_button.set_sensitive(runnable);
                 } else {

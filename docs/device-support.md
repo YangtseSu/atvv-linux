@@ -26,8 +26,10 @@ are pending operator actions).
 - 300 ms post-stop discard and an `AUDIO_STOP` echo that must not cause a
   second `MIC_CLOSE`.
 - Buttons arrive as a HID keyboard; the voice key is `KEY_F5` and is grabbed so
-  it cannot reach the focused application. Home is `KEY_HOMEPAGE`, TV is
-  `KEY_GRAVE` on the measured firmware.
+  it cannot reach the focused application. Home is `KEY_HOME`, the
+  application/menu key is `KEY_COMPOSE`, and TV is `KEY_GRAVE` on the measured
+  firmware. The HID descriptor advertises `KEY_HOME` and `KEY_COMPOSE`, not
+  `KEY_HOMEPAGE`/`KEY_MENU`.
 
 ## Adding a device
 

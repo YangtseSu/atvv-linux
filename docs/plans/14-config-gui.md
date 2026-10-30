@@ -215,5 +215,12 @@ Manual:
   test now asserts the overlay and every hotspot have a real allocation.
 - 2026-10-31 — rebuilt `0.1.0-7` with the click fix. The packaged
   `atvv-config` selected `Back` (`KEY_BACK`) when clicked under Xvfb, so the
-  staged binary has the working hit areas. Physical Test-mode press remains
-  the only open item.
+  staged binary has the working hit areas.
+- 2026-10-31 — test-mode fixes verified on the RC003: capture now suppresses
+  mapped keys, exec, dictation, the synthetic voice trigger, and voice-session
+  start/stop; voice edges and release edges are forwarded as `ButtonEvent`.
+  All thirteen keys were observed; OK did not exit Test mode; system volume
+  stayed unchanged. `KEY_HOME`/`KEY_COMPOSE` replace the old
+  `KEY_HOMEPAGE`/`KEY_MENU` home/menu mapping. The CSS provider is installed
+  after GTK init, so the selected/pressed SVG regions render; the voice key has
+  a non-editable hotspot and a fixed-key note.

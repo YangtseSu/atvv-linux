@@ -59,7 +59,36 @@ fn window_smoke() {
             .expect("hotspot bound");
         assert!(bounds.width() > 0.0 && bounds.height() > 0.0);
     }
-    assert!(window.diagram().button(RemoteButton::Voice).is_none());
+    let voice = window
+        .diagram()
+        .button(RemoteButton::Voice)
+        .expect("voice hotspot");
+    assert!(voice.width() > 0 && voice.height() > 0);
+    let selected_before = window.selected();
+    voice.emit_clicked();
+    assert_eq!(
+        window.selected(),
+        selected_before,
+        "the voice key must not become the selected mapping"
+    );
+
+    let model = GuiModel::new(window.document().expect("document")).expect("model");
+    window.diagram().refresh(&model, Some(RemoteButton::Power));
+    assert!(
+        window
+            .diagram()
+            .button(RemoteButton::Power)
+            .unwrap()
+            .has_css_class("pressed")
+    );
+    window.diagram().refresh(&model, None);
+    assert!(
+        !window
+            .diagram()
+            .button(RemoteButton::Power)
+            .unwrap()
+            .has_css_class("pressed")
+    );
 
     window
         .diagram()

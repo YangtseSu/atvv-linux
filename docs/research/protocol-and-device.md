@@ -199,8 +199,10 @@ audio.position   = [ MONO ]
   (`fan-tastic-z/sayall-omarchy@4d10971`, `sayall-hid/src/device.rs`): voice
   `KEY_F5`, TV `KEY_GRAVE`, power `KEY_POWER`, OK `KEY_ENTER`/`KEY_KPENTER`,
   back `KEY_BACK`/`KEY_ESC`, directions `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/
-  `KEY_RIGHT`, home `KEY_HOMEPAGE` (AC Home, not `KEY_HOME`), menu `KEY_MENU`,
-  volume `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN`. The voice key is grabbed so F5 cannot
+  `KEY_RIGHT`, home `KEY_HOME`, application/menu `KEY_COMPOSE`, volume
+  `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN`. The 2026-10-31 evdev descriptor on
+  `/dev/input/event25` advertises `KEY_HOME` (102) and `KEY_COMPOSE` (127), not
+  `KEY_HOMEPAGE`/`KEY_MENU`. The voice key is grabbed so F5 cannot
   reload a browser, but it drives ATVV, not the normal action map.
 - uinput must register every keycode the action map can emit. Tap is a press
   frame plus release frame; hold-to-talk needs separate press/release.
