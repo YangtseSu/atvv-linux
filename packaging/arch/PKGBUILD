@@ -2,7 +2,7 @@
 
 pkgname=atvv-linux
 pkgver=0.1.0
-pkgrel=5
+pkgrel=6
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/YangtseSu/atvv-linux"
@@ -10,7 +10,15 @@ license=('GPL-3.0-or-later')
 depends=('pipewire' 'bluez' 'dbus')
 makedepends=('clang' 'pkgconf' 'rust')
 source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('a1745ce7c974ed4e31679222afaa8d33a368873b89edd59b727012da2b8e259b')
+sha256sums=('693464fb202a0870af21e08226acfd3a757ed78c777651ad6debb310d6440589')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  # The deterministic source tarball uses fixed (epoch) mtimes. A target/
+  # directory left by a previous build would make Cargo treat changed sources
+  # as fresh, so packaging must start from a clean build tree.
+  rm -rf target
+}
 
 build() {
   cd "$pkgname-$pkgver"

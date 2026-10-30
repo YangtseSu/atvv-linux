@@ -76,6 +76,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `atvv.recording_keys="DICTATE,VOICECOMMAND,ASSISTANT"`, and
   `atvvctl doctor` reports `properties ok` and `contract ok`. The previous
   `0.1.0-4` package predated the contract output.
+- **0.1.0-6 package (built, not installed)**: the step-13 tree produced
+  `atvv-linux 0.1.0-6` (6.2 MiB; package sha256
+  `5717585d93f5efa282232dc14f6773dbec39cf2b32c80b69280d6f3586286f81`)
+  with the source tarball sha256
+  `693464fb202a0870af21e08226acfd3a757ed78c777651ad6debb310d6440589`.
+  `makepkg -f` runs the release workspace tests and installs the three
+  binaries, user unit, udev rule, modules-load file, man pages for `config`/
+  `capture`/`map`, completions, README, device-support matrix, and licenses.
+  The PKGBUILD now cleans `target/` in `prepare()`: the deterministic source
+  tarball uses epoch mtimes, so a reused `src/.../target` could otherwise make
+  Cargo package stale artifacts. `namcap` only reports the expected implicit
+  glibc/libgcc/libpipewire and runtime-service (`pipewire`, `bluez`) notes.
 - **11 evdevil input backend (complete)**: `atvv-input` now uses `evdevil`
   0.5.0 (`Key`, `Evdev`, `EventReader`, `UinputDevice`) instead of `evdev`
   0.13.2; 0BSD added to `deny.toml`; discovery skips unreadable/vanished
@@ -327,6 +339,14 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `atvv-linux 0.1.0-5` (5.9 MiB) plus a debug package; package sha256
   `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`.
   Installed on 2026-10-31; the unit restarted and reports the contract.
+- 2026-10-31 `./packaging/arch/make-source.sh` from the step-13 commit
+  (`660efca`) → source tarball sha256
+  `693464fb202a0870af21e08226acfd3a757ed78c777651ad6debb310d6440589`;
+  `makepkg -f` → `atvv-linux 0.1.0-6` (6.2 MiB) plus a debug package;
+  package sha256
+  `5717585d93f5efa282232dc14f6773dbec39cf2b32c80b69280d6f3586286f81`.
+  Not installed. The packaged `atvvctl --version` is `0.1.0`; the new
+  `config get|set`, `capture`, and `map test` help and man pages are present.
 - 2026-10-31 step 13 verification: `cargo test --workspace` →
   144 passed, 3 ignored; `cargo test -p atvv-input -- --ignored
   --test-threads=1` → 2 passed; `cargo test -p atvv-daemon --lib --
@@ -349,8 +369,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 test; the fake-remote live-map test proves a map change reaches the running
 input runtime without a daemon restart. See `docs/configuration.md` and
 `docs/plans/13-keymap-config.md`. `atvv-linux 0.1.0-5` remains installed and
-active (it predates step 13, so the new commands are available from a workspace
-build, not the installed binary yet).
+active; the step-13 tree is built as `atvv-linux 0.1.0-6` in
+`packaging/arch/` but is not installed. Install it with `pacman -U` when the
+new commands should be available system-wide.
 
 **Step 14 GTK4/libadwaita GUI is next.** It depends on step 13 and reads
 `docs/plans/14-config-gui.md`; the toolkit decision is ADR 0008. The GUI is a

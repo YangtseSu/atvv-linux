@@ -9,10 +9,12 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–09 and 11–13 are complete.** The package is installed, the user
-unit runs, and `atvvctl doctor` reports green on a real RC003. Step 10 (vinput
-zero-config) depends on an upstream consumer change; step 14 (GTK4
-configuration app) is next.
+**Steps 01–09 and 11–13 are complete.** The installed package is
+`atvv-linux 0.1.0-5`, the user unit runs, and `atvvctl doctor` reports green
+on a real RC003. The step-13 tree builds as `atvv-linux 0.1.0-6`; install it
+to get `atvvctl config`, `capture`, and `map`. Step 10 (vinput zero-config)
+depends on an upstream consumer change; step 14 (GTK4 configuration app) is
+next.
 
 The RC003 path and the fcitx5-vinput source path have both run on real system
 services.
