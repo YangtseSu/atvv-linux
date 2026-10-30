@@ -184,8 +184,8 @@ Manual:
   added desktop entry, AppStream metadata, scalable icon, `docs/gui.md`, an
   embedded remote asset, and the dark/light theme check.
 - 2026-10-31 — `makepkg -f` produced `atvv-linux 0.1.0-7` (6.2 MiB, sha256
-  `6429d065…e01699`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
-  `5e1c5834…b0691`) from source tarball `04ef3e3f…ea4105`. The base package
+  `bbb82452…2dea233`) and `atvv-linux-gui 0.1.0-7` (1.3 MiB, sha256
+  `01551ac6…ebdbb27`) from source tarball `46154660…97b2fa`. The base package
   still depends only on `pipewire`, `bluez`, and `dbus`; the GUI package adds
   `gtk4`, `libadwaita`, `librsvg`, and `atvv-linux`. Extracted packages were
   run under Xvfb with `atvvd --mock`; the packaged `atvv-config` renders the
@@ -213,3 +213,7 @@ Manual:
   surface, a 220×564 initial request, and a tick-based re-layout on size
   changes. XTest clicks selected all twelve hotspots in order; the UI smoke
   test now asserts the overlay and every hotspot have a real allocation.
+- 2026-10-31 — rebuilt `0.1.0-7` with the click fix. The packaged
+  `atvv-config` selected `Back` (`KEY_BACK`) when clicked under Xvfb, so the
+  staged binary has the working hit areas. Physical Test-mode press remains
+  the only open item.

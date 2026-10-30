@@ -114,12 +114,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
 - **0.1.0-7 packages (built, staged, not installed)**: the step-14 tree
-  (`9f26f68`) produced the split `atvv-linux 0.1.0-7` (6.2 MiB; package
-  sha256 `6429d0658fe41acaa345af7221e3f6f1b921302cc97933da4521c31d29e01699`)
+  (`a7fabbc`) produced the split `atvv-linux 0.1.0-7` (6.2 MiB; package
+  sha256 `bbb824524f4957af08b3db45177aa67a2f7da13d4fb68851a9636910a2dea233`)
   and `atvv-linux-gui 0.1.0-7` (1.3 MiB; package sha256
-  `5e1c5834e4c71bcf406a33b0814ecb66a92f3c762a83bfd27af881348b0b0691`) from
+  `01551ac6d0aeae644f342d06d2a92486fb8bc7868b7a4b1f263c775f5ebdbb27`) from
   source tarball sha256
-  `04ef3e3f5eb40a1927ba4fab5fc676079d13d46eba087c6de5496438b9ea4105`.
+  `46154660c8c13c9eb3b7de2ce0bb0ead7cd4431828e5f2d14dbc49e86597b2fa`.
   The base package keeps `pipewire`/`bluez`/`dbus` dependencies and the GUI
   package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux`. The packaged
   `atvv-config` launches under Xvfb with the packaged `atvvd --mock` and
@@ -128,8 +128,8 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `namcap` reports only the expected implicit
   libraries and runtime-service notes. `pacman -U` needs the operator's
   password, so the packages are not installed; `atvv-linux 0.1.0-6` remains
-  active. The later hotspot hit-testing fix is not in these packages; rebuild
-  after the layout direction is settled.
+  active. The packages include the pointer-click fix; a staged
+  `atvv-config` click selected `Back` (`KEY_BACK`) under Xvfb.
 - **14 configuration GUI (implemented; physical test-mode press pending)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
   embedded SVG remote diagram matching the RC003 layout (power/voice at the
