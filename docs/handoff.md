@@ -65,6 +65,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   started `/usr/bin/atvvd`, `atvvctl doctor` was all green, and the end-to-end
   fcitx text commit was operator-confirmed. Completed record:
   `docs/acceptance/rc003-2026-10-30.md`.
+- **0.1.0-4 package (built, install pending)**: a deterministic source
+  tarball from `d6a09b0` (sha256
+  `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`) and
+  `makepkg -f` produced `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package. Root installation is pending the operator. The installed
+  `0.1.0-3` service is stopped because its `evdev` key table rejects
+  `trigger_key = "DICTATE"`; the `0.1.0-4` binary accepts the live config.
 - **11 evdevil input backend (complete)**: `atvv-input` now uses `evdevil`
   0.5.0 (`Key`, `Evdev`, `EventReader`, `UinputDevice`) instead of `evdev`
   0.13.2; 0BSD added to `deny.toml`; discovery skips unreadable/vanished
@@ -82,9 +88,10 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `AddTriggerKey` and automatic device selection remain. Until then, the
   one-time `vinput device use` step remains. The daemon default trigger is now
   `DICTATE` (step 11); vinput keeps the user's `[TriggerKey]` entries and adds
-  `2=Dictate`. The live installed `0.1.0-3` unit still reads
-  `trigger_key = "ASSISTANT"` from `~/.config/atvv/daemon.toml` until the new
-  build is installed. See `docs/plans/10-vinput-zero-config.md`.
+  `2=Dictate`. The live `daemon.toml` already sets
+  `trigger_key = "DICTATE"`; the stopped service will accept it once
+  `0.1.0-4` is installed. See
+  `docs/plans/10-vinput-zero-config.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -183,6 +190,10 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 - `makepkg -f` in `packaging/arch` → `atvv-linux 0.1.0-1` (5.8 MiB) plus a
   debug package; after the connect fix, rebuilt `atvv-linux 0.1.0-2`, and
   after the F24 change, `atvv-linux 0.1.0-3`.
+- 2026-10-30 `makepkg -f` with the step-11 source at `d6a09b0` →
+  `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package; source checksum
+  `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`.
+  Root install is pending the operator; `pkexec` was dismissed.
   Contents: three binaries, user unit, udev rule, modules-load, 24 man pages,
   bash/zsh/fish completions, LICENSE, third-party notices, README,
   device-support matrix.
@@ -243,9 +254,17 @@ recording. See
 **10 vinput-zero-config remains** (in progress): upstream
 `SetCaptureDevice` / `AddTriggerKey` and automatic device selection remain;
 the manual `vinput device use atvv-miremote-rc003` step is still needed.
-vinput keeps the user's entries and adds `2=Dictate`. The installed
-`0.1.0-3` unit still uses `trigger_key = "ASSISTANT"` from the live config
-until the new build is installed. See
+vinput keeps the user's entries and adds `2=Dictate`. The live config already
+sets `trigger_key = "DICTATE"`. The next action is the operator install:
+
+```sh
+sudo pacman -U packaging/arch/atvv-linux-0.1.0-4-x86_64.pkg.tar.zst
+systemctl --user start atvvd
+atvvctl doctor
+```
+
+The installed `0.1.0-3` service is stopped because it cannot parse
+`DICTATE`; `0.1.0-4` is built and accepts the live config. See
 [`docs/plans/10-vinput-zero-config.md`](plans/10-vinput-zero-config.md).
 
 ## Commands

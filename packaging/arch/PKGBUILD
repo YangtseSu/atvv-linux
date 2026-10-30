@@ -2,7 +2,7 @@
 
 pkgname=atvv-linux
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/YangtseSu/atvv-linux"
@@ -10,7 +10,7 @@ license=('GPL-3.0-or-later')
 depends=('pipewire' 'bluez' 'dbus')
 makedepends=('clang' 'pkgconf' 'rust')
 source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('b36c45491fb43997abf5890b1181aed4583f1319360b1d25c91f9ab1a3547b20')
+sha256sums=('e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c')
 
 build() {
   cd "$pkgname-$pkgver"
