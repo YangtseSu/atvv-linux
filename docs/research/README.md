@@ -16,6 +16,9 @@ not a second plan and it does not override `docs/plans/`.
   `KEY_ASSISTANT`, and `KEY_DICTATE`: kernel/XKB/fcitx5 names, desktop usage,
   the `DICTATE` trigger default, `evdev`/`evdevil` support, and the deferred
   context-dependent mapping.
+- [`vinput-upstream-api.md`](vinput-upstream-api.md) — fcitx5-vinput
+  `bd7dd4365` D-Bus surface, capture-device ownership, addon-owned trigger
+  keys, the external-start focus gap, and the resulting upstream PR list.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -46,6 +49,7 @@ not a second plan and it does not override `docs/plans/`.
 | 07 RC003 hardware | `protocol-and-device.md` §2–§5, `reference-projects.md`, `rc003-hardware-evidence.md` |
 | 08 fcitx/MCP | `protocol-and-device.md` §8, `landscape.md` §6, `rc003-hardware-evidence.md` §Step 08 |
 | 09 packaging | `reference-projects.md` §License boundaries, `landscape.md` §4 |
+| 10 vinput zero-config | `vinput-upstream-api.md`, `protocol-and-device.md` §8 |
 | 11 input backend | `consumer-keys.md`, `reference-projects.md` §License boundaries |
 
 ## Current deltas after the research snapshot
@@ -83,6 +87,14 @@ implementation direction:
   (`VoiceCommand`, `Assistant`, `Dictate`) remain distinct. See
   [`consumer-keys.md`](consumer-keys.md) and
   [`../decisions/0006-evdevil-input-backend.md`](../decisions/0006-evdevil-input-backend.md).
+- **vinput upstream API.** A 2026-10-30 source review of fcitx5-vinput
+  `bd7dd4365` reduced step 10's upstream scope: the daemon has no
+  capture-device API, trigger keys are addon-owned, and an external
+  `StartRecording` can resolve a stale input context. The required upstream
+  changes are a capture-device D-Bus API and an addon focus fallback; an
+  `AddTriggerKey` daemon method is not viable and D-Bus mode is the
+  zero-config trigger path. See
+  [`vinput-upstream-api.md`](vinput-upstream-api.md).
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens
   `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input

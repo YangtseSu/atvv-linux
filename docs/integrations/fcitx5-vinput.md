@@ -33,13 +33,13 @@ outputs silence while the remote is idle.
    atvvctl doctor
    ```
 
-3. Select it in vinput, by name, and restart `vinput-daemon` if the device list
-   was cached:
+3. Select it in vinput, by name. The daemon re-reads the capture device at the
+   start of every recording, so the next recording uses it; no daemon restart
+   is needed:
 
    ```sh
    vinput device list
    vinput device use atvv-miremote-rc003
-   systemctl --user restart vinput-daemon
    vinput device list             # atvv-miremote-rc003 is marked active
    ```
 
@@ -154,9 +154,12 @@ and by `atvvctl doctor`. The trigger key is not synthesized in this mode, so
 the same key must not be bound in both places.
 
 Use D-Bus mode when the trigger key conflicts with an application binding, or
-when the compositor/IME path cannot see the virtual keyboard. fcitx5-vinput's
-external trigger uses the last active input context; trigger-key mode is more
-reliable when focus changes.
+when the compositor/IME path cannot see the virtual keyboard. External
+`StartRecording` resolves the addon's input context from its last key event,
+so a mouse-only focus change before the next key press can target a stale
+context; trigger-key mode does not have that problem. The upstream focus
+fallback (`mostRecentInputContext`) is pending; see
+[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
 
 ## Verification without a deadline
 
@@ -166,7 +169,6 @@ be at the machine; there is no countdown and no window to miss.
 ```sh
 atvvd --verbose
 vinput device use atvv-miremote-rc003
-systemctl --user restart vinput-daemon
 vinput device list                    # atvv-miremote-rc003 is active
 atvvctl monitor                       # prints voice started/stopped
 vinput daemon status                  # "recording" while the key is held
@@ -218,7 +220,7 @@ edges, `atvvctl mic`, D-Bus, or MCP.
 | Symptom | Check |
 |---|---|
 | Source missing | `atvvctl status`, `pw-cli info atvv-miremote-rc003`, `atvvctl doctor` |
-| Device not in `vinput device list` | restart `vinput-daemon` after the source exists |
+| Device not in `vinput device list` | the source must exist in PipeWire; the daemon re-reads `global.capture_device` at each recording, so a daemon restart is not needed |
 | Trigger does nothing | `atvvctl doctor` → `vinput` and `uinput` lines; `input = false` disables the key path. Ensure `[TriggerKey]` contains `2=Dictate` (or another configured key) and `trigger_key` matches; a commented section disables the trigger. |
 | Recording but silence | hold the key; `atvvctl status` must show `streaming`; the key gates RC003 frames |
 | F5 still leaks | the RC003 evdev node is not grabbed; check `input.grabbed` in status |

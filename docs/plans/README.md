@@ -124,12 +124,17 @@ records the ATVV source at 16 kHz. The completed record is
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily.
 
-Step 10 is in progress. The upstream `SetCaptureDevice`/`AddTriggerKey`
-work, automatic device selection that preserves an explicit choice, and the
-remaining manual `vinput device use` step are still open. The daemon trigger
-default was changed by step 11: it is now `DICTATE` (`KEY_DICTATE`), not `F24`.
-`F24` remains available as an explicit `trigger_key`, and vinput keeps the
-user's existing `[TriggerKey]` entries and adds `2=Dictate`.
+Step 10 is in progress. The upstream work is now two PRs: a capture-device
+`GetCaptureDevice`/`SetCaptureDevice` API and an addon focus fallback for
+external `StartRecording`. The earlier `AddTriggerKey` daemon request is not
+viable (trigger keys are addon-owned); D-Bus mode is the zero-config trigger
+path, with trigger mode kept as the manual push-to-talk fallback. Automatic
+device selection that preserves an explicit choice and the remaining manual
+`vinput device use` step are still open. The daemon trigger default was
+changed by step 11: it is now `DICTATE` (`KEY_DICTATE`), not `F24`. `F24`
+remains available as an explicit `trigger_key`, and vinput keeps the user's
+existing `[TriggerKey]` entries and adds `2=Dictate`. Evidence:
+[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
 
 Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
 `evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and

@@ -257,16 +257,17 @@ Status:     idle | recording | inferring | postprocessing | error
 Integration rules:
 
 - fcitx captures 16 kHz mono S16LE. Select the source by name, for example
-  `vinput device use atvv-<id>`, then restart `vinput-daemon` if its
-  configuration requires it.
+  `vinput device use atvv-<id>`. The daemon re-reads `global.capture_device`
+  at every recording, so no daemon restart is needed.
 - Default trigger is `Alt_R`; tap toggles and hold is push-to-talk. The daemon
   can grab the RC003 voice key and synthesize the configured trigger key on
   press/release. This preserves fcitx's input-context path.
 - D-Bus `StartRecording`/`StopRecording` is a fallback. The fcitx addon's
-  external trigger uses the last active input context and can be less reliable
-  when no context is active.
-- `StopRecording` takes the `scene_id` returned by the start flow; do not
-  invent an empty id if the API returns one.
+  external trigger resolves the last active input context; a focus change with
+  no key event can leave it stale until the upstream focus fallback lands.
+- `StartRecording` returns nothing. An empty `StopRecording` scene id is valid
+  and resolves to the configured active scene; do not require an id the start
+  flow does not provide.
 - Warm stream: fcitx may keep a bounded inactive capture stream. Do not use
   consumer presence as the mic gate; open/close the remote mic from ATVV
   events. The source itself remains resident.

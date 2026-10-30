@@ -84,14 +84,19 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **10 vinput zero-config (in progress)**: upstream `SetCaptureDevice` /
-  `AddTriggerKey` and automatic device selection remain. Until then, the
-  one-time `vinput device use` step remains. The daemon default trigger is now
-  `DICTATE` (step 11); vinput keeps the user's `[TriggerKey]` entries and adds
-  `2=Dictate`. The live `daemon.toml` already sets
+- **10 vinput zero-config (in progress)**: the upstream scope is two PRs: a
+  capture-device `GetCaptureDevice`/`SetCaptureDevice` API and an addon
+  `mostRecentInputContext` focus fallback. The earlier `AddTriggerKey` daemon
+  request is dropped: trigger keys are addon-owned and fcitx's
+  `Controller1` `GetConfig`/`SetConfig` is the only legitimate live path.
+  D-Bus mode is the zero-config trigger path; trigger mode remains the manual
+  push-to-talk fallback. Automatic device selection that preserves an explicit
+  choice and the manual `vinput device use` step remain. vinput keeps the
+  user's entries and adds `2=Dictate`. The live `daemon.toml` already sets
   `trigger_key = "DICTATE"`; the stopped service will accept it once
   `0.1.0-4` is installed. See
-  `docs/plans/10-vinput-zero-config.md`.
+  `docs/plans/10-vinput-zero-config.md` and
+  `docs/research/vinput-upstream-api.md`.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -160,6 +165,12 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   explicit alternative.
 - fcitx5-vinput rewrites `~/.config/fcitx5/conf/vinput.conf` on addon exit;
   edit it while fcitx5 is stopped.
+- vinput upstream API: trigger keys are addon-owned; do not add
+  `AddTriggerKey` to `org.fcitx.Vinput`. The zero-config path is D-Bus mode
+  plus a capture-device API and an addon focus fallback. Trigger-key
+  management, if needed, goes through fcitx's `Controller1`
+  `GetConfig`/`SetConfig`. Evidence:
+  `docs/research/vinput-upstream-api.md`.
 
 ## Verified
 
@@ -256,11 +267,15 @@ recording. See
 [`docs/plans/11-input-evdevil.md`](plans/11-input-evdevil.md) and
 [ADR 0006](decisions/0006-evdevil-input-backend.md).
 
-**10 vinput-zero-config remains** (in progress): upstream
-`SetCaptureDevice` / `AddTriggerKey` and automatic device selection remain;
-the manual `vinput device use atvv-miremote-rc003` step is still needed.
-vinput keeps the user's entries and adds `2=Dictate`. The live config already
-sets `trigger_key = "DICTATE"`. The next action is the operator install:
+**10 vinput-zero-config remains** (in progress): the upstream source review
+reduced it to a capture-device D-Bus API and an addon focus fallback; an
+`AddTriggerKey` daemon method is not viable because the trigger list is
+addon-owned. D-Bus mode is the zero-config trigger path; trigger mode stays as
+the manual fallback. Automatic device selection that preserves an explicit
+choice and the manual `vinput device use atvv-miremote-rc003` step are still
+open. vinput keeps the user's entries and adds `2=Dictate`. The live config
+already sets `trigger_key = "DICTATE"`. The next action is the operator
+install:
 
 ```sh
 sudo pacman -U packaging/arch/atvv-linux-0.1.0-4-x86_64.pkg.tar.zst

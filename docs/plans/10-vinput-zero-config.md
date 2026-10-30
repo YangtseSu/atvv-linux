@@ -15,13 +15,18 @@ exists, adding one dedicated trigger entry is the only manual step.
 ## Current state
 
 - vinput discovers the resident `atvv-miremote-rc003` source, but the user must
-  run `vinput device use atvv-miremote-rc003` and restart `vinput-daemon`.
-- The selected device is `global.capture_device` in
+  run `vinput device use atvv-miremote-rc003`. The daemon re-reads
+  `global.capture_device` at every `StartRecordingInternal` and calls
+  `capture_->SetTargetObject`, so the next recording already uses the new
+  device; the CLI's "Restart daemon to apply changes" sentence is stale. The
+  selected device is `global.capture_device` in
   `~/.config/vinput/config.json`. `org.fcitx.Vinput.Service` has no
-  capture-device setter.
+  capture-device setter or getter.
 - The fcitx addon trigger key is `[TriggerKey]` in
-  `~/.config/fcitx5/conf/vinput.conf`. It is a multi-entry list; users commonly
-  change it and may keep several entries.
+  `~/.config/fcitx5/conf/vinput.conf`. It is a multi-entry list owned by the
+  addon; the daemon and `org.fcitx.Vinput` cannot change it. fcitx's
+  `org.fcitx.Fcitx.Controller1` `GetConfig`/`SetConfig` can apply an addon
+  config change live without a direct file write.
 - A bare synthetic `Alt_R` did not trigger fcitx5-vinput 2.4.2 on 2026-10-30.
   A dedicated regular key `F24` did, with the user's existing `0=` entry kept.
   The `Control+Control_R` chord also worked.
@@ -30,6 +35,14 @@ exists, adding one dedicated trigger entry is the only manual step.
   explicit alternative. The live installed `0.1.0-3` unit still reads
   `trigger_key = "ASSISTANT"` from the user's config until the new build is
   installed.
+- External `StartRecording` reaches the daemon correctly, but the addon
+  resolves its target input context from `last_active_ic_`, which is not
+  updated on focus-in. A mouse-only focus change before the next key press can
+  leave it stale. `fcitx::Instance::mostRecentInputContext()` is the correct
+  fallback.
+- `StopRecording("")` is a valid contract: `scene::Resolve` falls back to the
+  configured active scene. `StartRecording` does not return a scene id, and
+  external callers do not need one for dictation.
 
 ## Deliverables
 
@@ -39,15 +52,33 @@ exists, adding one dedicated trigger entry is the only manual step.
   assume a user shortcut.
 - ⬜ Keep the user's existing `[TriggerKey]` entries: document
   `2=Dictate` alongside `0=<user key>`; never replace the user's entry.
-- ⬜ Upstream proposal/PR to fcitx5-vinput:
-  - `SetCaptureDevice(s name)` (apply live; validate the PipeWire node) and
-    `GetCaptureDevice() -> s`.
-  - `AddTriggerKey(s key)` / `SetTriggerKey(s key)` or a dedicated
-    "ATVV trigger" that appends the configured key (`Dictate`) without
-    replacing user entries; apply without a daemon restart.
-  - `StartRecording() -> s` returning the scene id, or a documented empty-id
-    contract.
-  - Tests and documentation upstream.
+- ⬜ Upstream issue + PR A (required): capture-device API in fcitx5-vinput.
+  - Add `GetCaptureDevice() -> s` returning the raw
+    `global.capture_device` (`""` = unset, `"default"` = explicit system
+    default, otherwise a node name) and `SetCaptureDevice(s) -> ()` that
+    validates the node, persists the field, and calls
+    `AudioCapture::SetTargetObject` so the next recording uses it.
+  - Update `vinput device use`/`list` to call the API when the daemon is
+    running, fall back to the config file when it is not, and remove the
+    stale "Restart daemon to apply changes" text.
+  - Tests for the config update/validation path and the CLI fallback; docs for
+    the unset-vs-explicit contract.
+- ⬜ Upstream PR B (required for D-Bus mode): addon focus fallback.
+  - In `resolveFrontendInputContext`, prefer
+    `instance_->mostRecentInputContext()` over `last_active_ic_` so an
+    external `StartRecording` does not depend on a key event in the focused
+    context. fcitx 5.1.23 provides the method.
+- ⬜ Upstream PR C (optional, decide after A/B): trigger-key CLI using
+  fcitx's `org.fcitx.Fcitx.Controller1` `GetConfig`/`SetConfig` on
+  `fcitx://config/addon/vinput`. Append to `TriggerKey` without replacing
+  existing entries; `VinputEngine::setConfig` applies and saves live. File
+  only if trigger mode must be zero-config; D-Bus mode needs no trigger key.
+- Do not file `AddTriggerKey`/`SetTriggerKey` on `org.fcitx.Vinput`: the
+  daemon does not own the addon's `[TriggerKey]`, and an addon-side control
+  object contradicts ADR 0001's decoupled frontend. Do not file
+  `StartRecording() -> s`: empty scene ids already resolve to the active
+  scene; document that contract instead. Evidence:
+  [`../research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
 - ⬜ Daemon device selection over D-Bus only:
   - When the source appears, select `atvv-miremote-rc003` only if the user has
     not chosen another explicit device.
@@ -87,6 +118,9 @@ exists, adding one dedicated trigger entry is the only manual step.
   application's user configuration and would override a deliberate choice.
 - The ATVV source must not become the system default; other applications keep
   their microphone.
+- D-Bus mode is the zero-config path once the upstream device API and focus
+  fallback exist: no `[TriggerKey]` entry is needed. Trigger mode remains the
+  verified push-to-talk path and needs one manual entry per vinput user.
 - Device selection is the remaining hard blocker for true zero-config.
 
 ## Verification
@@ -127,10 +161,12 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 
 - Upstream may reject the API or choose a different shape; keep daemon
   integration behind a capability check.
-- A live `AddTriggerKey`/`SetCaptureDevice` may race with vinput's config or
-  source enumeration; retry after the source appears and after reconnect.
-- D-Bus mode's `StopRecording` scene-id contract is less certain than the
-  trigger path; test both.
+- A live `SetCaptureDevice` may race with vinput's config or source
+  enumeration; call it after the source appears and re-check after reconnect.
+  If a controller persists its own source and then stops, vinput may keep a
+  stale target; restore the previous raw value on shutdown or add a fallback.
+- D-Bus mode still needs an end-to-end real-device check with text commit; the
+  scene-id contract itself is resolved (empty means the active scene).
 - Auto-selection must not fight an explicit user choice or the system default.
 - Some keyboards/apps may bind `F24`; the key is configurable. `DICTATE` is
   semantically owned by dictation software, so a future app may claim it.
@@ -146,3 +182,13 @@ journalctl --user -u vinput-daemon     # target.object=atvv-miremote-rc003
 - 2026-10-30 — step 11 changed the code default to `DICTATE`; vinput keeps
   `0=Alt_R`, `1=Assistant` and adds `2=Dictate`. The same real press drove
   fcitx `Key(Dictate)` and vinput recording at 16 kHz.
+- 2026-10-30 — upstream source review (`xifan2333/fcitx5-vinput` `bd7dd4365`,
+  installed 2.4.2). The upstream scope is PR A (capture-device
+  `GetCaptureDevice`/`SetCaptureDevice` plus CLI live apply) and PR B (addon
+  `mostRecentInputContext` focus fallback). `device use` already applies on
+  the next recording, so the restart instruction is stale. Trigger keys are
+  addon-owned and cannot be changed by `org.fcitx.Vinput`; the trigger-key
+  option is a CLI over fcitx's `Controller1` `GetConfig`/`SetConfig`, not a
+  daemon method, and is deferred until D-Bus mode is re-evaluated. Empty
+  `StopRecording` scene ids already resolve to the active scene. Evidence:
+  [`../research/vinput-upstream-api.md`](../research/vinput-upstream-api.md).
