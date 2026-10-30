@@ -19,5 +19,7 @@ atvv-daemon = { path = "../atvv-daemon" }
 atvv-input = { path = "../atvv-input" }
 atvv-protocol = { path = "../atvv-protocol" }
 clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
 serde_json.workspace = true
 zbus.workspace = true

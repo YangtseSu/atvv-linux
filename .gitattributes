@@ -1,0 +1,3 @@
+# The Arch packaging directory is not part of the source tarball. This lets the
+# release checksum stay valid after the PKGBUILD itself is updated.
+packaging/arch export-ignore

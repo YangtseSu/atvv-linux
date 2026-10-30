@@ -1,0 +1,60 @@
+# Maintainer: Yangtse Su <yangtsesu@gmail.com>
+
+pkgname=atvv-linux
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/YangtseSu/atvv-linux"
+license=('GPL-3.0-or-later')
+depends=('pipewire' 'bluez' 'dbus')
+makedepends=('clang' 'pkgconf' 'rust')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname-$pkgver"
+  # --locked keeps the committed dependency graph; the crates are fetched from
+  # crates.io, so this is not --frozen/--offline.
+  cargo build --release --locked --workspace --bins
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  cargo test --workspace --release --locked
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+
+  install -Dm755 target/release/atvvd "$pkgdir/usr/bin/atvvd"
+  install -Dm755 target/release/atvvctl "$pkgdir/usr/bin/atvvctl"
+  install -Dm755 target/release/atvv-mcp "$pkgdir/usr/bin/atvv-mcp"
+
+  install -Dm644 packaging/systemd/atvvd.service \
+    "$pkgdir/usr/lib/systemd/user/atvvd.service"
+  install -Dm644 packaging/udev/70-atvv-linux.rules \
+    "$pkgdir/usr/lib/udev/rules.d/70-atvv-linux.rules"
+  install -Dm644 packaging/modules-load.d/atvv-linux.conf \
+    "$pkgdir/usr/lib/modules-load.d/atvv-linux.conf"
+
+  install -d "$pkgdir/usr/share/man/man1"
+  ./target/release/atvvctl manpages "$pkgdir/usr/share/man/man1"
+  install -m644 packaging/man/atvv-mcp.1 "$pkgdir/usr/share/man/man1/atvv-mcp.1"
+
+  install -d "$pkgdir/usr/share/bash-completion/completions"
+  ./target/release/atvvctl completions bash \
+    >"$pkgdir/usr/share/bash-completion/completions/atvvctl"
+  install -d "$pkgdir/usr/share/zsh/site-functions"
+  ./target/release/atvvctl completions zsh \
+    >"$pkgdir/usr/share/zsh/site-functions/_atvvctl"
+  install -d "$pkgdir/usr/share/fish/vendor_completions.d"
+  ./target/release/atvvctl completions fish \
+    >"$pkgdir/usr/share/fish/vendor_completions.d/atvvctl.fish"
+
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/device-support.md "$pkgdir/usr/share/doc/$pkgname/device-support.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 THIRD-PARTY-NOTICES.md \
+    "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.md"
+}

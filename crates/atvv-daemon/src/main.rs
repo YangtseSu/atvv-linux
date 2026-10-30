@@ -3,37 +3,17 @@
 //! `atvvd` entry point.
 
 use std::error::Error;
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
 use atvv_audio::AudioSourceConfig;
 use atvv_daemon::audio::PipeWireSink;
+use atvv_daemon::cli::Args;
 use atvv_daemon::daemon::{DaemonConfig, EventSink};
 use atvv_daemon::dbus::{self, DaemonInterface, DbusSink};
 use atvv_daemon::transport::{BluezTransport, MockConfig, MockHandle, MockTransport, Transport};
 use atvv_protocol::profile::RC003;
 use clap::Parser;
-
-#[derive(Debug, Parser)]
-#[command(name = "atvvd", version, about = "ATVV remote session daemon")]
-struct Args {
-    /// Bluetooth address of the remote (default: `device` in daemon.toml).
-    #[arg(long)]
-    device: Option<String>,
-    /// BlueZ adapter name such as `hci0` (default: BlueZ's default adapter).
-    #[arg(long)]
-    adapter: Option<String>,
-    /// Use the hardware-free mock transport.
-    #[arg(long)]
-    mock: bool,
-    /// Log protocol and lifecycle activity to stderr.
-    #[arg(long)]
-    verbose: bool,
-    /// Configuration file (default: $XDG_CONFIG_HOME/atvv/daemon.toml).
-    #[arg(long)]
-    config: Option<PathBuf>,
-}
 
 fn main() -> ExitCode {
     match run() {

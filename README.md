@@ -9,8 +9,13 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–08 complete and verified; packaging (step 09) remains. The RC003
-path and the fcitx5-vinput source path have both run on real system services.**
+**Steps 01–08 complete and verified. Step 09 packaging is implemented; the
+package builds, and the release binaries passed the daemon, source, reconnect,
+and PipeWire-restart checks on a real RC003. The installed-package,
+post-reboot, and end-to-end fcitx text checks remain.**
+
+The RC003 path and the fcitx5-vinput source path have both run on real system
+services.
 
 Implemented:
 
@@ -40,7 +45,8 @@ Implemented:
 
 Not yet complete:
 
-- Arch packaging and installed systemd/udev integration (step 09)
+- Installed-package, post-reboot, and end-to-end fcitx text acceptance (step
+  09); the package builds and its unit and udev syntax pass.
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run
@@ -48,6 +54,60 @@ ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run
 [`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md)
 for the exact evidence and remaining gaps (pairing gesture, intelligibility,
 installed-unit PipeWire restart).
+
+## Install (Arch)
+
+Requirements: Arch Linux, a systemd user session, PipeWire, BlueZ, and (for
+voice-key integration) fcitx5-vinput. The daemon is a user service; never run
+it as root.
+
+```sh
+git clone https://github.com/YangtseSu/atvv-linux.git
+cd atvv-linux
+# packaging/arch is export-ignored, so generate the source tarball from a
+# committed tree first; the script prints its SHA-256.
+./packaging/arch/make-source.sh
+cd packaging/arch
+makepkg -si
+```
+
+Pair the remote, then enable the user service:
+
+```sh
+atvvctl pair C0:5D:39:F8:2D:4C
+systemctl --user daemon-reload
+systemctl --user enable --now atvvd
+atvvctl doctor
+```
+
+`atvvd` exposes `atvv-miremote-rc003` through PipeWire. Select it in
+fcitx5-vinput by name (see [`docs/integrations/fcitx5-vinput.md`](docs/integrations/fcitx5-vinput.md));
+do not make it the system default.
+
+The package installs `/usr/bin/{atvvd,atvvctl,atvv-mcp}`;
+`/usr/lib/systemd/user/atvvd.service`;
+`/usr/lib/udev/rules.d/70-atvv-linux.rules` (`uaccess` for the RC003 event
+nodes and `/dev/uinput`); `/usr/lib/modules-load.d/atvv-linux.conf` (`uinput`);
+man pages; and bash/zsh/fish completions. No system-wide D-Bus policy is
+installed: the daemon uses the session bus.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `cannot connect to the session D-Bus` | `systemctl --user status atvvd`; `systemctl --user enable --now atvvd` |
+| `no device address` | `atvvctl pair <MAC>` writes `~/.config/atvv/daemon.toml` |
+| Source missing | `pw-cli info atvv-miremote-rc003`; `atvvctl doctor` |
+| `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
+| Remote not connected or CAPS missing | `bluetoothctl info <MAC>`; `atvvctl doctor`; `atvvctl monitor` |
+| Voice key does not trigger fcitx | `trigger_key` must match vinput's trigger; see the integration doc |
+| F5 reaches the focused application | The RC003 node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
+| No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
+| Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |
+
+Device support and the real-device record are in
+[`docs/device-support.md`](docs/device-support.md) and
+[`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md).
 
 ## Build and test
 

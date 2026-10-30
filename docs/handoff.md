@@ -54,22 +54,30 @@ per-session copies; `docs/plans/` remains the canonical plan.
   trigger emission with lost-node release, optional `org.fcitx.Vinput` client
   with fast name-owner failure, `atvv-mcp` stdio server (`status`,
   `voice_start`, `voice_stop`, `voice_toggle`, `list_devices`, `reload`),
-  isolated-bus mock tests, and `docs/integrations/`. The fcitx recording leg
-  was verified without an operator: a mock-transport daemon and the real
-  session PipeWire/vinput/fcitx recorded from `atvv-miremote-rc003` at 16 kHz;
-  a focused `zenity` entry plus `ydotool` delivered the trigger chord to the
-  fcitx addon and started the same recording. A real RC003 press produced 141
-  frames and fired a GNOME keybinding from the synthetic chord.
+  isolated-bus mock tests, and `docs/integrations/`.
+- **09 packaging (implemented, acceptance partial)**: version `0.1.0`; clap
+  `completions`/`manpages`; `atvvd` CLI in `atvv-daemon/src/cli.rs`; packaged
+  user unit, udev `uaccess` rule, `modules-load.d`; deterministic Arch source
+  tarball and PKGBUILD; cargo-deny, REUSE, third-party notices; CI with
+  fmt/clippy/test/cargo-deny/REUSE; daily Dependabot PRs; README
+  install/troubleshooting; device support matrix; acceptance record
+  `docs/acceptance/rc003-2026-10-30.md`. Built `atvv-linux 0.1.0-1` and
+  staged-installed it; the packaged `atvvd` started as a user service and
+  `atvvctl doctor` was all green. Remaining: root install, post-reboot run,
+  end-to-end fcitx text commit, sign-off.
 
 ## Not implemented
 
-- **09 Arch packaging**: PKGBUILD, udev, installed systemd unit, CI, hardware
-  acceptance. Depends on all prior steps; the installed-unit PipeWire restart
-  check is still open.
+- **09 remaining acceptance**: `sudo pacman -U` into `/usr`, a post-reboot
+  `atvvctl doctor` + source check, and a live fcitx text commit. These need
+  root/the operator and are event-driven; do not put them on a timer.
+- zbus 6 migration (the zbus 5 split crates are unmaintained; denied
+  advisories are documented in `deny.toml`). Do it as a separate dependency
+  step.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
-power-cycle, intelligibility). Step 07 verified the fields recorded in
-`docs/research/rc003-hardware-evidence.md`.
+power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07
+verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 
 ## Decisions
 
@@ -80,22 +88,16 @@ power-cycle, intelligibility). Step 07 verified the fields recorded in
 - Rust 2024; MSRV 1.87 (zbus 5 requires it); `atvv-protocol` is I/O-free.
 - Arch Linux packaging only; Debian/Fedora/Nix/Flatpak are out.
 - PipeWire service restart belongs to systemd (`PartOf=pipewire.service`,
-  `Restart=always`), not to `atvv-audio`. The unit exists but is not installed
-  or verified until step 09. The in-process source does not recover from a
-  full PipeWire daemon restart; it is recreated on daemon start.
+  `Restart=always`), not to `atvv-audio`. Verified with a transient unit using
+  the packaged properties (`MainPID` changed 85063 → 87720 and the source was
+  recreated); the root-installed unit's post-reboot run is still pending.
 - The resident source sets `node.pause-on-idle=false` so a linked consumer
-  wakes it without a playback driver. `node.always-process` is not used: it
-  freewheels and drains the queue while unlinked.
+  wakes it without a playback driver. `node.always-process` is not used.
 - `atvv-bluez` owns a private Tokio runtime and exposes a synchronous
-  `BluezLink`; `atvv-daemon` adapts it to `Transport`. Notifications use
-  `AcquireNotify` with a recorded `StartNotify` fallback. Reconnects invalidate
-  the previous notification generation so stale EOF/errors cannot publish
-  events.
+  `BluezLink`; `atvv-daemon` adapts it to `Transport`.
 - ASR is external; no unofficial cloud protocol in the core.
 - Device facts live in `DeviceProfile`; RC003 profile id is
   `miremote-rc003`. Button keys and gesture timing are profile fields.
-- Input actions use the documented grammar; power defaults to `none` so logind
-  policy is not chosen implicitly.
 - The fake remote profile (`test-fake-remote`, VID `0x1209`, PID `0x0002`) is
   test-only and never part of `PROFILES`.
 - D-Bus boundary: `org.atvv.Daemon` at `/org/atvv/Daemon`; `GetStatus` returns
@@ -103,48 +105,26 @@ power-cycle, intelligibility). Step 07 verified the fields recorded in
   `StartVoice`, `StopVoice`, `ToggleVoice`, `ReloadConfig`; signals
   `StateChanged(s)`, `VoiceStarted()`, `VoiceStopped()`. Protocol structs do
   not cross D-Bus.
-- The D-Bus object is registered before the well-known name is claimed;
-  claiming first allowed a client to call an unregistered object and wait
-  forever.
-- `StartVoice` sends `MIC_OPEN`; the mock answers with a direct `AUDIO_START`.
-  A device `AUDIO_STOP` sends one `MIC_CLOSE`; the mock echo is ignored by
-  `Session`. `Transport` writes are rejected while disconnected.
-- Mock control messages take priority over generated audio frames so stop and
-  disconnect are not delayed by the frame stream.
-- Tests use `PcmSink` implementations instead of requiring PipeWire; the real
-  `PipeWireSink` is verified separately with `pw-cli`/`pw-record`.
-- Config lives at `$XDG_CONFIG_HOME/atvv/daemon.toml` (or
-  `~/.config/atvv/daemon.toml`): optional `device`, `adapter`, `gain_db`
-  (±24), `input`, `vinput` (`trigger`/`dbus`/`off`), and `trigger_key` (key or
-  `+` chord, `none` disables). `atvvctl pair` writes `device` and preserves the
-  rest. Missing file = defaults; invalid file is reported by `ReloadConfig` and
-  `atvvctl doctor`. `ReloadConfig` applies gain and input; vinput mode and
-  trigger require a daemon restart.
-- On the RC003, the physical voice key gates microphone data: a host
-  `MIC_OPEN` produces `AUDIO_START` but no audio frames. The voice-key edges
-  therefore drive both `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger; the
-  device may also send a direct `AUDIO_START`, which the session treats as
-  streaming.
-- The mic is never opened because a PipeWire consumer is linked. The resident
-  source and the daemon have no consumer-presence callback; only voice edges,
-  `atvvctl mic`, D-Bus, and MCP request a session.
-- Trigger mode emits the configured key program from the input engine and
-  releases it when the grabbed node disappears, so a link loss cannot leave a
-  modifier stuck. `trigger_key` accepts a chord because GNOME custom shortcuts
-  reject bare modifier keys; the default remains `Alt_R` for fcitx.
-- `VinputClient` checks name ownership before `StartRecording`, so an absent
-  `vinput-daemon` fails immediately instead of waiting for the method timeout.
-  Failure is reported in `StatusView.vinput` and never stops the ATVV session.
-- `atvv-mcp` supports the handshake MCP revisions `2024-11-05` through
-  `2025-11-25` (`initialize`, `tools/list`, `tools/call`). Backend errors are
-  tool results (`isError: true`); unknown tools are `-32602`. It never handles
-  audio.
-- Live hardware checks are event-driven and must not impose a countdown on the
-  operator. Leave the daemon running and repeat the check whenever a person is
-  at the machine.
-- CI installs `libpipewire-0.3-dev`, `libspa-0.2-dev`, `libclang-dev`, and
-  `dbus` on `ubuntu-latest`: the workspace builds a native PipeWire client and
-  `libspa-sys` runs bindgen.
+- Config: `$XDG_CONFIG_HOME/atvv/daemon.toml`; missing file = defaults;
+  invalid file is reported by `ReloadConfig` and `atvvctl doctor`.
+- The RC003 mic is gated by the physical voice key; host `MIC_OPEN` alone
+  yields `AUDIO_START` and then a frame timeout. Voice-key edges drive both
+  `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger.
+- Package facts: `atvv-linux` version `0.1.0`; binaries `atvvd`, `atvvctl`,
+  `atvv-mcp`; user unit at `/usr/lib/systemd/user/atvvd.service`; udev rule
+  `/usr/lib/udev/rules.d/70-atvv-linux.rules`; modules-load
+  `/usr/lib/modules-load.d/atvv-linux.conf`; no system D-Bus policy.
+- The Arch source tarball is deterministic (`packaging/arch/make-source.sh`);
+  `packaging/arch` is `export-ignore`, so the pinned checksum is stable.
+- Man pages are generated from clap by `atvvctl manpages`; `atvvctl
+  completions <shell>` prints completions. `atvvd` shares its clap definition
+  from `atvv-daemon/src/cli.rs`.
+- CI runs fmt, clippy, workspace tests, cargo-deny, and REUSE. Dependabot
+  checks Cargo and GitHub Actions daily and opens grouped minor/patch PRs;
+  it does not auto-merge.
+- `deny.toml` allows GPL-3.0-or-later, MIT, Apache-2.0 (including the LLVM
+  exception), BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, and Zlib.
+  GPL-3.0-only is deliberately absent.
 
 ## Verified
 
@@ -152,99 +132,64 @@ power-cycle, intelligibility). Step 07 verified the fields recorded in
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo test -p atvv-daemon
+cargo deny check
+reuse lint
+udevadm verify packaging/udev/70-atvv-linux.rules
 ```
 
 - `cargo test --workspace` → 111 passed, 2 ignored.
-- `cargo test -p atvv-daemon` → 19 unit tests, the isolated-bus daemon test,
-  and two `org.fcitx.Vinput` tests passed; each integration test starts its
-  own `dbus-daemon`.
-- Step 08 isolated-bus tests: a mock `org.fcitx.Vinput` received
-  `StartRecording` and `StopRecording("")`; with the name absent the client
-  failed at once (`available = false`, error in the status view); `atvv-mcp`
-  over stdio against the mock daemon completed `initialize`, `tools/list`
-  (six tools), `tools/call status`, `voice_start` → `0x0C`, `voice_stop` →
-  `0x0D`, `list_devices`, and tool-error results.
-- `cargo test -p atvv-input voice_key_emits_the_trigger_key_and_keeps_the_raw_edge
-  -- --ignored` → the fake remote's voice press held `KEY_RIGHTALT` and the
-  release lifted it while the raw `Voice` edges still reached the daemon.
-- Step 08 real-device press (2026-10-30, RC003 `C0:5D:39:F8:2D:4C`, `hci0`):
-  with `trigger_key = "ctrl+alt+v"`, one physical press produced direct
-  `AUDIO_START 04 03 02 05`, 141 frames, `AUDIO_STOP 00 02`, and
-  `voice key pressed`/`released`; a GNOME custom keybinding
-  `<Control><Alt>v` fired from the synthetic chord. `vinput device list`
-  listed `atvv-miremote-rc003` as the active source.
-- Step 08 automated fcitx/source check (mock transport, real session bus,
-  real PipeWire/vinput/fcitx): `vinput recording start` reached `recording`;
-  vinput-daemon logged `target.object=atvv-miremote-rc003` and
-  `negotiated format: rate=16000 channels=1 fmt=259`; `pw-cat` captured
-  8.00 s / 128,000 samples at 16 kHz with peak 32767, RMS 14025.9, 48,939
-  non-zero samples. A focused `zenity --entry` plus `ydotool`
-  `Control+Control_R` started the same recording (daemon streaming 101 frames
-  / 24,240 samples). Both runs were cancelled with `CancelOperation`, so no
-  ASR inference was requested.
-- Integration test: direct `AUDIO_START` → `VoiceStarted` + streaming frames;
-  device `AUDIO_STOP` → exactly one `0x0D`, echo 150 ms later ignored;
-  D-Bus `StartVoice`/`StopVoice` → one `MIC_OPEN`/`MIC_CLOSE`; introspection
-  lists every method and signal; `StateChanged`/`VoiceStarted`/`VoiceStopped`
-  arrive on the isolated bus; `ReloadConfig` applied `gain_db = 6`.
-- `dbus-run-session -- target/debug/atvvd --mock --verbose` +
-  `busctl --user call ... GetStatus/StartVoice` + `atvvctl status/mic stop`:
-  state `ready` → `opening` → `streaming` (21 frames, 5040 samples) → `ready`.
-- `atvvctl doctor` against the mock daemon: `daemon ok`, `source ok`,
-  `pipewire ok`, `uinput ok`, `config warn` (missing file, defaults).
-- `pw-cli info atvv-miremote-rc003` → `Audio/Source`, 16 kHz, virtual.
-  `pw-cat --record --target atvv-miremote-rc003` captured 16 kHz mono s16le.
-- Step 07 hardware run (2026-10-30, RC003 `C0:5D:39:F8:2D:4C`, `hci0`):
-  `atvvctl pair` → paired/trusted and saved to config; `atvvctl doctor` all
-  `ok`; real CAPS `0b 01 00 02 03 00 78 00 00` (v1.0, ADPCM 16 kHz, HTT,
-  120 bytes); `AUDIO_START 04 03 02 03`; `AUDIO_STOP 00 02` and `00 08`;
-  3,954 frames / 948,960 samples over a ~60 s hold with six `MIC_EXTEND`
-  sends; 65 s WAV at 16 kHz, max 0.999969, RMS 0.356024.
+- `cargo deny check` → advisories, bans, licenses, sources ok; zbus 5
+  unmaintained advisories `RUSTSEC-2026-0370/0371/0372` ignored with a
+  migration note.
+- `reuse lint` → REUSE 3.3 compliant, 89 files.
+- `udevadm verify` → 1 rule file, 0 failures.
+- `systemd-analyze verify --user` with a temp copy pointing at the built
+  binary → pass. The packaged unit was enabled and started from a temporary
+  user unit copy whose `ExecStart` was the staged packaged binary, then
+  removed.
+- `makepkg -f` in `packaging/arch` → `atvv-linux 0.1.0-1` (5.8 MiB) plus a
+  debug package. Contents: three binaries, user unit, udev rule,
+  modules-load, 24 man pages, bash/zsh/fish completions, LICENSE,
+  third-party notices, README, device-support matrix.
+- Staged `pacman --root`/`fakeroot` install → succeeded; packaged
+  `atvvctl --version` = `0.1.0`. `namcap` only warns that glibc/libpipewire/
+  libgcc are implicit and that `pipewire`/`bluez` may not be needed (they are
+  runtime services).
+- Real RC003 (`C0:5D:39:F8:2D:4C`, `hci0`, 2026-10-30): release and packaged
+  `atvvd` → CAPS `0b 01 00 02 03 00 78 00 00`; `atvvctl doctor` all green;
+  `Audio/Source` at 16 kHz; 1 s capture = 16,000 samples; `MIC_OPEN` →
+  `AUDIO_START 04 00 02 00` then frame timeout without the key; reconnect
+  after `bluetoothctl disconnect`; `systemctl --user restart
+  pipewire.service` restarted the unit and recreated the source.
+- Step 07/08 evidence remains the source for 60 s keepalive (3,954 frames /
+  948,960 samples, six `MIC_EXTEND`), key mapping, and the fcitx source/trigger
+  run: `docs/research/rc003-hardware-evidence.md`.
 - `atvvctl record --wav` uses `pw-cat --record`; a non-zero pw-cat exit is
-  accepted when the WAV contains data. `atvvctl monitor` printed
-  `opening`/`voice started`/`streaming`/`voice stopped`/`ready`.
-- Reconnect after `bluetoothctl disconnect` reached `ready` with a fresh CAPS
-  without a daemon restart; an eager first attempt can drop again and retry.
-- Virtual-source scheduling: with no playback driver,
-  `pw-cat --record --target atvv-test` captured the synthetic tone
-  (max 0.2009, RMS 0.1222) after `node.pause-on-idle=false`. Without it the
-  node stayed suspended and consumers recorded silence.
-- `systemctl --user restart pipewire` → the in-process source was not
-  recreated; a daemon restart restored it. The installed-unit path belongs to
-  step 09 (ADR 0005).
-- GitHub Actions `ci` for `2c0c435` → success (fmt, clippy, workspace tests);
-  the runner installs `libpipewire-0.3-dev`, `libspa-0.2-dev`, `libclang-dev`,
-  and `dbus`.
-- `cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored`
-  (step 05) → passed: uinput hold pressed and release lifted `KEY_LEFTALT`.
-- `atvvctl audio test --seconds 5` + `pw-record --target atvv-test` (step 04)
-  captured 16 kHz mono s16le with amplitude ≈ 0.2.
-- `pw-cli destroy <node>` recreated the source (step 04).
-- Full `systemctl --user restart pipewire` is not verified; the unit is not
-  installed. See ADR 0005.
+  accepted when the WAV contains data.
+- `atvvctl completions <shell>` and `atvvctl manpages <dir>` work from the
+  release binary; a broken stdout pipe returns an error instead of panicking.
 
 ## Next step
 
-**09 packaging-and-acceptance** is next. Step 08 is complete and verified.
-Read:
+**09 packaging-and-acceptance** remains. Do these in order, without a timer:
 
-```bash
-# run from the repository root
-cat docs/plans/09-packaging-and-acceptance.md
-cat docs/research/reference-projects.md
-cat docs/research/landscape.md
-```
-
-Step 09 covers the systemd user unit, udev `uaccess` rules, `modules-load.d`,
-the Arch PKGBUILD, cargo-deny/REUSE, man page/completions, the installed-unit
-PipeWire restart check, and the hardware acceptance record. Do not add an
-in-process PipeWire service-restart monitor; the unit owns that (ADR 0005).
-
-The fcitx live check is no longer a blocker: an automated focused-entry test
-(`zenity` + `ydotool`) recorded from `atvv-miremote-rc003` at 16 kHz. A manual
-spot check is still useful but has no deadline; see
-`docs/integrations/fcitx5-vinput.md`.
+1. Install the built package as root:
+   `sudo pacman -U packaging/arch/atvv-linux-0.1.0-1-x86_64.pkg.tar.zst`
+   (the deterministically generated source tarball and pinned checksum are
+   already in place; rebuild with `makepkg -f` if the package file is absent).
+2. `systemctl --user daemon-reload && systemctl --user enable --now atvvd`;
+   `atvvctl doctor` must be all green. Check that `systemctl --user status
+   atvvd` uses `/usr/bin/atvvd`.
+3. Run `udevadm test /sys/class/input/eventX` as root for the RC003 node and
+   record the `uaccess` tag; re-login if the ACL is missing.
+4. Reboot, log in, and verify `atvvctl doctor`, the source, and a real voice
+   press. Record the result in `docs/acceptance/rc003-2026-10-30.md`.
+5. Hold the voice key in a focused fcitx input context and commit text; record
+   the systemd unit, source, and text result. This is the last open exit
+   criterion. If it cannot be done now, leave the step in progress; do not
+   fabricate a result.
+6. Sign the acceptance record and mark step 09 done only when every exit
+   criterion has a recorded command/output.
 
 ## Commands
 
@@ -252,11 +197,15 @@ spot check is still useful but has no deadline; see
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo deny check
+reuse lint
+udevadm verify packaging/udev/70-atvv-linux.rules
+./packaging/arch/make-source.sh
+cd packaging/arch && makepkg -f
 cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- simulate miremote-rc003
 cargo run -q -p atvv-cli -- audio test --seconds 3
 cargo run -q -p atvv-cli -- input fake-remote
-cargo run -q -p atvv-cli -- input fake-remote --hold 30
 dbus-run-session -- cargo run -q -p atvv-daemon -- --mock --verbose
 cargo run -q -p atvv-cli -- status
 cargo run -q -p atvv-cli -- mic start
@@ -269,6 +218,8 @@ cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
 cargo run -q -p atvv-daemon -- --verbose   # device from daemon.toml
 cargo run -q -p atvv-cli -- monitor
 cargo run -q -p atvv-cli -- record --wav /tmp/rc003.wav --seconds 10
+cargo run -q -p atvv-cli -- completions bash
+cargo run -q -p atvv-cli -- manpages /tmp/atvv-man
 cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored
 ```
 

@@ -1,0 +1,10 @@
+version = 1
+SPDX-PackageName = "atvv-linux"
+SPDX-PackageSupplier = "Yangtse Su <yangtsesu@gmail.com>"
+SPDX-PackageDownloadLocation = "https://github.com/YangtseSu/atvv-linux"
+
+[[annotations]]
+path = ["**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Yangtse Su"
+SPDX-License-Identifier = "GPL-3.0-or-later"

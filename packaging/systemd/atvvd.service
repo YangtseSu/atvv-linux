@@ -4,7 +4,7 @@ Documentation=https://github.com/YangtseSu/atvv-linux
 # ADR 0005: systemd restarts the daemon with PipeWire, which rebuilds the
 # resident Audio/Source. The daemon does not monitor PipeWire restarts.
 PartOf=pipewire.service
-After=pipewire.service
+After=bluetooth.target pipewire.service
 Wants=pipewire.service
 
 [Service]

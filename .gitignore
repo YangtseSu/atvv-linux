@@ -1,4 +1,8 @@
 /target
+/packaging/arch/*.tar.gz
+/packaging/arch/*.pkg.tar.*
+/packaging/arch/pkg/
+/packaging/arch/src/
 /dist/
 /build/
 *.log

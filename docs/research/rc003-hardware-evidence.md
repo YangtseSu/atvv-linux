@@ -261,3 +261,54 @@ compositor; the automated run verifies the fcitx addon and the ATVV source.
 No time-boxed verification was used or should be added. All temporary changes
 (fcitx trigger, daemon `trigger_key`, vinput capture device, GNOME custom
 keybinding, `ydotoold`, mock daemon) were restored after the runs.
+
+## Step 09 packaging checks (2026-10-30)
+
+Release binaries from this tree (`cargo build --release --locked --workspace
+--bins`) were run against the same RC003 (`C0:5D:39:F8:2D:4C`, `hci0`) as a
+transient systemd user unit with the packaged unit's properties
+(`PartOf=pipewire.service`, `After=pipewire.service`,
+`Wants=pipewire.service`, `Restart=always`). All output below was observed as
+user `yangtse`; no root was used.
+
+```text
+atvvd: notifications via acquire-notify
+atvvd: connected to 小米蓝牙语音遥控器 (C0:5D:39:F8:2D:4C)
+atvvd: send [0a, 01, 00, 00, 03, 03]
+atvvd: control [0b, 01, 00, 02, 03, 00, 78, 00, 00]
+atvvd: caps v1.0 codecs=0x02 interaction=HoldToTalk frame=120
+atvvd: state: ready
+```
+
+- `atvvctl doctor`: `daemon`, `source`, `pipewire`, `bluez`, `device`,
+  `atvv` (tx/audio/control MTU 242), `uinput`, `vinput`, and `config` all
+  `ok`.
+- `atvvctl status`: `input.grabbed=["/dev/input/event25"]`,
+  `keyboard=true`, trigger `Alt_R`.
+- `pw-cli info atvv-miremote-rc003`: `Audio/Source`, 16 kHz, 1 channel,
+  `node.virtual=true`, `node.pause-on-idle=false`.
+- `atvvctl record --seconds 1`: WAV 1 channel, 16 kHz, 16-bit, 16,000 samples.
+  RMS 0 because the physical key was not held; this verifies the source
+  format, not intelligibility.
+- `atvvctl mic start`: `AUDIO_START 04 00 02 00`, `voice started`, then
+  `audio frame timeout; closing the stream` after about 2 s and one
+  `MIC_CLOSE [0d]`. No frames arrived without the voice key. The 60-second
+  keepalive remains the step 07 result (six `MIC_EXTEND` sends).
+- `bluetoothctl disconnect C0:5D:39:F8:2D:4C`: `disconnected` →
+  `reconnecting` → connected with a fresh CAPS and `ready`.
+- `systemctl --user restart pipewire.service`: the unit was stopped and
+  restarted (`MainPID` 85063 → 87720); `atvvctl status` returned to `ready`,
+  the source was recreated at 16 kHz, and the journal showed a fresh CAPS.
+- The package was built (`atvv-linux 0.1.0-1`, 5.8 MiB, plus a debug package)
+  and installed into a staging root with `pacman --root`/`fakeroot`. The
+  packaged `atvvd` started as a user service from the staging root and
+  `atvvctl doctor` was all `ok`. A temporary copy of the packaged user unit
+  with `ExecStart` pointing at the staged binary was `enable`d and `start`ed
+  successfully, then removed.
+- `namcap` reported only informational warnings: glibc/libpipewire/libgcc are
+  implicitly satisfied, and `pipewire`/`bluez` are runtime services rather
+  than link-time dependencies.
+
+Still pending: `pacman -U` into `/usr` (needs root), the post-reboot run, and
+the end-to-end fcitx text commit. The acceptance record is
+[`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).

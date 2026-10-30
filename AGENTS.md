@@ -79,7 +79,9 @@ cargo run -q -p atvv-cli -- simulate miremote-rc003
 
 ## Code rules
 
+<!-- REUSE-IgnoreStart -->
 - Every source file starts with `// SPDX-License-Identifier: GPL-3.0-or-later`.
+<!-- REUSE-IgnoreEnd -->
 - Protocol code stays independent of BlueZ, PipeWire, tokio, and input crates.
 - The session state machine emits actions; it never calls a transport or sleeps.
 - Log protocol anomalies at a bounded rate; do not print one line per audio

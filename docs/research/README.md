@@ -62,9 +62,12 @@ implementation direction:
   (`PartOf=pipewire.service`, `Restart=always`), not by an in-process monitor
   (ADR 0005).
 - **Hardware state.** Step 07 ran on a real RC003 (`C0:5D:39:F8:2D:4C`) on
-  2026-10-30. Steps 01–07 are complete; step 08 is implemented and awaiting
-  one untimed live fcitx capture; step 09 remains. The verified facts are in
-  [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md).
+  2026-10-30. Steps 01–08 are complete; step 09 packaging is implemented and
+  the package builds. The release binaries and the packaged `atvvd` passed the
+  daemon/source/reconnect/PipeWire-restart checks; the root package install,
+  post-reboot run, and end-to-end fcitx text commit are pending. The verified
+  facts are in [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) and
+  [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens
   `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input
@@ -83,9 +86,12 @@ These cannot be closed by reading code or by synthetic tests:
 - Pairing gesture and LE Secure Connections numeric-comparison behavior. (The
   device was already bonded during step 07.)
 - Whether a single real-device press (voice key → daemon → synthetic trigger →
-  fcitx) records from `atvv-miremote-rc003`. The legs were verified separately:
-  a real press produced ATVV audio and the trigger reached the compositor, and
-  an automated focused-entry test made fcitx record from the ATVV source at
-  16 kHz. A future joint spot check is useful but must not be time-boxed.
+  fcitx) records from `atvv-miremote-rc003` and commits text. The legs were
+  verified separately: a real press produced ATVV audio and the trigger
+  reached the compositor, and an automated focused-entry test made fcitx
+  record from the ATVV source at 16 kHz. A future joint spot check is useful
+  but must not be time-boxed.
 - fcitx5-vinput warm-stream behavior with the real daemon.
-- PipeWire service restart behavior of the installed systemd unit.
+- The root-installed unit after a real reboot. The unit's `PartOf` restart
+  behavior was verified with a transient unit using the packaged properties;
+  `pacman -U` into `/usr` and the post-reboot run remain operator actions.

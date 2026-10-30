@@ -1,0 +1,36 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH ATVV-MCP 1 "2026-10-30" "atvv-linux 0.1.0" "User Commands"
+.SH NAME
+atvv-mcp \- stdio MCP server for the ATVV daemon
+.SH SYNOPSIS
+.B atvv-mcp
+.SH DESCRIPTION
+.B atvv-mcp
+serves the Model Context Protocol over stdin/stdout and connects to
+.B org.atvv.Daemon
+on the session bus. It never handles audio; use the resident
+.B Audio/Source
+for capture.
+.PP
+The server supports the MCP revisions 2024-11-05 through 2025-11-25 and the
+tools
+.BR status ,
+.BR voice_start ,
+.BR voice_stop ,
+.BR voice_toggle ,
+.BR list_devices ,
+and
+.BR reload .
+A backend failure is returned as a tool result with
+.BR isError ;
+an unknown tool is a JSON-RPC error.
+.SH ENVIRONMENT
+.TP
+.B DBUS_SESSION_BUS_ADDRESS
+Session bus used to reach
+.BR org.atvv.Daemon .
+.SH SEE ALSO
+.BR atvvd (1),
+.BR atvvctl (1)
+.SH AUTHOR
+Yangtse Su

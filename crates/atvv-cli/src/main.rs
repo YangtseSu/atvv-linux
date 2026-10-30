@@ -4,7 +4,8 @@
 
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, ExitCode};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
@@ -16,7 +17,8 @@ use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
 use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find};
 use atvv_protocol::session::Session;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -98,6 +100,17 @@ enum Command {
         /// BlueZ adapter name such as `hci0`.
         #[arg(long)]
         adapter: Option<String>,
+    },
+    /// Print shell completions to stdout.
+    Completions {
+        /// Shell to generate completions for.
+        shell: Shell,
+    },
+    /// Write man pages into a directory (used by packaging).
+    #[command(hide = true)]
+    Manpages {
+        /// Destination directory.
+        dir: PathBuf,
     },
 }
 
@@ -185,7 +198,28 @@ fn run() -> Result<(), String> {
         } => record(&wav, seconds, trigger),
         Command::Monitor => monitor(),
         Command::Doctor { device, adapter } => doctor(device, adapter),
+        Command::Completions { shell } => completions(shell),
+        Command::Manpages { dir } => manpages(&dir),
     }
+}
+
+fn completions(shell: Shell) -> Result<(), String> {
+    let mut command = Cli::command();
+    let mut output = Vec::new();
+    clap_complete::generate(shell, &mut command, "atvvctl", &mut output);
+    std::io::stdout()
+        .write_all(&output)
+        .map_err(|error| format!("cannot write completions: {error}"))
+}
+
+fn manpages(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir)
+        .map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    clap_mangen::generate_to(Cli::command(), dir)
+        .map_err(|error| format!("cannot write atvvctl man pages: {error}"))?;
+    clap_mangen::generate_to(atvv_daemon::cli::Args::command(), dir)
+        .map_err(|error| format!("cannot write atvvd man pages: {error}"))?;
+    Ok(())
 }
 
 fn daemon_client() -> Result<Client, String> {

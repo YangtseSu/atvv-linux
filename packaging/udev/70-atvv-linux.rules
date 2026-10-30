@@ -1,0 +1,14 @@
+# ATVV remotes: Xiaomi Bluetooth Remote 2 Pro / RC003 (USB ids 2717:32b8).
+# HID-over-GATT event nodes are recreated on every connection, so match the
+# parent input device by vendor/product rather than by event number or a
+# product name that differs between firmware and locales. The uaccess tag lets
+# the active seat user open the node without membership in the "input" group.
+SUBSYSTEM=="input", ATTRS{id/vendor}=="2717", ATTRS{id/product}=="32b8", TAG+="uaccess"
+
+# Xiaomi remote family fallback for firmware that reports a different product
+# id. This matches the same prefix the device profile accepts.
+SUBSYSTEM=="input", ATTRS{name}=="MI RC*", TAG+="uaccess"
+
+# The daemon creates its virtual keyboard through /dev/uinput. Some
+# distributions already tag this node; the rule is idempotent.
+SUBSYSTEM=="misc", KERNEL=="uinput", TAG+="uaccess"

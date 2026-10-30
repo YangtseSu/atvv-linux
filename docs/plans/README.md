@@ -57,7 +57,7 @@ step 08 is complete and verified; step 09 is next.
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
-| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ⬜ not-started | all of 01–08 |
+| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | 🚧 in-progress | all of 01–08 |
 
 ## Architecture contract
 
@@ -101,20 +101,24 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 ## Current state — 2026-10-30
 
-Steps 01–07 are complete. Step 07 ran on a real RC003
+Steps 01–08 are complete. Step 07 ran on a real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire
 source, which had stayed suspended without a playback driver. Full evidence is
 in [`docs/research/rc003-hardware-evidence.md`](../research/rc003-hardware-evidence.md).
 
-Step 08 is complete and verified: the daemon's `vinput`/`trigger_key` settings,
-voice-edge mic control, the `org.fcitx.Vinput` client, `atvv-mcp`,
-isolated-bus tests, and the integration docs are in place. A mock-transport
-daemon plus the real session PipeWire/vinput/fcitx recorded from
-`atvv-miremote-rc003` at 16 kHz (`negotiated format: rate=16000 channels=1
-fmt=259`; 8 s capture peak 32767, RMS 14025.9), and a focused entry plus
-`ydotool` delivered the trigger chord to the fcitx addon. The real RC003 press
-verified the voice-key edge, ATVV audio, and the synthetic chord reaching the
-compositor. PipeWire service restart is systemd-owned (ADR 0005) and remains a
-step 09 verification with the installed unit. Step 09 is next.
+Step 08 verified the voice-edge mic control, the synthetic trigger, the
+`org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
+the same evidence document records the real-press and automated runs.
+
+Step 09 packaging is implemented: `atvv-linux 0.1.0-1` builds from the
+deterministic source tarball and installs the binaries, user unit, udev rule,
+modules-load file, man pages, and completions. The release and staged-package
+binaries passed `atvvctl doctor`, 16 kHz source, reconnect, and PipeWire
+restart checks on the real RC003. Remaining acceptance work is the root
+`pacman -U` install, a post-reboot run, and the end-to-end fcitx text commit;
+see [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
+CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
+GitHub Actions daily. Step 09 stays in progress until those operator checks
+and the sign-off are recorded.
