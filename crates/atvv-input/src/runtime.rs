@@ -64,6 +64,18 @@ enum RawEdge {
     Button { button: RemoteButton, pressed: bool },
 }
 
+/// Map an evdev key value to a press/release edge.
+///
+/// `2` is an autorepeat of a held key, not a new edge; the gesture engine and
+/// the voice-key state track press/release themselves.
+fn edge(value: i32) -> Option<bool> {
+    match value {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
 struct Dispatcher {
     map: ActionMap,
     resolver: KeyResolver,
@@ -219,19 +231,20 @@ impl InputRuntime {
                                     let code = KeyCode::new(event.code());
                                     match keymap.button(code) {
                                         Some(RemoteButton::Voice) => {
-                                            let _ = tx.send(RawEdge::Voice {
-                                                pressed: value != 0,
-                                            });
+                                            if let Some(pressed) = edge(value) {
+                                                let _ = tx.send(RawEdge::Voice { pressed });
+                                            }
                                         }
                                         Some(button) => {
-                                            let _ = tx.send(RawEdge::Button {
-                                                button,
-                                                pressed: value != 0,
-                                            });
+                                            if let Some(pressed) = edge(value) {
+                                                let _ =
+                                                    tx.send(RawEdge::Button { button, pressed });
+                                            }
                                         }
                                         None => {
                                             // Re-emit keys the profile does not map,
                                             // otherwise grabbing them loses input.
+                                            // Repeats are forwarded as well.
                                             if let Some(keyboard) = &vkbd {
                                                 let _ = keyboard.emit_raw(code, value);
                                             }
@@ -412,6 +425,14 @@ mod tests {
             }
             other => panic!("unexpected event: {other:?}"),
         }
+    }
+
+    #[test]
+    fn evdev_repeats_are_not_edges() {
+        assert_eq!(edge(0), Some(false));
+        assert_eq!(edge(1), Some(true));
+        assert_eq!(edge(2), None);
+        assert_eq!(edge(3), None);
     }
 
     #[test]

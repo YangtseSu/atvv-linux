@@ -98,5 +98,6 @@ cargo run -q -p atvv-cli -- simulate miremote-rc003
 - `atvv-protocol`: pure library; no I/O.
 - `atvv-audio`: PipeWire source and PCM queue (step 04).
 - `atvv-input`: evdev discovery, grab, gestures, uinput (step 05).
+- `atvv-bluez`: BlueZ GATT transport and pairing; no session logic.
 - `atvv-daemon`: session orchestration and D-Bus (step 06).
 - `atvv-cli`: `atvvctl`; no protocol logic beyond formatting.

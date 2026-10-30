@@ -19,6 +19,10 @@ pub const MAX_GAIN_DB: i8 = 24;
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct FileConfig {
+    /// Bluetooth address written by `atvvctl pair`.
+    pub device: Option<String>,
+    /// BlueZ adapter name such as `hci0`; the default adapter when absent.
+    pub adapter: Option<String>,
     /// Override the profile gain in dB, clamped to ±24 dB.
     pub gain_db: Option<i8>,
     /// Start the evdev/uinput input path.
@@ -30,6 +34,8 @@ pub struct FileConfig {
 pub struct LoadedConfig {
     pub path: PathBuf,
     pub existed: bool,
+    pub device: Option<String>,
+    pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
 }
@@ -52,6 +58,8 @@ pub fn load(path: &Path, profile_gain_db: i8) -> Result<LoadedConfig, ConfigErro
         return Ok(LoadedConfig {
             path: path.to_path_buf(),
             existed: false,
+            device: None,
+            adapter: None,
             gain_db: profile_gain_db,
             input: true,
         });
@@ -74,8 +82,47 @@ pub fn load(path: &Path, profile_gain_db: i8) -> Result<LoadedConfig, ConfigErro
     Ok(LoadedConfig {
         path: path.to_path_buf(),
         existed: true,
+        device: file.device,
+        adapter: file.adapter,
         gain_db,
         input: file.input.unwrap_or(true),
+    })
+}
+
+/// Record the paired device and adapter without discarding other settings.
+///
+/// A malformed existing file is an error: the daemon should not silently
+/// replace a typo with defaults.
+pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(), ConfigError> {
+    let mut file = if path.exists() {
+        let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        toml::from_str(&text).map_err(|source| ConfigError::Parse {
+            path: path.to_path_buf(),
+            source,
+        })?
+    } else {
+        FileConfig::default()
+    };
+    file.device = Some(device.to_string());
+    if let Some(adapter) = adapter {
+        file.adapter = Some(adapter.to_string());
+    }
+    let text = toml::to_string_pretty(&file).map_err(|source| ConfigError::Serialize {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|source| ConfigError::Write {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    }
+    std::fs::write(path, text).map_err(|source| ConfigError::Write {
+        path: path.to_path_buf(),
+        source,
     })
 }
 
@@ -92,6 +139,18 @@ pub enum ConfigError {
         path: PathBuf,
         #[source]
         source: toml::de::Error,
+    },
+    #[error("cannot serialize {path}: {source}")]
+    Serialize {
+        path: PathBuf,
+        #[source]
+        source: toml::ser::Error,
+    },
+    #[error("cannot write {path}: {source}")]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
     },
     #[error("gain_db {0} is outside -{MAX_GAIN_DB}..={MAX_GAIN_DB}")]
     GainRange(i8),
@@ -141,6 +200,55 @@ mod tests {
         assert!(matches!(load(&path, 0), Err(ConfigError::Parse { .. })));
         std::fs::write(&path, "gain_db = 40\n").unwrap();
         assert!(matches!(load(&path, 0), Err(ConfigError::GainRange(40))));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_device_round_trips_and_preserves_settings() {
+        let path = std::env::temp_dir().join(format!(
+            "atvv-config-save-{}-{}.toml",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        std::fs::write(&path, "gain_db = 6\ninput = false\n").unwrap();
+        save_device(&path, "C0:5D:39:F8:2D:4C", Some("hci0")).unwrap();
+
+        let config = load(&path, 0).unwrap();
+        assert_eq!(config.device.as_deref(), Some("C0:5D:39:F8:2D:4C"));
+        assert_eq!(config.adapter.as_deref(), Some("hci0"));
+        assert_eq!(config.gain_db, 6);
+        assert!(!config.input);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_device_creates_the_file_and_keeps_an_unset_adapter() {
+        let path = std::env::temp_dir().join(format!(
+            "atvv-config-create-{}-{}.toml",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&path);
+        save_device(&path, "C0:5D:39:F8:2D:4C", None).unwrap();
+
+        let config = load(&path, 0).unwrap();
+        assert_eq!(config.device.as_deref(), Some("C0:5D:39:F8:2D:4C"));
+        assert_eq!(config.adapter, None);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_device_refuses_a_malformed_existing_file() {
+        let path = std::env::temp_dir().join(format!(
+            "atvv-config-malformed-{}-{}.toml",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        std::fs::write(&path, "gaiN_db = 3\n").unwrap();
+        assert!(matches!(
+            save_device(&path, "C0:5D:39:F8:2D:4C", None),
+            Err(ConfigError::Parse { .. })
+        ));
         let _ = std::fs::remove_file(&path);
     }
 }

@@ -1,0 +1,16 @@
+[package]
+name = "atvv-bluez"
+description = "BlueZ GATT transport for ATVV v1.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+atvv-protocol = { path = "../atvv-protocol" }
+bluer.workspace = true
+futures-util.workspace = true
+thiserror.workspace = true
+tokio.workspace = true

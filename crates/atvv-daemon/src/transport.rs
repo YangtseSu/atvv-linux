@@ -412,6 +412,71 @@ impl Transport for MockTransport {
     }
 }
 
+/// BlueZ-backed transport for `atvvd`.
+///
+/// This adapter only translates events and errors; the session path is shared
+/// with the mock transport.
+pub struct BluezTransport {
+    link: atvv_bluez::BluezLink,
+}
+
+impl BluezTransport {
+    #[must_use]
+    pub fn new(link: atvv_bluez::BluezLink) -> Self {
+        Self { link }
+    }
+
+    #[must_use]
+    pub fn notification_mode(&self) -> &atvv_bluez::NotificationMode {
+        self.link.notification_mode()
+    }
+}
+
+impl Transport for BluezTransport {
+    fn kind(&self) -> &'static str {
+        "bluez"
+    }
+
+    fn address(&self) -> &str {
+        self.link.address()
+    }
+
+    fn device_name(&self) -> &str {
+        self.link.device_name()
+    }
+
+    fn poll(&mut self, timeout: Duration) -> Result<Option<TransportEvent>, TransportError> {
+        match self.link.poll(timeout) {
+            Ok(Some(atvv_bluez::BluezEvent::Connected { address, name })) => {
+                Ok(Some(TransportEvent::Connected { address, name }))
+            }
+            Ok(Some(atvv_bluez::BluezEvent::Disconnected { reason })) => {
+                Ok(Some(TransportEvent::Disconnected { reason }))
+            }
+            Ok(Some(atvv_bluez::BluezEvent::Control(bytes))) => {
+                Ok(Some(TransportEvent::Control(bytes)))
+            }
+            Ok(Some(atvv_bluez::BluezEvent::Audio(bytes))) => {
+                Ok(Some(TransportEvent::Audio(bytes)))
+            }
+            Ok(None) => Ok(None),
+            Err(error) => Err(TransportError::Other(error.to_string())),
+        }
+    }
+
+    fn write_command(&mut self, bytes: &[u8]) -> Result<(), TransportError> {
+        self.link
+            .write_command(bytes)
+            .map_err(|error| TransportError::Other(error.to_string()))
+    }
+
+    fn reconnect(&mut self) -> Result<(), TransportError> {
+        self.link
+            .reconnect()
+            .map_err(|error| TransportError::Other(error.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

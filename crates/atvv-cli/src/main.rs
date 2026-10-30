@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
+use std::path::PathBuf;
 use std::process::{Command as ProcessCommand, ExitCode};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
@@ -13,7 +14,7 @@ use atvv_daemon::Client;
 use atvv_input::{ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, RemoteEvent};
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
-use atvv_protocol::profile::{PROFILES, RemoteButton, find};
+use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find};
 use atvv_protocol::session::Session;
 use clap::{Parser, Subcommand};
 
@@ -64,8 +65,40 @@ enum Command {
     },
     /// Re-read the daemon configuration.
     Reload,
-    /// Check D-Bus, PipeWire, uinput, and config.
-    Doctor,
+    /// Pair and trust a remote, then save its address.
+    Pair {
+        /// Bluetooth address, e.g. C0:5D:39:F8:2D:4C.
+        address: String,
+        /// BlueZ adapter name such as `hci0`.
+        #[arg(long)]
+        adapter: Option<String>,
+        /// Do not write the address to daemon.toml.
+        #[arg(long)]
+        no_save: bool,
+    },
+    /// Capture the resident ATVV source to a WAV file.
+    Record {
+        /// Output WAV path.
+        #[arg(long)]
+        wav: PathBuf,
+        /// Capture length in seconds.
+        #[arg(long, default_value_t = 10)]
+        seconds: u64,
+        /// Open the remote microphone through the daemon while capturing.
+        #[arg(long)]
+        trigger: bool,
+    },
+    /// Print daemon state changes and voice signals.
+    Monitor,
+    /// Check D-Bus, BlueZ, PipeWire, uinput, and config.
+    Doctor {
+        /// Bluetooth address to probe (default: `device` in daemon.toml).
+        #[arg(long)]
+        device: Option<String>,
+        /// BlueZ adapter name such as `hci0`.
+        #[arg(long)]
+        adapter: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -140,7 +173,18 @@ fn run() -> Result<(), String> {
         Command::Status => status(),
         Command::Mic { command } => mic(command),
         Command::Reload => reload(),
-        Command::Doctor => doctor(),
+        Command::Pair {
+            address,
+            adapter,
+            no_save,
+        } => pair(&address, adapter, no_save),
+        Command::Record {
+            wav,
+            seconds,
+            trigger,
+        } => record(&wav, seconds, trigger),
+        Command::Monitor => monitor(),
+        Command::Doctor { device, adapter } => doctor(device, adapter),
     }
 }
 
@@ -173,6 +217,154 @@ fn reload() -> Result<(), String> {
     let client = daemon_client()?;
     client.reload().map_err(|error| error.to_string())?;
     println!("reloaded");
+    Ok(())
+}
+
+fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), String> {
+    let report = atvv_bluez::pair(atvv_bluez::PairConfig {
+        address: address.to_string(),
+        adapter: adapter.clone(),
+        ..atvv_bluez::PairConfig::default()
+    })
+    .map_err(|error| format!("pairing {address} failed: {error}"))?;
+
+    println!("address: {}", report.address);
+    if let Some(name) = &report.name {
+        println!("name: {name}");
+    }
+    println!("already_paired: {}", report.already_paired);
+    println!("paired: {}", report.paired);
+    println!("trusted: {}", report.trusted);
+    for request in &report.agent_requests {
+        println!("agent: {request}");
+    }
+    if !report.paired {
+        return Err("the device is not bonded".to_string());
+    }
+    if no_save {
+        println!("config: not saved (--no-save)");
+        return Ok(());
+    }
+    let path = atvv_daemon::config::default_path();
+    atvv_daemon::config::save_device(&path, &report.address, adapter.as_deref())
+        .map_err(|error| error.to_string())?;
+    println!("config: {} device={}", path.display(), report.address);
+    Ok(())
+}
+
+fn record(wav: &PathBuf, seconds: u64, trigger: bool) -> Result<(), String> {
+    let client = daemon_client()?;
+    let status = client
+        .status()
+        .map_err(|error| format!("cannot read daemon status: {error}"))?;
+    if !status.audio.available {
+        return Err(format!(
+            "source {} is unavailable: {}",
+            status.audio.source,
+            status.audio.degraded.as_deref().unwrap_or("degraded")
+        ));
+    }
+
+    let rate = RC003.sample_rate;
+    let seconds = seconds.max(1);
+    let samples = u64::from(rate) * seconds;
+    let mut child = ProcessCommand::new("pw-cat")
+        .arg("--record")
+        .args([
+            "--target",
+            &status.audio.source,
+            "--rate",
+            &rate.to_string(),
+            "--channels",
+            "1",
+            "--format",
+            "s16",
+            "--container",
+            "wav",
+            "--sample-count",
+            &samples.to_string(),
+        ])
+        .arg(wav)
+        .spawn()
+        .map_err(|error| format!("cannot start pw-cat: {error}"))?;
+
+    if trigger {
+        // Let the capture stream link before asking the remote for audio.
+        std::thread::sleep(Duration::from_millis(300));
+        client
+            .start_voice()
+            .map_err(|error| format!("StartVoice failed: {error}"))?;
+    }
+    println!(
+        "recording {seconds}s at {rate} Hz from {} to {}",
+        status.audio.source,
+        wav.display()
+    );
+    let outcome = child.wait();
+    if trigger {
+        let _ = client.stop_voice();
+    }
+    let outcome = outcome.map_err(|error| format!("pw-cat failed: {error}"))?;
+    // pw-cat may exit non-zero even after writing a complete
+    // `--sample-count` capture, so the file is the source of truth.
+    let bytes = std::fs::metadata(wav).map_or(0, |metadata| metadata.len());
+    if bytes <= 44 {
+        return Err(format!(
+            "pw-cat produced no audio (exit {outcome}): {}",
+            wav.display()
+        ));
+    }
+    if !outcome.success() {
+        eprintln!("atvvctl: pw-cat exited with {outcome}; {bytes} bytes were written");
+    }
+    println!("captured {}", wav.display());
+    Ok(())
+}
+
+fn monitor() -> Result<(), String> {
+    let client = daemon_client()?;
+    match client.status() {
+        Ok(status) => println!(
+            "state={} transport={} caps={}",
+            status.state,
+            status.device.transport,
+            status.caps.as_ref().map_or_else(
+                || "none".to_string(),
+                |caps| format!("v{} {} {} B", caps.version, caps.codec, caps.frame_size)
+            )
+        ),
+        Err(error) => eprintln!("status: {error}"),
+    }
+
+    let proxy = zbus::blocking::Proxy::new(
+        client.connection(),
+        atvv_daemon::dbus::SERVICE,
+        atvv_daemon::dbus::PATH,
+        atvv_daemon::dbus::INTERFACE,
+    )
+    .map_err(|error| error.to_string())?;
+    let signals = proxy
+        .receive_all_signals()
+        .map_err(|error| error.to_string())?;
+    println!("monitoring {} (Ctrl-C to stop)", atvv_daemon::dbus::SERVICE);
+    for message in signals {
+        let member = message
+            .header()
+            .member()
+            .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
+        match member.as_str() {
+            "StateChanged" => {
+                let state: String = message
+                    .body()
+                    .deserialize()
+                    .map_err(|error| error.to_string())?;
+                println!("state: {state}");
+            }
+            "VoiceStarted" => println!("voice: started"),
+            "VoiceStopped" => println!("voice: stopped"),
+            other => println!("{other}"),
+        }
+    }
     Ok(())
 }
 
@@ -209,8 +401,15 @@ impl Check {
     }
 }
 
-fn doctor() -> Result<(), String> {
+fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), String> {
     let mut checks = Vec::new();
+    let config_path = atvv_daemon::config::default_path();
+    let config = atvv_daemon::config::load(&config_path, RC003.gain_db);
+    let configured_device = config
+        .as_ref()
+        .ok()
+        .and_then(|config| config.device.clone());
+    let address = device_arg.or(configured_device);
     let status = match Client::connect() {
         Ok(client) => match client.status() {
             Ok(status) => {
@@ -298,6 +497,92 @@ fn doctor() -> Result<(), String> {
         ));
     }
 
+    match address {
+        Some(address) => {
+            let probe = atvv_bluez::BluezConfig {
+                address: address.clone(),
+                adapter: adapter.clone(),
+                ..atvv_bluez::BluezConfig::default()
+            };
+            match atvv_bluez::probe(&probe) {
+                Ok(report) => {
+                    checks.push(Check::new(
+                        "bluez",
+                        if report.powered {
+                            CheckState::Ok
+                        } else {
+                            CheckState::Fail
+                        },
+                        format!(
+                            "adapter {} is {}",
+                            report.adapter,
+                            if report.powered { "powered" } else { "off" }
+                        ),
+                    ));
+                    checks.push(Check::new(
+                        "device",
+                        if report.connected && report.paired && report.trusted {
+                            CheckState::Ok
+                        } else {
+                            CheckState::Warn
+                        },
+                        format!(
+                            "{} {}{}{}{}",
+                            report.address,
+                            report.name.as_deref().unwrap_or("(unnamed)"),
+                            if report.paired {
+                                " paired"
+                            } else {
+                                " not-paired"
+                            },
+                            if report.trusted {
+                                " trusted"
+                            } else {
+                                " untrusted"
+                            },
+                            if report.connected {
+                                " connected"
+                            } else {
+                                " disconnected"
+                            },
+                        ),
+                    ));
+                    match &report.atvv {
+                        Some(info) => checks.push(Check::new(
+                            "atvv",
+                            CheckState::Ok,
+                            format!(
+                                "service {}; tx mtu {} [{}]; audio mtu {}; control mtu {}",
+                                info.service_uuid,
+                                info.transmit.mtu,
+                                info.transmit.flags.join(","),
+                                info.audio.mtu,
+                                info.control.mtu,
+                            ),
+                        )),
+                        None => checks.push(Check::new(
+                            "atvv",
+                            CheckState::Warn,
+                            if report.connected {
+                                "service is not resolved yet"
+                            } else {
+                                "connect the remote to resolve the service"
+                            },
+                        )),
+                    }
+                }
+                Err(error) => {
+                    checks.push(Check::new("bluez", CheckState::Fail, error.to_string()));
+                }
+            }
+        }
+        None => checks.push(Check::new(
+            "bluez",
+            CheckState::Warn,
+            "no device configured; run `atvvctl pair <MAC>`",
+        )),
+    }
+
     match OpenOptions::new().write(true).open("/dev/uinput") {
         Ok(_) => checks.push(Check::new(
             "uinput",
@@ -311,8 +596,7 @@ fn doctor() -> Result<(), String> {
         )),
     }
 
-    let config_path = atvv_daemon::config::default_path();
-    match atvv_daemon::config::load(&config_path, atvv_protocol::profile::RC003.gain_db) {
+    match config {
         Ok(config) if config.existed => checks.push(Check::new(
             "config",
             CheckState::Ok,

@@ -11,16 +11,19 @@ use atvv_audio::AudioSourceConfig;
 use atvv_daemon::audio::PipeWireSink;
 use atvv_daemon::daemon::{DaemonConfig, EventSink};
 use atvv_daemon::dbus::{self, DaemonInterface, DbusSink};
-use atvv_daemon::transport::{MockConfig, MockTransport, Transport};
+use atvv_daemon::transport::{BluezTransport, MockConfig, MockHandle, MockTransport, Transport};
 use atvv_protocol::profile::RC003;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
 #[command(name = "atvvd", version, about = "ATVV remote session daemon")]
 struct Args {
-    /// Bluetooth address of the remote.
+    /// Bluetooth address of the remote (default: `device` in daemon.toml).
     #[arg(long)]
     device: Option<String>,
+    /// BlueZ adapter name such as `hci0` (default: BlueZ's default adapter).
+    #[arg(long)]
+    adapter: Option<String>,
     /// Use the hardware-free mock transport.
     #[arg(long)]
     mock: bool,
@@ -45,24 +48,50 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    if !args.mock {
-        return Err("the BlueZ transport is step 07; start the daemon with --mock for now".into());
-    }
-
     let profile = RC003;
     let config_path = args
         .config
         .unwrap_or_else(atvv_daemon::config::default_path);
     let loaded = atvv_daemon::config::load(&config_path, profile.gain_db)?;
-    let address = args
-        .device
-        .unwrap_or_else(|| "02:00:00:00:00:01".to_string());
+    let address = args.device.or_else(|| loaded.device.clone());
+    let adapter = args.adapter.or_else(|| loaded.adapter.clone());
 
-    let (transport, _mock_handle) = MockTransport::new(MockConfig {
-        address: address.clone(),
-        ..MockConfig::default()
-    });
+    // The mock handle must stay alive: dropping it closes the mock's command
+    // channel and the transport reports a closed link.
+    let (transport, _mock_handle): (Box<dyn Transport>, Option<MockHandle>) = if args.mock {
+        let address = address.unwrap_or_else(|| "02:00:00:00:00:01".to_string());
+        let (transport, handle) = MockTransport::new(MockConfig {
+            address,
+            ..MockConfig::default()
+        });
+        (Box::new(transport), Some(handle))
+    } else {
+        let address =
+            address.ok_or("no device address: pass --device or run `atvvctl pair <MAC>` first")?;
+        let link = atvv_bluez::BluezLink::connect(atvv_bluez::BluezConfig {
+            address,
+            adapter,
+            ..atvv_bluez::BluezConfig::default()
+        })?;
+        if args.verbose {
+            eprintln!(
+                "atvvd: notifications via {}",
+                link.notification_mode().label()
+            );
+            if let atvv_bluez::NotificationMode::Start { acquire_error } = link.notification_mode()
+            {
+                eprintln!("atvvd: AcquireNotify fallback: {acquire_error}");
+            }
+        }
+        (Box::new(BluezTransport::new(link)), None)
+    };
+
     let address = transport.address().to_string();
+    let transport_label = format!(
+        "{} transport ({})",
+        transport.kind(),
+        transport.device_name()
+    );
 
     let mut config = DaemonConfig::new(profile, address.clone());
     config.source_name = dbus::source_name(profile);
@@ -82,12 +111,15 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let connection = dbus::connect_session()?;
     let signals: Arc<dyn EventSink> = Arc::new(DbusSink::new(&connection)?);
-    let (daemon, handle) =
-        atvv_daemon::Daemon::new(config, Box::new(transport), Box::new(audio), signals);
+    let (daemon, handle) = atvv_daemon::Daemon::new(config, transport, Box::new(audio), signals);
     let interface = DaemonInterface::new(handle.status(), handle.commands(), address);
     dbus::serve(&connection, interface)?;
 
-    println!("atvvd: mock transport on {} {}", dbus::SERVICE, dbus::PATH);
+    println!(
+        "atvvd: {transport_label} on {} {}",
+        dbus::SERVICE,
+        dbus::PATH
+    );
     daemon.run();
     Ok(())
 }

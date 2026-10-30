@@ -18,6 +18,7 @@ path = "src/lib.rs"
 
 [dependencies]
 atvv-audio = { path = "../atvv-audio" }
+atvv-bluez = { path = "../atvv-bluez" }
 atvv-input = { path = "../atvv-input" }
 atvv-protocol = { path = "../atvv-protocol" }
 clap.workspace = true

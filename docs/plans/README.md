@@ -38,11 +38,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 |---|---|---|
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
-| C — Hardware bring-up | 07 | RC003 pairing, real CAPS, audio capture, reconnect |
+| C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08 | fcitx5-vinput trigger/D-Bus and a proper MCP surface |
 | E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
 
-M0 is steps 01–06. Steps 07–09 require a device or a release decision.
+M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
+steps 08–09 remain.
 
 ## Step files
 
@@ -54,7 +55,7 @@ M0 is steps 01–06. Steps 07–09 require a device or a release decision.
 | 04 | B | [pipewire-source](04-pipewire-source.md) | ✅ done | 01 |
 | 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 |
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
-| 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ⬜ not-started | 01, 02, 04, 06 |
+| 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ⬜ not-started | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ⬜ not-started | all of 01–08 |
 
@@ -100,13 +101,12 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 ## Current state — 2026-10-30
 
-M0 (steps 01–06) is complete without hardware. The PipeWire source is verified
-for creation, recording, and node-removal recreation; full PipeWire service
-restart is owned by systemd (ADR 0005) and must be verified in step 09. The
-input path is verified with a fake uinput remote: discovery, `EVIOCGRAB`,
-gesture timing, and compositor-visible uinput keys. The daemon's mock
-transport drives the real `Session` over `org.atvv.Daemon`; D-Bus signals,
-introspection, start/stop, the ignored stop echo, and config reload are covered
-by an isolated-bus integration test. The workspace has 88 passing tests and one
-ignored kernel-uinput test. Steps 07–09 are planned; step 07 is blocked on an
-RC003 and the hardware acceptance part of step 09 depends on it.
+Steps 01–07 are complete. Step 07 ran on a real RC003
+(`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
+frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
+reconnect without a daemon restart. The run also fixed the resident PipeWire
+source, which had stayed suspended without a playback driver. Full evidence is
+in [`docs/research/rc003-hardware-evidence.md`](../research/rc003-hardware-evidence.md).
+PipeWire service restart is systemd-owned (ADR 0005) and remains a step 09
+verification with the installed unit. Step 08 (fcitx5-vinput/MCP) is next;
+step 09 depends on all prior steps.

@@ -15,4 +15,6 @@ pub use audio::{PcmSink, PipeWireSink};
 pub use daemon::{Command, Daemon, DaemonConfig, DaemonEvent, DaemonHandle, EventSink, NullSink};
 pub use dbus::{Client, ClientError};
 pub use status::{AudioView, CapsView, ConfigView, DeviceView, InputView, StatusCell, StatusView};
-pub use transport::{MockConfig, MockHandle, MockTransport, Transport, TransportEvent};
+pub use transport::{
+    BluezTransport, MockConfig, MockHandle, MockTransport, Transport, TransportEvent,
+};

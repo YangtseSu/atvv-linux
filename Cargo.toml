@@ -4,6 +4,7 @@ members = [
     "crates/atvv-protocol",
     "crates/atvv-audio",
     "crates/atvv-input",
+    "crates/atvv-bluez",
     "crates/atvv-daemon",
     "crates/atvv-cli",
 ]
@@ -20,6 +21,9 @@ authors = ["Yangtse Su <yangtsesu@gmail.com>"]
 [workspace.dependencies]
 thiserror = "2.0"
 clap = { version = "4.5", features = ["derive"] }
+bluer = { version = "0.17", features = ["bluetoothd"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
 pipewire = "0.10"
 crossbeam-queue = "0.3"
 evdev = "0.13"

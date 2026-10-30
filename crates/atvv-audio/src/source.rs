@@ -257,6 +257,9 @@ fn run_session(
         *pw::keys::AUDIO_CHANNELS => config.channels.to_string(),
         "audio.rate" => config.sample_rate.to_string(),
         "node.virtual" => "true",
+        // Keep the node alive between consumers; the graph clock schedules it
+        // while a consumer is linked.
+        "node.pause-on-idle" => "false",
         "device.description" => config.description.clone(),
         "device.class" => "sound",
         "device.icon-name" => "audio-input-microphone",

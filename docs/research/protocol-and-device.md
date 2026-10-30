@@ -1,8 +1,9 @@
 # ATVV v1.0 and device facts
 
-Status: implementation facts and field reports; RC003 values marked “expected”
-are not hardware-verified in this repository. See
-[`README.md`](README.md) for evidence rules.
+Status: implementation facts and field reports. RC003 values were verified in
+the step 07 hardware run on 2026-10-30 where
+[`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) says so; everything
+else is an upstream or field-report expectation.
 
 ## 1. GATT service
 
@@ -69,8 +70,8 @@ Fixed layout, 7 bytes:
 
 ## 3. RC003 profile
 
-Profile id: `miremote-rc003`. These are expected/facts from field reports, not a
-local hardware run:
+Profile id: `miremote-rc003`. These values were verified on 2026-10-30 except
+where the evidence file notes otherwise:
 
 | Field | Value |
 |---|---|
@@ -107,7 +108,13 @@ evidence.
   `Channels=1` in BlueZ avoids EATT ordering problems.
 - The `AUDIO_START` payload codec can be garbage on RC003; CAPS is
   authoritative.
-- RC003 sends late audio after `AUDIO_STOP`; discard the 300 ms window.
+- RC003 sends late audio after `AUDIO_STOP`; discard the 300 ms window. The
+  one hardware run saw no late audio after an HTT release (`AUDIO_STOP 00 02`);
+  keep the discard for other stop reasons.
+- A host `MIC_OPEN` (`0c 00`) produces `AUDIO_START` after roughly 300–400 ms
+  but **no audio frames** until the physical voice key is held. The key gates
+  the microphone data path; step 08 must synthesize the key rather than rely
+  on `StartVoice` for audio.
 - RC003 16 kHz uses 0 dB. Clamp gain to ±24 dB; do not enable AGC by default.
 - Optional three-point smoothing/click removal is allowed; keep it
   configurable and avoid over-filtering for ASR.
@@ -267,14 +274,25 @@ Integration rules:
 
 ## 9. Real-device questions
 
-Record in step 07:
+Answered by the 2026-10-30 run in
+[`rc003-hardware-evidence.md`](rc003-hardware-evidence.md), unless marked
+otherwise:
 
-- Exact `CAPS_RESP` hex, version, codec mask, interaction, frame size.
-- Exact `AUDIO_START` payload and stream id.
-- Exact `AUDIO_STOP` bytes and whether an echo follows; timing.
-- Whether `START_SEARCH` ever appears.
-- Notification lengths, MTU, fragmentation, and `0x0A` sync frequency.
-- 16 kHz WAV amplitude/clipping and intelligibility.
-- Pairing gesture and numeric-comparison prompt.
+- Exact `CAPS_RESP` hex, version, codec mask, interaction, frame size:
+  `0b 01 00 02 03 00 78 00 00`, v1.0, mask `0x02`, HTT, 120 bytes (9-byte
+  notification).
+- Exact `AUDIO_START` payload and stream id: `04 03 02 03`, then `04 03 02 04`;
+  the stream id increments.
+- Exact `AUDIO_STOP` bytes and whether an echo follows; timing: `00 02` on
+  HTT release, `00 08` on link loss; no echo observed.
+- Whether `START_SEARCH` ever appears: no.
+- Notification lengths, MTU, fragmentation, and `0x0A` sync frequency:
+  negotiated MTU 242; frames arrived whole; sync frequency not counted.
+- 16 kHz WAV amplitude/clipping and intelligibility: non-silent speech, peak
+  0.999969, RMS 0.356; clipping and intelligibility not independently
+  verified.
+- Pairing gesture and numeric-comparison prompt: not verified (device was
+  already bonded).
 - 60-second keepalive, release, disconnect/reconnect, adapter power-cycle, and
-  PipeWire service restart.
+  PipeWire service restart: keepalive/release/reconnect verified; adapter
+  power-cycle and installed-unit PipeWire restart remain open.

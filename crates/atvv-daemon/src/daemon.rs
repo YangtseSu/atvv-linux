@@ -162,6 +162,7 @@ pub struct Daemon {
     frames: u64,
     samples: u64,
     dropped_frames: u64,
+    traced_audio: bool,
     input_degraded: Vec<String>,
     last_button: Option<String>,
     voice_key: Option<bool>,
@@ -259,6 +260,7 @@ impl Daemon {
             frames: 0,
             samples: 0,
             dropped_frames: 0,
+            traced_audio: false,
             input_degraded,
             last_button: None,
             voice_key: None,
@@ -346,6 +348,7 @@ impl Daemon {
         self.frames = 0;
         self.samples = 0;
         self.dropped_frames = 0;
+        self.traced_audio = false;
         self.discard_until = None;
         self.last_audio = Some(now);
         self.next_keepalive = Some(now + self.keepalive_interval);
@@ -411,6 +414,7 @@ impl Daemon {
     }
 
     fn on_control(&mut self, bytes: &[u8]) {
+        self.trace(format!("control {bytes:02x?}"));
         match CtlEvent::parse(bytes) {
             CtlEvent::CapsResp(caps) => {
                 self.caps_deadline = None;
@@ -513,6 +517,17 @@ impl Daemon {
             }
         };
         self.decoder = decoder;
+
+        if self.verbose && !self.traced_audio {
+            let raw = &frame[..frame.len().min(16)];
+            let peak = self.pcm[..written].iter().map(|sample| sample.abs()).max();
+            self.trace(format!(
+                "first frame {} B raw {raw:02x?} peak {}",
+                frame.len(),
+                peak.unwrap_or(0)
+            ));
+            self.traced_audio = true;
+        }
 
         if self.gain != 1.0 {
             for sample in &mut self.pcm[..written] {
