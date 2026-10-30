@@ -93,8 +93,10 @@ Recorded 2026-10-31:
   reported `properties ok` and `contract ok`.
 - `timeout 3 pw-cat --record --target atvv-miremote-rc003 --rate 16000
   --channels 1 --format s16 /tmp/atvv-smoke.wav` produced a 96,246-byte WAV.
-- The packaged `0.1.0-4` install predates the contract output; rebuilding the
-  package is required for the installed unit to expose it.
+- The packaged `0.1.0-4` install predates the contract output.
+  `atvv-linux 0.1.0-5` was built from this tree (package sha256
+  `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`);
+  root install is pending the operator.
 
 ## Exit criteria
 

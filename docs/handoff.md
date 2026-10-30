@@ -278,14 +278,20 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `timeout 3 pw-cat --record --target atvv-miremote-rc003 --rate 16000
   --channels 1 --format s16` produced a 96,246-byte WAV. The installed
   `0.1.0-4` unit was stopped for the check and restarted afterwards.
+- 2026-10-31 `makepkg -f` from the step-12 tree (`dadc23b`) →
+  `atvv-linux 0.1.0-5` (5.9 MiB) plus a debug package; package sha256
+  `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`.
+  Root install is pending the operator.
 
 ## Next step
 
 **Step 12 is complete.** The provider contract is available through
 `atvvctl contract [--json]`, the `contract` object in `atvvctl status`,
 `atvvctl doctor`, and the `atvv-mcp` `contract` tool. Browser and IM recipes
-are documented. The installed `0.1.0-4` package predates this output; rebuild
-and install a new package to expose `atvv.*` on the resident source.
+are documented. `atvv-linux 0.1.0-5` was built from the step-12 tree
+(sha256 `0099a95a36946146239daeab5036e0677561d02d7abaa1a7806f208aa1e3e447`);
+the installed `0.1.0-4` package predates the output, so installing `0.1.0-5`
+is required to expose `atvv.*` on the resident source.
 
 **Step 10 vinput-zero-config remains** (in progress, upstream-bound): ATVV is
 the provider and vinput is the consumer. The primary path is the resident
@@ -297,10 +303,14 @@ ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). The upstream issue
 and PR are not submitted. `vinput = "trigger"` stays the default;
 `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: rebuild the Arch package from the step-12 tree
-(`./packaging/arch/make-source.sh`, then `makepkg -f`), and have the operator
-install it so the resident source advertises the contract. Then proceed with
-the step 10 upstream issue/PR and the real vinput auto-bind check.
+Immediate action: the operator installs the built package, then proceeds
+with the step 10 upstream issue/PR and the real vinput auto-bind check.
+
+```sh
+sudo pacman -U packaging/arch/atvv-linux-0.1.0-5-x86_64.pkg.tar.zst
+systemctl --user restart atvvd
+atvvctl doctor
+```
 
 ## Commands
 

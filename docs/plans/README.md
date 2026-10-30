@@ -126,9 +126,9 @@ Step 08 verified the voice-edge mic control, the synthetic trigger, the
 the same evidence document records the real-press and automated runs.
 
 Step 09 packaging and acceptance is complete: `atvv-linux 0.1.0-3` is the
-acceptance baseline, `0.1.0-4` is installed and active, the enabled user unit
-starts `/usr/bin/atvvd`, and `atvvctl doctor` reports all green on the real
-RC003.
+acceptance baseline, `0.1.0-4` is installed and active, and `0.1.0-5` is
+built with the provider contract; the enabled user unit starts
+`/usr/bin/atvvd`, and `atvvctl doctor` reports all green on the real RC003.
 The end-to-end fcitx text commit is operator-confirmed and the vinput journal
 records the ATVV source at 16 kHz. The completed record is
 [`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
