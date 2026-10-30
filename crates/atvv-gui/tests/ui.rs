@@ -24,6 +24,7 @@ fn window() -> std::rc::Rc<AppWindow> {
     for _ in 0..3 {
         while gtk::glib::MainContext::default().iteration(false) {}
     }
+    gtk::test_widget_wait_for_draw(window.window());
     window
 }
 
@@ -38,6 +39,10 @@ fn window_smoke() {
 
     let window = window();
     assert!(window.window().get_visible());
+    assert!(
+        window.diagram().fixed().width() > 0,
+        "the hotspot overlay was allocated no space"
+    );
 
     for button in RemoteButton::LOGICAL {
         let hotspot = window
@@ -45,6 +50,14 @@ fn window_smoke() {
             .button(button)
             .unwrap_or_else(|| panic!("{button} has no hotspot"));
         assert_eq!(hotspot.widget_name(), format!("hotspot-{}", button.name()));
+        assert!(
+            hotspot.width() > 0 && hotspot.height() > 0,
+            "{button} hotspot has no allocation"
+        );
+        let bounds = hotspot
+            .compute_bounds(window.diagram().fixed())
+            .expect("hotspot bound");
+        assert!(bounds.width() > 0.0 && bounds.height() > 0.0);
     }
     assert!(window.diagram().button(RemoteButton::Voice).is_none());
 

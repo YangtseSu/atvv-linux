@@ -128,6 +128,17 @@ const HOTSPOT_CSS: [&str; 12] = [
     "hotspot-volume-down",
 ];
 
+const DIAGRAM_WIDTH: f64 = 220.0;
+const DIAGRAM_HEIGHT: f64 = DIAGRAM_WIDTH * VIEWBOX_HEIGHT / VIEWBOX_WIDTH;
+
+fn scaled(hotspot: Hotspot, width: f64, height: f64) -> (f64, f64, i32, i32) {
+    let x = (hotspot.x * width).round();
+    let y = (hotspot.y * height).round();
+    let w = (hotspot.width * width).round().max(18.0) as i32;
+    let h = (hotspot.height * height).round().max(18.0) as i32;
+    (x, y, w, h)
+}
+
 /// Callback type for a hotspot click.
 pub type SelectHandler = Box<dyn Fn(RemoteButton)>;
 
@@ -150,39 +161,30 @@ impl RemoteDiagram {
             .width_request(220)
             .build();
 
-        let overlay = gtk::Overlay::new();
-        overlay.set_hexpand(true);
-        overlay.set_vexpand(true);
+        let fixed = gtk::Fixed::new();
+        fixed.add_css_class("remote-canvas");
+        fixed.set_hexpand(true);
+        fixed.set_vexpand(true);
+        fixed.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
+        root.set_child(Some(&fixed));
 
-        let canvas = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        canvas.add_css_class("remote-canvas");
-        canvas.set_hexpand(true);
-        canvas.set_vexpand(true);
-
-        match texture() {
+        let base: gtk::Widget = match texture() {
             Some(texture) => {
                 let picture = gtk::Picture::for_paintable(&texture);
                 picture.set_content_fit(gtk::ContentFit::Contain);
                 picture.set_can_shrink(true);
-                picture.set_hexpand(true);
-                picture.set_vexpand(true);
-                canvas.append(&picture);
+                picture.set_can_target(false);
+                picture.upcast()
             }
             None => {
                 let label = gtk::Label::new(Some("Remote diagram unavailable"));
                 label.add_css_class("dim-label");
-                label.set_hexpand(true);
-                label.set_vexpand(true);
-                canvas.append(&label);
+                label.set_can_target(false);
+                label.upcast()
             }
-        }
-        overlay.set_child(Some(&canvas));
-
-        let fixed = gtk::Fixed::new();
-        fixed.set_hexpand(true);
-        fixed.set_vexpand(true);
-        overlay.add_overlay(&fixed);
-        root.set_child(Some(&overlay));
+        };
+        base.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
+        fixed.put(&base, 0.0, 0.0);
 
         let mut buttons = BTreeMap::new();
         for (index, hotspot) in HOTSPOTS.iter().enumerate() {
@@ -200,34 +202,35 @@ impl RemoteDiagram {
             buttons.insert(hotspot.button, button);
         }
 
-        let layout_buttons = buttons.clone();
-        let update = move |fixed: &gtk::Fixed| {
-            let width = f64::from(fixed.width());
-            let height = f64::from(fixed.height());
-            if width <= 0.0 || height <= 0.0 {
-                return;
-            }
-            for hotspot in HOTSPOTS {
-                let Some(button) = layout_buttons.get(&hotspot.button) else {
-                    continue;
-                };
-                let x = (hotspot.x * width).round();
-                let y = (hotspot.y * height).round();
-                let w = (hotspot.width * width).round().max(18.0);
-                let h = (hotspot.height * height).round().max(18.0);
-                button.set_size_request(w as i32, h as i32);
-                fixed.move_(button, x, y);
-            }
-        };
-        let update = std::rc::Rc::new(update);
-        for property in ["width", "height"] {
-            let update = update.clone();
-            fixed.connect_notify_local(Some(property), move |fixed, _| {
-                update(fixed);
-            });
+        for hotspot in HOTSPOTS {
+            let Some(button) = buttons.get(&hotspot.button) else {
+                continue;
+            };
+            let (x, y, w, h) = scaled(hotspot, DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
+            button.set_size_request(w, h);
+            fixed.move_(button, x, y);
         }
-        let update_map = update.clone();
-        fixed.connect_map(move |fixed| update_map(fixed));
+
+        let layout_base = base.clone();
+        let layout_buttons = buttons.clone();
+        let last = std::cell::Cell::new((0, 0));
+        fixed.add_tick_callback(move |fixed, _clock| {
+            let width = fixed.width();
+            let height = fixed.height();
+            if width > 0 && height > 0 && (width, height) != last.get() {
+                last.set((width, height));
+                layout_base.set_size_request(width, height);
+                for hotspot in HOTSPOTS {
+                    let Some(button) = layout_buttons.get(&hotspot.button) else {
+                        continue;
+                    };
+                    let (x, y, w, h) = scaled(hotspot, f64::from(width), f64::from(height));
+                    button.set_size_request(w, h);
+                    fixed.move_(button, x, y);
+                }
+            }
+            glib::ControlFlow::Continue
+        });
 
         Self {
             root,

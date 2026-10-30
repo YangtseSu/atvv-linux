@@ -52,8 +52,9 @@ const CSS: &str = r#"
   border-color: alpha(currentColor, 0.32);
 }
 .remote-hotspot.selected {
-  background: alpha(@accent_bg_color, 0.30);
-  border-color: @accent_color;
+  background: alpha(@accent_bg_color, 0.38);
+  border: 2px solid @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.28);
 }
 .remote-hotspot.conflict {
   background: alpha(@warning_color, 0.12);

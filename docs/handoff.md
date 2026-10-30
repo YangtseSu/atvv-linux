@@ -128,12 +128,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `namcap` reports only the expected implicit
   libraries and runtime-service notes. `pacman -U` needs the operator's
   password, so the packages are not installed; `atvv-linux 0.1.0-6` remains
-  active.
+  active. The later hotspot hit-testing fix is not in these packages; rebuild
+  after the layout direction is settled.
 - **14 configuration GUI (implemented; physical test-mode press pending)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
   embedded SVG remote diagram matching the RC003 layout (power/voice at the
   top, circular D-pad, back/home/menu left, volume/TV right; the voice key is
-  not a hotspot), twelve accessible `GtkButton` hotspots, the
+  not a hotspot), twelve pointer-clickable `GtkButton` hotspots (XTest
+  verified all twelve), the
   single/double/long action editor, keyboard and remote learning, test mode,
   `exec` confirmation, banners/toasts, and a daemon-unavailable state.
   `RunAction` was added to `org.atvv.Daemon` for test mode. Split packaging is

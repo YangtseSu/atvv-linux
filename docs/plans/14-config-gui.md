@@ -204,3 +204,9 @@ Manual:
 - 2026-10-31 — rebuilt `0.1.0-7` after the diagram fix; the staged package
   now renders the RC003 layout. The third physical Test-mode window (45 s)
   also saw no key event; the operator was not at the remote.
+- 2026-10-31 — fixed hotspot pointer input. `GtkOverlay` allocated the
+  overlay `GtkFixed` at `0×0`, so no button had a hit area; the diagram was
+  visually present but unclickable. Replaced the overlay with a `GtkFixed`
+  surface, a 220×564 initial request, and a tick-based re-layout on size
+  changes. XTest clicks selected all twelve hotspots in order; the UI smoke
+  test now asserts the overlay and every hotspot have a real allocation.
