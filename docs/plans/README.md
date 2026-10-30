@@ -39,8 +39,9 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on operator approval and upstream review: local consumer patches ready; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
+| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
+| F — Configuration | 13–14 | keymap persistence/config API, then a GTK4/libadwaita GNOME-HIG configuration app |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -62,6 +63,8 @@ on approval/upstream; steps 11 and 12 are complete.
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
+| 13 | F | [keymap-config](13-keymap-config.md) | ⬜ not-started | 12, 06 |
+| 14 | F | [config-gui](14-config-gui.md) | ⬜ not-started | 13 |
 
 ## Architecture contract
 
@@ -86,6 +89,8 @@ Binding rules:
   and read-only status. Consumers such as fcitx5-vinput own source selection
   and trigger binding; ATVV does not write their configuration or call their
   daemon in the primary path (ADR 0007).
+- The GUI is an optional GTK4/libadwaita client over D-Bus; the daemon
+  remains headless and must not gain GUI dependencies (ADR 0008).
 - The source advertises the provider contract: `atvv.contract_version=1`,
   `atvv.profile`, and `atvv.recording_keys` (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`). Consumers bind the declared set; the provider emits one active
@@ -134,7 +139,7 @@ records the ATVV source at 16 kHz. The completed record is
 CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
 GitHub Actions daily.
 
-Step 10 is blocked on operator approval and upstream review. ATVV is the
+Step 10 is blocked on upstream review/merge. ATVV is the
 provider: it exposes the resident `Audio/Source` and the standard `Dictate`
 key. vinput is the consumer and owns source selection and trigger binding.
 Issues
@@ -181,3 +186,17 @@ abandoned; the decision and evidence are in
 [ADR 0006](../decisions/0006-evdevil-input-backend.md) and
 [`consumer-keys.md`](../research/consumer-keys.md). Context-dependent mapping
 of the three keys is deferred.
+
+Steps 13–14 are planned. Step 13 can start now; step 14 depends on it. Step 10
+remains blocked on upstream review. The GUI decision is recorded in
+[ADR 0008](../decisions/0008-gui-toolkit.md).
+
+## Backlog after 14
+
+- AUR/release packaging for the GUI; AppStream and screenshots.
+- Optional tray/status indicator: connection, recording, battery, error.
+- PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
+- Second ATVV v1.0 device to validate the profile abstraction.
+- zbus 6 migration and removal of ignored zbus 5 advisories.
+- Optional manual layers/profiles; no automatic per-app focus detection.
+- Optional import/export and config migration UI.

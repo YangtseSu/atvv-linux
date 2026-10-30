@@ -30,6 +30,9 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
   live in `docs/research/reference-projects.md`.
 - Reference external projects by GitHub URL and pinned commit. Never record a
   local clone path in this repository.
+- GUI: GTK4 + libadwaita + GNOME HIG (ADR 0008). The GUI is a separate
+  D-Bus client; it never grabs evdev or writes `daemon.toml`. No TUI, GPUI, or
+  web UI.
 - Do not push without explicit user approval for that push. Do not rewrite
   published history.
 

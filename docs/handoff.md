@@ -16,7 +16,8 @@ Updated: 2026-10-31
 2. `docs/plans/README.md` — canonical step index and M0 exit criteria.
 3. `docs/research/README.md` — evidence index and current deltas.
 4. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
-5. The next step file and its research links before editing code.
+5. `docs/decisions/0008-gui-toolkit.md` — GTK4/libadwaita/GNOME HIG.
+6. The next step file and its research links before editing code.
 
 This file is updated in place at the end of every step/session. Do not create
 per-session copies; `docs/plans/` remains the canonical plan.
@@ -104,15 +105,16 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `vinput_device` policy are dropped. `vinput = "trigger"` remains the
   default; `vinput = "dbus"` is an explicit fallback. The live `daemon.toml`
   already sets `trigger_key = "DICTATE"`; the installed `0.1.0-5` service
-  accepts it. The primary upstream request is still consumer-side source
-  auto-selection plus auto-binding of `atvv.recording_keys`; it is not
-  submitted. Local consumer patches are implemented in the
-  `YangtseSu/fcitx5-vinput` fork on three stacked branches
-  (`feat/auto-capture-device`, `feat/recording-keys-metadata`,
-  `feat/bind-recording-keys`); see the step 10 progress log for verification.
-  See `docs/plans/10-vinput-zero-config.md`,
+  accepts it. Issues #491 and #492 are open; PR #493 is ready and PRs #494
+  and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
+- **13 keymap configuration backend (planned)**: shared `atvv-config` schema,
+  per-button action persistence, D-Bus `GetConfig`/`SetConfig`/capture, and
+  `atvvctl config`/`capture`/`map`. No GUI required.
+- **14 GTK4 configuration GUI (planned)**: `atvv-gui`/`atvv-config`, remote
+  diagram with clickable hotspots, action editor, live key learning, test
+  mode, and GNOME HIG. Depends on step 13.
 - zbus 6 migration (the zbus 5 split crates are unmaintained; denied
   advisories are documented in `deny.toml`). Do it as a separate dependency
   step.
@@ -138,6 +140,8 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - `atvv-bluez` owns a private Tokio runtime and exposes a synchronous
   `BluezLink`; `atvv-daemon` adapts it to `Transport`.
 - ASR is external; no unofficial cloud protocol in the core.
+- GUI: Rust + `gtk4-rs` + `libadwaita`, GNOME HIG; GUI is an optional D-Bus
+  client. See ADR 0008. No TUI/GPUI/web UI.
 - Device facts live in `DeviceProfile`; RC003 profile id is
   `miremote-rc003`. Button keys and gesture timing are profile fields.
 - The fake remote profile (`test-fake-remote`, VID `0x1209`, PID `0x0002`) is
@@ -302,20 +306,18 @@ generic IM guidance are documented; step 12's dependency is `03, 06`, while
 the vinput consumer recipe is the blocked step 10. `atvv-linux 0.1.0-5` is installed and active; the resident
 source advertises the contract and `atvvctl doctor` is all green.
 
-**Step 10 vinput-zero-config is blocked** on operator approval (push, issues,
-draft PRs) and upstream review/merge: ATVV is the provider and vinput is the
-consumer. The primary path is the resident
-PipeWire source plus the standard `Dictate` key; the one-time
-`vinput device use` and `Dictate` at the next free index (default install:
-`1=Dictate`) setup is correct layering. A consumer-side
-auto-selection/auto-bind feature would remove the manual entries; the
-ATVV-side `SetCaptureDevice` push is dropped (ADR 0007). Issues #491 and #492
-are open; no PR is submitted. `vinput = "trigger"` stays the default;
-`vinput = "dbus"` is an explicit fallback.
+**Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
+the provider and vinput is the consumer. Issues #491 and #492 are open; PR
+#493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
+default; `vinput = "dbus"` is an explicit fallback.
+
+**Step 13 keymap-config can start now.** It does not depend on step 10. Read
+`docs/plans/13-keymap-config.md`; step 14 (GTK4/libadwaita GUI) follows after
+step 13. The GUI decision is recorded in ADR 0008.
 
 Immediate action: wait for upstream review on PR #493; after it merges, rebase
 PR #494 onto `main`, then PR #495, rebuild vinput, and record the real
-auto-bind acceptance. No local publication work remains.
+auto-bind acceptance. In parallel, start step 13.
 
 ## Commands
 
