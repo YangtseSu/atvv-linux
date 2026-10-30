@@ -9,11 +9,43 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use atvv_input::parse_key_program;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Gain clamp from the research notes: ±24 dB, no AGC.
 pub const MAX_GAIN_DB: i8 = 24;
+
+/// fcitx5-vinput trigger key used while the voice key is held.
+///
+/// `Alt_R` is the vinput default and does not collide with common desktop
+/// bindings; the target application must be configured to the same key.
+pub const DEFAULT_TRIGGER_KEY: &str = "Alt_R";
+
+/// How the daemon reaches fcitx5-vinput.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VinputMode {
+    /// Grab the voice key and synthesize `trigger_key` on press/release.
+    #[default]
+    Trigger,
+    /// Call `org.fcitx.Vinput` `StartRecording`/`StopRecording` directly.
+    Dbus,
+    /// Do not integrate with vinput; the D-Bus/CLI session still works.
+    Off,
+}
+
+impl VinputMode {
+    /// Stable name used by status reports and diagnostics.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Trigger => "trigger",
+            Self::Dbus => "dbus",
+            Self::Off => "off",
+        }
+    }
+}
 
 /// Raw `daemon.toml`.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -27,6 +59,10 @@ pub struct FileConfig {
     pub gain_db: Option<i8>,
     /// Start the evdev/uinput input path.
     pub input: Option<bool>,
+    /// fcitx5-vinput integration mode.
+    pub vinput: Option<VinputMode>,
+    /// Synthetic key emitted while the voice key is held; `none` disables it.
+    pub trigger_key: Option<String>,
 }
 
 /// Validated configuration with defaults applied.
@@ -38,6 +74,9 @@ pub struct LoadedConfig {
     pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
+    pub vinput: VinputMode,
+    /// Key name; `None` disables synthetic trigger emission.
+    pub trigger_key: Option<String>,
 }
 
 /// `$XDG_CONFIG_HOME/atvv/daemon.toml`, or `~/.config/atvv/daemon.toml`.
@@ -62,6 +101,8 @@ pub fn load(path: &Path, profile_gain_db: i8) -> Result<LoadedConfig, ConfigErro
             adapter: None,
             gain_db: profile_gain_db,
             input: true,
+            vinput: VinputMode::default(),
+            trigger_key: Some(DEFAULT_TRIGGER_KEY.to_string()),
         });
     }
 
@@ -79,6 +120,9 @@ pub fn load(path: &Path, profile_gain_db: i8) -> Result<LoadedConfig, ConfigErro
         return Err(ConfigError::GainRange(gain_db));
     }
 
+    let trigger_key =
+        parse_trigger_key(file.trigger_key.as_deref().unwrap_or(DEFAULT_TRIGGER_KEY))?;
+
     Ok(LoadedConfig {
         path: path.to_path_buf(),
         existed: true,
@@ -86,7 +130,24 @@ pub fn load(path: &Path, profile_gain_db: i8) -> Result<LoadedConfig, ConfigErro
         adapter: file.adapter,
         gain_db,
         input: file.input.unwrap_or(true),
+        vinput: file.vinput.unwrap_or_default(),
+        trigger_key,
     })
+}
+
+/// Validate a configured trigger key name.
+///
+/// `none` or an empty value disables synthetic trigger emission. Any other
+/// value must resolve to a kernel key.
+fn parse_trigger_key(name: &str) -> Result<Option<String>, ConfigError> {
+    let name = name.trim();
+    if name.is_empty() || name.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    if parse_key_program(name).is_none() {
+        return Err(ConfigError::TriggerKey(name.to_string()));
+    }
+    Ok(Some(name.to_string()))
 }
 
 /// Record the paired device and adapter without discarding other settings.
@@ -154,6 +215,8 @@ pub enum ConfigError {
     },
     #[error("gain_db {0} is outside -{MAX_GAIN_DB}..={MAX_GAIN_DB}")]
     GainRange(i8),
+    #[error("trigger_key {0:?} is not a known input key name (use `none` to disable)")]
+    TriggerKey(String),
 }
 
 #[cfg(test)]
@@ -172,6 +235,40 @@ mod tests {
         assert!(!config.existed);
         assert_eq!(config.gain_db, 0);
         assert!(config.input);
+        assert_eq!(config.vinput, VinputMode::Trigger);
+        assert_eq!(config.trigger_key.as_deref(), Some(DEFAULT_TRIGGER_KEY));
+    }
+
+    #[test]
+    fn parses_vinput_mode_and_trigger_key() {
+        let path = std::env::temp_dir().join(format!(
+            "atvv-config-vinput-{}-{}.toml",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        std::fs::write(&path, "vinput = \"dbus\"\ntrigger_key = \"F18\"\n").unwrap();
+        let config = load(&path, 0).unwrap();
+        assert_eq!(config.vinput, VinputMode::Dbus);
+        assert_eq!(config.trigger_key.as_deref(), Some("F18"));
+
+        std::fs::write(&path, "trigger_key = \"none\"\n").unwrap();
+        let config = load(&path, 0).unwrap();
+        assert_eq!(config.vinput, VinputMode::Trigger);
+        assert_eq!(config.trigger_key, None);
+
+        std::fs::write(&path, "trigger_key = \"ctrl+alt+v\"\n").unwrap();
+        let config = load(&path, 0).unwrap();
+        assert_eq!(config.trigger_key.as_deref(), Some("ctrl+alt+v"));
+
+        std::fs::write(&path, "trigger_key = \"not-a-key\"\n").unwrap();
+        assert!(matches!(
+            load(&path, 0),
+            Err(ConfigError::TriggerKey(key)) if key == "not-a-key"
+        ));
+
+        std::fs::write(&path, "vinput = \"carrier-pigeon\"\n").unwrap();
+        assert!(matches!(load(&path, 0), Err(ConfigError::Parse { .. })));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

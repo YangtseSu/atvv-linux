@@ -29,6 +29,7 @@ pub struct StatusView {
     pub caps: Option<CapsView>,
     pub audio: AudioView,
     pub input: InputView,
+    pub vinput: VinputView,
     pub config: ConfigView,
     pub last_error: Option<String>,
 }
@@ -73,6 +74,18 @@ pub struct InputView {
     pub degraded: Vec<String>,
     pub last_button: Option<String>,
     pub voice_key: Option<bool>,
+}
+
+/// fcitx5-vinput integration state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VinputView {
+    /// `trigger`, `dbus`, or `off`.
+    pub mode: String,
+    /// Synthetic key name in trigger mode.
+    pub trigger: Option<String>,
+    /// Whether the last `org.fcitx.Vinput` call reached the service.
+    pub available: bool,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

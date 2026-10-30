@@ -18,6 +18,17 @@ pub struct KeyProgram {
     pub release: Vec<KeyCode>,
 }
 
+impl KeyProgram {
+    /// A single key held for as long as the caller keeps it pressed.
+    #[must_use]
+    pub fn single(code: KeyCode) -> Self {
+        Self {
+            press: vec![code],
+            release: vec![code],
+        }
+    }
+}
+
 /// Profile keys that cannot be resolved to one input code.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum KeyMapError {
@@ -174,6 +185,31 @@ pub fn resolve_key(name: &str) -> Option<KeyCode> {
     KeyCode::from_str(&format!("KEY_{}", base.to_uppercase())).ok()
 }
 
+/// Parse a synth expression: a single key (`Alt_R`, `F18`) or a chord
+/// (`ctrl+alt+v`). Modifiers are pressed first and released in reverse.
+///
+/// Chords exist for compositors that refuse bare modifier or bare function
+/// key bindings; the IME must be configured to the same chord.
+#[must_use]
+pub fn parse_key_program(input: &str) -> Option<KeyProgram> {
+    let tokens: Vec<&str> = input.split('+').map(str::trim).collect();
+    if tokens.is_empty() || tokens.iter().any(|token| token.is_empty()) {
+        return None;
+    }
+    let (key, mods) = tokens.split_last()?;
+    let action = if mods.is_empty() {
+        Action::Key {
+            name: (*key).to_string(),
+        }
+    } else {
+        Action::Combo {
+            mods: mods.iter().map(|token| (*token).to_string()).collect(),
+            key: (*key).to_string(),
+        }
+    };
+    KeyResolver.program(&action).ok()
+}
+
 /// Resolves actions into ordered key programs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct KeyResolver;
@@ -269,6 +305,33 @@ mod tests {
         assert_eq!(resolve_key("7"), Some(KeyCode::KEY_7));
         assert_eq!(resolve_key("context-menu"), Some(KeyCode::KEY_CONTEXT_MENU));
         assert_eq!(resolve_key("no-such-key"), None);
+    }
+
+    #[test]
+    fn single_key_program_presses_and_releases_the_same_key() {
+        let program = KeyProgram::single(KeyCode::KEY_RIGHTALT);
+        assert_eq!(program.press, vec![KeyCode::KEY_RIGHTALT]);
+        assert_eq!(program.release, vec![KeyCode::KEY_RIGHTALT]);
+    }
+
+    #[test]
+    fn parses_single_keys_and_chords() {
+        let single = parse_key_program("Alt_R").unwrap();
+        assert_eq!(single.press, vec![KeyCode::KEY_RIGHTALT]);
+        assert_eq!(single.release, vec![KeyCode::KEY_RIGHTALT]);
+
+        let chord = parse_key_program("ctrl+alt+v").unwrap();
+        assert_eq!(
+            chord.press,
+            vec![KeyCode::KEY_LEFTCTRL, KeyCode::KEY_LEFTALT, KeyCode::KEY_V]
+        );
+        assert_eq!(
+            chord.release,
+            vec![KeyCode::KEY_V, KeyCode::KEY_LEFTALT, KeyCode::KEY_LEFTCTRL]
+        );
+
+        assert!(parse_key_program("ctrl+").is_none());
+        assert!(parse_key_program("ctrl+nope").is_none());
     }
 
     #[test]

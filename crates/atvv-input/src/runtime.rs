@@ -23,7 +23,7 @@ use thiserror::Error;
 use crate::action::{Action, ActionError, ActionMap, Trigger};
 use crate::device::{SkippedDevice, discover};
 use crate::gesture::{Gesture, GestureEngine, Timing};
-use crate::keymap::{KeyMap, KeyMapError, KeyResolver};
+use crate::keymap::{KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program};
 use crate::vkbd::VirtualKeyboard;
 
 /// Event delivered to the daemon / CLI.
@@ -50,6 +50,8 @@ pub enum InputError {
     Profile { profile: String, error: KeyMapError },
     #[error("action map: {0}")]
     Action(#[from] ActionError),
+    #[error("voice trigger key {0:?} is not a known input name")]
+    TriggerKey(String),
     #[error("no evdev node matches profile {0}")]
     NoDevice(String),
     #[error("no matching evdev node could be grabbed")]
@@ -58,10 +60,28 @@ pub enum InputError {
     Thread(#[from] io::Error),
 }
 
+/// Optional synthetic key emitted while the voice key is held.
+///
+/// The voice key is grabbed for the ATVV session, so applications would
+/// otherwise never see F5. A synthetic trigger key (vinput defaults to
+/// `Alt_R`) preserves the IME input-context path.
+#[derive(Debug, Clone, Default)]
+pub struct InputOptions {
+    /// Key name resolved with [`resolve_key`]. `None` disables the trigger.
+    pub voice_trigger: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy)]
 enum RawEdge {
-    Voice { pressed: bool },
-    Button { button: RemoteButton, pressed: bool },
+    Voice {
+        pressed: bool,
+    },
+    Button {
+        button: RemoteButton,
+        pressed: bool,
+    },
+    /// A grabbed node disappeared; lift any held voice state.
+    Lost,
 }
 
 /// Map an evdev key value to a press/release edge.
@@ -86,6 +106,22 @@ struct Dispatcher {
 impl Dispatcher {
     fn voice(&self, pressed: bool) {
         let _ = self.events.send(RemoteEvent::Voice { pressed });
+    }
+
+    fn trigger(&self, program: &KeyProgram, pressed: bool) {
+        let Some(keyboard) = &self.vkbd else {
+            return;
+        };
+        let result = if pressed {
+            keyboard.hold(program)
+        } else {
+            keyboard.release(program)
+        };
+        if let Err(error) = result {
+            let _ = self.events.send(RemoteEvent::Degraded {
+                message: format!("voice trigger key: {error}"),
+            });
+        }
     }
 
     fn dispatch(&self, gestures: Vec<Gesture>) {
@@ -152,6 +188,15 @@ pub struct InputRuntime {
 impl InputRuntime {
     /// Discover, grab, and start reading the profile's nodes.
     pub fn start(profile: DeviceProfile, map: ActionMap) -> Result<Self, InputError> {
+        Self::start_with_options(profile, map, InputOptions::default())
+    }
+
+    /// Like [`Self::start`], with synthetic key emission for the voice key.
+    pub fn start_with_options(
+        profile: DeviceProfile,
+        map: ActionMap,
+        options: InputOptions,
+    ) -> Result<Self, InputError> {
         let keymap = KeyMap::from_profile(&profile).map_err(|error| InputError::Profile {
             profile: profile.id.to_string(),
             error,
@@ -161,9 +206,17 @@ impl InputRuntime {
             return Err(InputError::NoDevice(profile.id.to_string()));
         }
 
+        let voice_trigger = match options.voice_trigger {
+            Some(name) => Some(parse_key_program(&name).ok_or(InputError::TriggerKey(name))?),
+            None => None,
+        };
+
         let resolver = KeyResolver;
         let mut registration: BTreeSet<KeyCode> = keymap.codes().collect();
         registration.extend(resolver.codes_for(&map)?);
+        if let Some(program) = &voice_trigger {
+            registration.extend(program.press.iter().copied());
+        }
         for matched in &discovery.matched {
             registration.extend(matched.supported_keys.iter().copied());
         }
@@ -256,6 +309,10 @@ impl InputRuntime {
                                 thread::sleep(Duration::from_millis(10));
                             }
                             Err(error) => {
+                                // The node cannot deliver the release that
+                                // lifts a held trigger key; let the engine
+                                // synthesize it before reporting the loss.
+                                let _ = tx.send(RawEdge::Lost);
                                 let _ = event_tx.send(RemoteEvent::DeviceLost {
                                     path: path.clone(),
                                     error: error.to_string(),
@@ -286,6 +343,7 @@ impl InputRuntime {
         let engine_map = map.clone();
         let timing = profile.gesture_timing;
         let engine_event_tx = event_tx.clone();
+        let engine_trigger = voice_trigger;
         let engine = thread::Builder::new()
             .name("atvv-gesture".into())
             .spawn(move || {
@@ -299,6 +357,7 @@ impl InputRuntime {
                     vkbd: engine_vkbd,
                     events: engine_event_tx,
                 };
+                let mut voice_down = false;
                 while !engine_stop.load(Ordering::Relaxed) {
                     let now = Instant::now();
                     let timeout = engine
@@ -306,7 +365,13 @@ impl InputRuntime {
                         .map(|deadline| deadline.saturating_duration_since(now))
                         .unwrap_or(Duration::from_millis(250));
                     match raw_rx.recv_timeout(timeout) {
-                        Ok(RawEdge::Voice { pressed }) => dispatcher.voice(pressed),
+                        Ok(RawEdge::Voice { pressed }) => {
+                            voice_down = pressed;
+                            if let Some(program) = &engine_trigger {
+                                dispatcher.trigger(program, pressed);
+                            }
+                            dispatcher.voice(pressed);
+                        }
                         Ok(RawEdge::Button { button, pressed }) => {
                             let now = Instant::now();
                             let gestures = if pressed {
@@ -315,6 +380,15 @@ impl InputRuntime {
                                 engine.release(button, now)
                             };
                             dispatcher.dispatch(gestures);
+                        }
+                        Ok(RawEdge::Lost) => {
+                            if voice_down {
+                                voice_down = false;
+                                if let Some(program) = &engine_trigger {
+                                    dispatcher.trigger(program, false);
+                                }
+                                dispatcher.voice(false);
+                            }
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -454,5 +528,87 @@ mod tests {
             Some(Trigger::Long)
         );
         assert_eq!(trigger_for(Gesture::Release(RemoteButton::Ok)), None);
+    }
+}
+
+#[cfg(test)]
+mod kernel_tests {
+    use super::*;
+    use crate::fake::{FAKE_REMOTE, FakeRemote};
+
+    fn wait_for(device: &mut evdev::Device, code: KeyCode, value: i32) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            match device.fetch_events() {
+                Ok(events) => {
+                    for event in events {
+                        if event.event_type() == EventType::KEY
+                            && event.code() == code.code()
+                            && event.value() == value
+                        {
+                            return true;
+                        }
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                Err(_) => return false,
+            }
+        }
+        false
+    }
+
+    #[test]
+    #[ignore = "needs /dev/uinput and evdev read access"]
+    fn voice_key_emits_the_trigger_key_and_keeps_the_raw_edge() {
+        let mut fake = FakeRemote::open().expect("fake remote");
+        let runtime = InputRuntime::start_with_options(
+            FAKE_REMOTE,
+            ActionMap::defaults(),
+            InputOptions {
+                voice_trigger: Some("Alt_R".to_string()),
+            },
+        )
+        .expect("input runtime");
+        let path = runtime
+            .keyboard_path()
+            .expect("virtual keyboard node")
+            .to_path_buf();
+
+        // udev applies the seat ACL after the node appears.
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut keyboard = loop {
+            match evdev::Device::open(&path) {
+                Ok(device) => break device,
+                Err(_) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("cannot open {}: {error}", path.display()),
+            }
+        };
+        keyboard.set_nonblocking(true).unwrap();
+
+        fake.press(RemoteButton::Voice).expect("voice press");
+        assert!(
+            wait_for(&mut keyboard, KeyCode::KEY_RIGHTALT, 1),
+            "voice press did not synthesize Alt_R down"
+        );
+        fake.release(RemoteButton::Voice).expect("voice release");
+        assert!(
+            wait_for(&mut keyboard, KeyCode::KEY_RIGHTALT, 0),
+            "voice release did not lift Alt_R"
+        );
+
+        let mut edges = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while edges.len() < 2 && Instant::now() < deadline {
+            if let Ok(RemoteEvent::Voice { pressed }) = runtime.try_recv() {
+                edges.push(pressed);
+            } else {
+                thread::sleep(Duration::from_millis(5));
+            }
+        }
+        assert_eq!(edges, [true, false], "raw voice edges were lost");
     }
 }

@@ -12,9 +12,10 @@ not a second plan and it does not override `docs/plans/`.
   interface.
 - [`reference-projects.md`](reference-projects.md) — exact source URLs, pinned
   snapshots, licenses, reuse boundaries, and upstream references.
-- [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — first real RC003
-  run (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
-  PipeWire behavior, and the fixes found.
+- [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
+  runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
+  PipeWire behavior, the step 08 trigger/compositor run, and the fixes found.
+  The live fcitx capture from the ATVV source remains unverified.
 
 ## Evidence rules
 
@@ -38,7 +39,7 @@ not a second plan and it does not override `docs/plans/`.
 | 05 input/uinput | `landscape.md` §3.2 and §5, `protocol-and-device.md` §6 |
 | 06 daemon/D-Bus | `landscape.md` §3.1 and §6, `protocol-and-device.md` §7 |
 | 07 RC003 hardware | `protocol-and-device.md` §2–§5, `reference-projects.md`, `rc003-hardware-evidence.md` |
-| 08 fcitx/MCP | `protocol-and-device.md` §8, `landscape.md` §6 |
+| 08 fcitx/MCP | `protocol-and-device.md` §8, `landscape.md` §6, `rc003-hardware-evidence.md` §Step 08 |
 | 09 packaging | `reference-projects.md` §License boundaries, `landscape.md` §4 |
 
 ## Current deltas after the research snapshot
@@ -60,11 +61,15 @@ implementation direction:
   (`PartOf=pipewire.service`, `Restart=always`), not by an in-process monitor
   (ADR 0005).
 - **Hardware state.** Step 07 ran on a real RC003 (`C0:5D:39:F8:2D:4C`) on
-  2026-10-30. Steps 01–07 are complete; 08–09 remain. The verified facts are
-  in [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md).
+  2026-10-30. Steps 01–07 are complete; step 08 is implemented and awaiting
+  one untimed live fcitx capture; step 09 remains. The verified facts are in
+  [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md).
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
-  audio frames; the physical voice key must be held. Step 08 must synthesize
-  the voice key rather than rely on `StartVoice` for audio.
+  audio frames; the physical voice key must be held. The daemon opens
+  `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input
+  runtime synthesizes the configured fcitx trigger program (a key or chord).
+  The device may also send its own direct `AUDIO_START`; the session treats
+  either order as streaming.
 
 ## Open questions
 
@@ -76,5 +81,9 @@ These cannot be closed by reading code or by synthetic tests:
   capture is non-silent with peaks near full scale.)
 - Pairing gesture and LE Secure Connections numeric-comparison behavior. (The
   device was already bonded during step 07.)
+- Whether a live fcitx5-vinput recording starts from `atvv-miremote-rc003`
+  when the operator presses the key in a focused editor. The trigger path and
+  the source are verified separately; the combined leg is open and must not be
+  time-boxed.
 - fcitx5-vinput warm-stream behavior with the real daemon.
 - PipeWire service restart behavior of the installed systemd unit.

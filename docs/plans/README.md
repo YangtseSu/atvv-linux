@@ -39,11 +39,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08 | fcitx5-vinput trigger/D-Bus and a proper MCP surface |
+| D — Integration | 08 | **in progress**: fcitx5-vinput trigger/D-Bus, MCP surface, and an untimed live fcitx check |
 | E — Release | 09 | Arch packaging, permissions, CI, hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
-steps 08–09 remain.
+step 08 is implemented and awaiting the untimed fcitx live check; step 09
+depends on 08.
 
 ## Step files
 
@@ -56,7 +57,7 @@ steps 08–09 remain.
 | 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 |
 | 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
-| 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ⬜ not-started | 03, 06, 07 |
+| 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | 🚧 in-progress | 03, 06, 07 |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ⬜ not-started | all of 01–08 |
 
 ## Architecture contract
@@ -107,6 +108,13 @@ frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire
 source, which had stayed suspended without a playback driver. Full evidence is
 in [`docs/research/rc003-hardware-evidence.md`](../research/rc003-hardware-evidence.md).
-PipeWire service restart is systemd-owned (ADR 0005) and remains a step 09
-verification with the installed unit. Step 08 (fcitx5-vinput/MCP) is next;
-step 09 depends on all prior steps.
+
+Step 08 is implemented and under verification: the daemon's `vinput`/
+`trigger_key` settings, voice-edge mic control, the `org.fcitx.Vinput` client,
+`atvv-mcp`, isolated-bus tests, and the integration docs are in place. On a
+real RC003 press the daemon streamed 141 frames and a synthetic `ctrl+alt+v`
+chord fired a GNOME custom keybinding; the fcitx5 recording leg during a live
+press has not been observed yet. That check is repeatable and deliberately has
+no deadline. PipeWire service restart is systemd-owned (ADR 0005) and remains a
+step 09 verification with the installed unit. Step 09 depends on all prior
+steps.

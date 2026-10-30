@@ -1,0 +1,25 @@
+[package]
+name = "atvv-mcp"
+description = "Minimal stdio MCP server for the ATVV daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "atvv-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "atvv_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+atvv-daemon = { path = "../atvv-daemon" }
+serde_json.workspace = true
+
+[dev-dependencies]
+atvv-protocol = { path = "../atvv-protocol" }
+zbus.workspace = true

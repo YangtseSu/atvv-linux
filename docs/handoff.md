@@ -7,8 +7,8 @@ Updated: 2026-10-30
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 96 passed (7 test binaries),
-  1 ignored kernel-uinput test.
+- Tests: `cargo test --workspace` → 111 passed (12 test binaries),
+  2 ignored kernel-uinput tests.
 
 ## Read first
 
@@ -49,11 +49,23 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `AUDIO_START`, 120-byte frames, `AUDIO_STOP 00 02`/`00 08`, six keepalives
   over a 60 s hold, non-silent 16 kHz WAV, auto-reconnect. Evidence:
   `docs/research/rc003-hardware-evidence.md`.
+- **08 fcitx/MCP (implemented, one live check open)**: `vinput` and
+  `trigger_key` config (single key or `+` chord), voice-edge `MIC_OPEN`/
+  `MIC_CLOSE`, synthetic trigger emission with lost-node release, optional
+  `org.fcitx.Vinput` client with fast name-owner failure, `atvv-mcp` stdio
+  server (`status`, `voice_start`, `voice_stop`, `voice_toggle`,
+  `list_devices`, `reload`), isolated-bus mock tests, and
+  `docs/integrations/`. On a real press the daemon streamed 141 frames and a
+  synthetic `ctrl+alt+v` fired a GNOME custom keybinding; a live fcitx
+  recording during a press has not been observed.
 
 ## Not implemented
 
-- **08 fcitx5-vinput/MCP**: trigger key, D-Bus bridge, MCP. Unblocked by 07;
-  the RC003 microphone only produces frames while the voice key is held.
+- **08 live fcitx leg**: `vinput` lists `atvv-miremote-rc003` as active, but a
+  physical press has not yet produced a vinput recording with a focused editor
+  (the vinput-daemon log showed no capture negotiation during the one press).
+  The check is repeatable and must not be put on a countdown; run it whenever
+  an operator is at the machine.
 - **09 Arch packaging**: PKGBUILD, udev, installed systemd unit, CI, hardware
   acceptance. Depends on all prior steps; the installed-unit PipeWire restart
   check is still open.
@@ -106,12 +118,33 @@ power-cycle, intelligibility). Step 07 verified the fields recorded in
   `PipeWireSink` is verified separately with `pw-cli`/`pw-record`.
 - Config lives at `$XDG_CONFIG_HOME/atvv/daemon.toml` (or
   `~/.config/atvv/daemon.toml`): optional `device`, `adapter`, `gain_db`
-  (±24), and `input`. `atvvctl pair` writes `device` and preserves the rest.
-  Missing file = defaults; invalid file is reported by `ReloadConfig` and
-  `atvvctl doctor`.
+  (±24), `input`, `vinput` (`trigger`/`dbus`/`off`), and `trigger_key` (key or
+  `+` chord, `none` disables). `atvvctl pair` writes `device` and preserves the
+  rest. Missing file = defaults; invalid file is reported by `ReloadConfig` and
+  `atvvctl doctor`. `ReloadConfig` applies gain and input; vinput mode and
+  trigger require a daemon restart.
 - On the RC003, the physical voice key gates microphone data: a host
-  `MIC_OPEN` produces `AUDIO_START` but no audio frames. Step 08 must
-  synthesize the key for fcitx; `StartVoice` alone is not enough for audio.
+  `MIC_OPEN` produces `AUDIO_START` but no audio frames. The voice-key edges
+  therefore drive both `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger; the
+  device may also send a direct `AUDIO_START`, which the session treats as
+  streaming.
+- The mic is never opened because a PipeWire consumer is linked. The resident
+  source and the daemon have no consumer-presence callback; only voice edges,
+  `atvvctl mic`, D-Bus, and MCP request a session.
+- Trigger mode emits the configured key program from the input engine and
+  releases it when the grabbed node disappears, so a link loss cannot leave a
+  modifier stuck. `trigger_key` accepts a chord because GNOME custom shortcuts
+  reject bare modifier keys; the default remains `Alt_R` for fcitx.
+- `VinputClient` checks name ownership before `StartRecording`, so an absent
+  `vinput-daemon` fails immediately instead of waiting for the method timeout.
+  Failure is reported in `StatusView.vinput` and never stops the ATVV session.
+- `atvv-mcp` supports the handshake MCP revisions `2024-11-05` through
+  `2025-11-25` (`initialize`, `tools/list`, `tools/call`). Backend errors are
+  tool results (`isError: true`); unknown tools are `-32602`. It never handles
+  audio.
+- Live hardware checks are event-driven and must not impose a countdown on the
+  operator. Leave the daemon running and repeat the check whenever a person is
+  at the machine.
 - CI installs `libpipewire-0.3-dev`, `libspa-0.2-dev`, `libclang-dev`, and
   `dbus` on `ubuntu-latest`: the workspace builds a native PipeWire client and
   `libspa-sys` runs bindgen.
@@ -125,9 +158,26 @@ cargo test --workspace
 cargo test -p atvv-daemon
 ```
 
-- `cargo test --workspace` → 96 passed, 1 ignored.
-- `cargo test -p atvv-daemon` → 13 unit tests and the isolated-bus integration
-  test passed; the integration test starts its own `dbus-daemon`.
+- `cargo test --workspace` → 111 passed, 2 ignored.
+- `cargo test -p atvv-daemon` → 19 unit tests, the isolated-bus daemon test,
+  and two `org.fcitx.Vinput` tests passed; each integration test starts its
+  own `dbus-daemon`.
+- Step 08 isolated-bus tests: a mock `org.fcitx.Vinput` received
+  `StartRecording` and `StopRecording("")`; with the name absent the client
+  failed at once (`available = false`, error in the status view); `atvv-mcp`
+  over stdio against the mock daemon completed `initialize`, `tools/list`
+  (six tools), `tools/call status`, `voice_start` → `0x0C`, `voice_stop` →
+  `0x0D`, `list_devices`, and tool-error results.
+- `cargo test -p atvv-input voice_key_emits_the_trigger_key_and_keeps_the_raw_edge
+  -- --ignored` → the fake remote's voice press held `KEY_RIGHTALT` and the
+  release lifted it while the raw `Voice` edges still reached the daemon.
+- Step 08 real-device press (2026-10-30, RC003 `C0:5D:39:F8:2D:4C`, `hci0`):
+  with `trigger_key = "ctrl+alt+v"`, one physical press produced direct
+  `AUDIO_START 04 03 02 05`, 141 frames, `AUDIO_STOP 00 02`, and
+  `voice key pressed`/`released`; a GNOME custom keybinding
+  `<Control><Alt>v` fired from the synthetic chord. `vinput device list`
+  listed `atvv-miremote-rc003` as the active source. The same press produced no
+  vinput capture negotiation, so the fcitx recording leg is not verified.
 - Integration test: direct `AUDIO_START` → `VoiceStarted` + streaming frames;
   device `AUDIO_STOP` → exactly one `0x0D`, echo 150 ms later ignored;
   D-Bus `StartVoice`/`StopVoice` → one `MIC_OPEN`/`MIC_CLOSE`; introspection
@@ -171,18 +221,29 @@ cargo test -p atvv-daemon
 
 ## Next step
 
-**08 vinput-and-mcp** is next. Read:
+**08 live fcitx check**, then **09 packaging**. Step 08 code is complete; the
+only open item is one focused-editor press that starts a vinput recording from
+`atvv-miremote-rc003`. The check is repeatable and must never be put on a
+countdown; run it when a person is at the machine:
 
-```bash
+```sh
 # run from the repository root
-cat docs/research/README.md
-cat docs/plans/08-vinput-and-mcp.md
+atvvd --verbose                       # or the step 09 systemd unit
+vinput device use atvv-miremote-rc003
+systemctl --user restart vinput-daemon
+vinput device list                    # atvv-miremote-rc003 is active
+atvvctl monitor                       # prints voice started/stopped
+vinput daemon status                  # "recording" while the key is held
 ```
 
-Keep the RC003 key gating in mind: the physical voice key must be synthesized
-for fcitx; a host `StartVoice`/`MIC_OPEN` produces `AUDIO_START` but no audio
-frames. Do not add an in-process PipeWire service-restart monitor; the unit
-owns that (ADR 0005).
+Focus an editor that uses fcitx, press and hold the voice key, speak, release.
+The trigger must match vinput's `[TriggerKey]` (the current desktop uses
+`Control+Control_R`; `trigger_key = "Control_R"` or a chord works). If the
+recording starts, update step 08's two open exit criteria and its status. Do
+not add a timed harness; the check waits for a real event.
+
+Do not add an in-process PipeWire service-restart monitor; the unit owns that
+(ADR 0005).
 
 ## Commands
 

@@ -194,3 +194,51 @@ the graph, and consumers recorded digital silence.
 - Stop-echo timing (no echo observed after `AUDIO_STOP 00 02`).
 - Human or ASR transcription of the captured speech.
 - Full PipeWire service restart through the installed systemd unit (step 09).
+
+## Step 08 trigger and fcitx checks (2026-10-30)
+
+Second run on the same RC003 (`C0:5D:39:F8:2D:4C`), this time exercising the
+step 08 input/IME path. `atvvd` used the real BlueZ transport; the resident
+source was `atvv-miremote-rc003`; `vinput device list` marked it active after
+`vinput device use atvv-miremote-rc003` and a `vinput-daemon` restart.
+
+One physical voice-key press was observed with `trigger_key = "ctrl+alt+v"`
+(fcitx's vinput trigger was temporarily set to `Control+Alt+V`):
+
+```text
+control [04, 03, 02, 05]
+voice started
+state: streaming
+first frame 120 B raw [77, 72, 80, 98, 09, 81, 88, 09, 89, 90, 18, 13, 00, 10, 36, 30] peak 267
+voice key pressed
+voice is already active
+control [00, 02]
+voice stopped
+state: ready
+voice key released
+```
+
+`atvvctl status` afterwards reported 141 decoded frames, state `ready`, and
+`input.voice_key = false`. The device sent the direct `AUDIO_START` itself; the
+host `MIC_OPEN` triggered by the voice edge was therefore a no-op ("voice is
+already active"), and the release `AUDIO_STOP 00 02` closed the session without
+a host `MIC_CLOSE`.
+
+A GNOME custom keybinding `<Control><Alt>v` (command `touch
+/tmp/atvv-alt-r`) fired from the synthetic chord, proving that the trigger
+program reached the compositor.
+
+The same press did **not** start a vinput recording: the vinput-daemon journal
+showed no `negotiated format` entry after the ATVV source had been selected,
+so fcitx did not consume the trigger in that run. An earlier test with the
+desktop's existing vinput trigger `Control+Control_R` (with the default source
+still selected) did start recording and negotiated
+`rate=16000 channels=1 fmt=259`; that is evidence for the fcitx trigger path,
+not for the ATVV source. The missing live fcitx capture from
+`atvv-miremote-rc003` is the one open step 08 item.
+
+No time-boxed verification was used or should be added. The daemon stays
+running and the check can be repeated whenever an operator happens to press
+the key with a focused editor. All temporary changes (fcitx trigger, daemon
+`trigger_key`, vinput capture device, GNOME custom keybinding, `ydotoold`) were
+restored after the run.

@@ -193,6 +193,20 @@ fn daemon_client() -> Result<Client, String> {
         .map_err(|error| format!("cannot connect to the session D-Bus: {error}\nis atvvd running?"))
 }
 
+/// Whether `vinput-daemon` owns its well-known name on the session bus.
+fn vinput_service_present() -> bool {
+    let Ok(connection) = zbus::blocking::Connection::session() else {
+        return false;
+    };
+    let Ok(name) = zbus::names::BusName::try_from(atvv_daemon::vinput::SERVICE) else {
+        return false;
+    };
+    let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+        return false;
+    };
+    bus.name_has_owner(name).unwrap_or(false)
+}
+
 fn status() -> Result<(), String> {
     let client = daemon_client()?;
     let value = client.status_json().map_err(|error| error.to_string())?;
@@ -596,15 +610,69 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
         )),
     }
 
+    match &config {
+        Ok(config) => {
+            let trigger = config.trigger_key.as_deref().unwrap_or("none");
+            match config.vinput {
+                atvv_daemon::VinputMode::Trigger => {
+                    let keyboard = status.as_ref().is_some_and(|status| status.input.keyboard);
+                    checks.push(Check::new(
+                        "vinput",
+                        if keyboard {
+                            CheckState::Ok
+                        } else {
+                            CheckState::Warn
+                        },
+                        format!(
+                            "trigger mode: {trigger} ({})",
+                            if keyboard {
+                                "virtual keyboard ready"
+                            } else {
+                                "virtual keyboard unavailable"
+                            }
+                        ),
+                    ));
+                }
+                atvv_daemon::VinputMode::Dbus => {
+                    let present = vinput_service_present();
+                    checks.push(Check::new(
+                        "vinput",
+                        if present {
+                            CheckState::Ok
+                        } else {
+                            CheckState::Warn
+                        },
+                        if present {
+                            "dbus mode: org.fcitx.Vinput is running"
+                        } else {
+                            "dbus mode: org.fcitx.Vinput is not running; trigger degrades"
+                        },
+                    ));
+                }
+                atvv_daemon::VinputMode::Off => checks.push(Check::new(
+                    "vinput",
+                    CheckState::Warn,
+                    "disabled; the voice key does not trigger fcitx",
+                )),
+            }
+        }
+        Err(_) => checks.push(Check::new(
+            "vinput",
+            CheckState::Warn,
+            "skipped: configuration is invalid",
+        )),
+    }
+
     match config {
         Ok(config) if config.existed => checks.push(Check::new(
             "config",
             CheckState::Ok,
             format!(
-                "{} (gain {} dB, input {})",
+                "{} (gain {} dB, input {}, vinput {})",
                 config_path.display(),
                 config.gain_db,
-                config.input
+                config.input,
+                config.vinput.name()
             ),
         )),
         Ok(_) => checks.push(Check::new(

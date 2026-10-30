@@ -9,7 +9,8 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–07 complete; the RC003 path has run on real hardware.**
+**Steps 01–07 complete; step 08 implemented with one untimed live check open;
+the RC003 path has run on real hardware.**
 
 Implemented:
 
@@ -20,22 +21,27 @@ Implemented:
   consumer links (`node.pause-on-idle=false`); full PipeWire service restart is
   delegated to the systemd unit (ADR 0005).
 - `atvv-input`: profile-driven evdev discovery and `EVIOCGRAB`, the RC003
-  gesture engine, and a uinput virtual keyboard. `atvvctl input fake-remote`
+  gesture engine, a uinput virtual keyboard, and a configurable synthetic
+  trigger key/chord for the grabbed voice key. `atvvctl input fake-remote`
   exercises the whole path without hardware.
 - `atvv-bluez`: BlueZ GATT transport (`bluer`), adapter/device selection,
   `AcquireNotify` with a `StartNotify` fallback, a pairing agent, and
   reconnect handling.
 - `atvv-daemon` / `atvvd`: session orchestration behind a `Transport` trait,
   the mock and BlueZ transports, timers, PCM decoding, the resident PipeWire
-  source, the input layer, and a JSON view model over `org.atvv.Daemon`.
+  source, voice-edge mic control, trigger-key and `org.fcitx.Vinput` modes, the
+  input layer, and a JSON view model over `org.atvv.Daemon`.
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
   simulation, an audio-source smoke test, the fake input remote, plus
   `status`, `mic start|stop|toggle`, `reload`, `pair`, `record`, `monitor`, and
   `doctor`.
+- `atvv-mcp`: stdio MCP server with `status`, `voice_start`, `voice_stop`,
+  `voice_toggle`, `list_devices`, and `reload`.
 
-Not yet implemented:
+Not yet complete:
 
-- fcitx5-vinput / MCP integration
+- one live fcitx5-vinput capture from `atvv-miremote-rc003` during a physical
+  press with a focused editor; the check is repeatable and has no deadline
 - Arch packaging and installed systemd/udev integration
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
@@ -61,6 +67,7 @@ cargo run -q -p atvv-cli -- pair C0:5D:39:F8:2D:4C
 cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
 cargo run -q -p atvv-cli -- record --wav /tmp/rc003.wav --seconds 10
 cargo run -q -p atvv-cli -- monitor
+cargo run -q -p atvv-mcp
 ```
 
 ## Layout
@@ -72,10 +79,12 @@ crates/atvv-input/      evdev discovery/grab, gestures, uinput keyboard
 crates/atvv-bluez/      BlueZ GATT transport and pairing agent
 crates/atvv-daemon/     atvvd session daemon, mock transport, D-Bus API
 crates/atvv-cli/        atvvctl diagnostics and D-Bus control
+crates/atvv-mcp/        stdio MCP server for agents
 packaging/              systemd user unit (step 09 installs it)
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
 docs/research/          landscape, protocol facts, reference snapshots
+docs/integrations/      fcitx5-vinput and coding-agent setup
 docs/handoff.md         current state for the next session
 ```
 

@@ -173,8 +173,13 @@ fn mock_daemon_dbus_contract() {
     let address = transport.address().to_string();
 
     let signals: Arc<dyn EventSink> = Arc::new(DbusSink::new(&server).expect("signal sink"));
-    let (daemon, handle) =
-        Daemon::new(config, Box::new(transport), Box::new(CountingSink), signals);
+    let (daemon, handle) = Daemon::new(
+        config,
+        Box::new(transport),
+        Box::new(CountingSink),
+        signals,
+        None,
+    );
     let interface = DaemonInterface::new(handle.status(), handle.commands(), address.clone());
     dbus::serve(&server, interface).expect("serve org.atvv.Daemon");
     let daemon_thread = std::thread::spawn(move || daemon.run());

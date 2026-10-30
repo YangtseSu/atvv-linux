@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
-use atvv_input::{Action, ActionMap, DictationMode, InputRuntime, RemoteEvent};
+use atvv_input::{Action, ActionMap, DictationMode, InputOptions, InputRuntime, RemoteEvent};
 use atvv_protocol::adpcm::Decoder;
 use atvv_protocol::caps::{Codec, InteractionModel};
 use atvv_protocol::commands;
@@ -19,11 +19,12 @@ use atvv_protocol::session::{Session, SessionAction, SessionState};
 use thiserror::Error;
 
 use crate::audio::PcmSink;
-use crate::config;
+use crate::config::{self, VinputMode};
 use crate::status::{
-    AudioView, CapsView, ConfigView, DeviceView, InputView, StatusCell, StatusView,
+    AudioView, CapsView, ConfigView, DeviceView, InputView, StatusCell, StatusView, VinputView,
 };
 use crate::transport::{Transport, TransportEvent};
+use crate::vinput::VinputControl;
 
 /// Request from D-Bus or the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +66,10 @@ pub struct DaemonConfig {
     pub config_loaded: bool,
     pub gain_db: i8,
     pub input_enabled: bool,
+    /// fcitx5-vinput integration mode.
+    pub vinput: VinputMode,
+    /// Synthetic key name while the voice key is held; `None` disables it.
+    pub trigger_key: Option<String>,
     pub verbose: bool,
     pub tick: Duration,
     pub keepalive_interval: Duration,
@@ -84,6 +89,8 @@ impl DaemonConfig {
             config_loaded: false,
             gain_db: profile.gain_db,
             input_enabled: true,
+            vinput: VinputMode::Trigger,
+            trigger_key: Some(config::DEFAULT_TRIGGER_KEY.to_string()),
             verbose: false,
             tick: Duration::from_millis(10),
             keepalive_interval: Duration::from_secs(10),
@@ -136,6 +143,10 @@ pub struct Daemon {
     status: StatusCell,
     commands: Receiver<Command>,
 
+    vinput_mode: VinputMode,
+    vinput: Option<Box<dyn VinputControl>>,
+    trigger_key: Option<String>,
+
     session: Session,
     accumulator: Option<FrameAccumulator>,
     decoder: Decoder,
@@ -181,9 +192,17 @@ impl Daemon {
         transport: Box<dyn Transport>,
         audio: Box<dyn PcmSink>,
         signals: Arc<dyn EventSink>,
+        vinput: Option<Box<dyn VinputControl>>,
     ) -> (Self, DaemonHandle) {
         let (sender, commands) = mpsc::channel();
-        let (input, input_degraded) = start_input(config.profile, config.input_enabled);
+        let input_trigger = (config.vinput == VinputMode::Trigger)
+            .then(|| config.trigger_key.clone())
+            .flatten();
+        let (input, input_degraded) = start_input(
+            config.profile,
+            config.input_enabled,
+            input_trigger.as_deref(),
+        );
         let status = StatusView {
             state: "disconnected".to_string(),
             connected: false,
@@ -216,6 +235,14 @@ impl Daemon {
                 last_button: None,
                 voice_key: None,
             },
+            vinput: VinputView {
+                mode: config.vinput.name().to_string(),
+                trigger: config.trigger_key.clone(),
+                available: vinput.as_ref().is_some_and(|control| control.available()),
+                last_error: vinput
+                    .as_ref()
+                    .and_then(|control| control.last_error().map(str::to_string)),
+            },
             config: ConfigView {
                 path: Some(config.config_path.display().to_string()),
                 loaded: config.config_loaded,
@@ -238,6 +265,9 @@ impl Daemon {
             signals,
             status,
             commands,
+            vinput_mode: config.vinput,
+            vinput,
+            trigger_key: config.trigger_key,
             session: Session::new(config.profile),
             accumulator: None,
             decoder: Decoder::new(),
@@ -611,13 +641,23 @@ impl Daemon {
     fn apply_input_enabled(&mut self) {
         if self.input_enabled {
             if self.input.is_none() {
-                let (input, degraded) = start_input(self.profile, true);
+                let trigger = self.input_voice_trigger();
+                let (input, degraded) = start_input(self.profile, true, trigger);
                 self.input = input;
                 self.input_degraded = degraded;
             }
         } else {
             self.input = None;
             self.input_degraded.clear();
+        }
+    }
+
+    /// Synthetic key passed to the input runtime, if trigger mode is active.
+    fn input_voice_trigger(&self) -> Option<&str> {
+        if self.vinput_mode == VinputMode::Trigger {
+            self.trigger_key.as_deref()
+        } else {
+            None
         }
     }
 
@@ -639,13 +679,7 @@ impl Daemon {
 
     fn on_input_event(&mut self, event: RemoteEvent) {
         match event {
-            RemoteEvent::Voice { pressed } => {
-                self.voice_key = Some(pressed);
-                self.trace(format!(
-                    "voice key {}",
-                    if pressed { "pressed" } else { "released" }
-                ));
-            }
+            RemoteEvent::Voice { pressed } => self.on_voice_key(pressed),
             RemoteEvent::Button {
                 button,
                 gesture,
@@ -681,6 +715,27 @@ impl Daemon {
             }
         }
         self.publish_status();
+    }
+
+    /// The RC003 voice key gates microphone data, so the ATVV session is
+    /// opened and closed by the key edges, never by PipeWire consumer state.
+    fn on_voice_key(&mut self, pressed: bool) {
+        self.voice_key = Some(pressed);
+        self.trace(format!(
+            "voice key {}",
+            if pressed { "pressed" } else { "released" }
+        ));
+        self.request_voice(pressed);
+        if let Some(vinput) = &mut self.vinput {
+            let result = if pressed {
+                vinput.start()
+            } else {
+                vinput.stop()
+            };
+            if let Err(error) = result {
+                self.trace(format!("{error}"));
+            }
+        }
     }
 
     fn note_input_degraded(&mut self, message: String) {
@@ -837,6 +892,18 @@ impl Daemon {
                 last_button: self.last_button.clone(),
                 voice_key: self.voice_key,
             },
+            vinput: VinputView {
+                mode: self.vinput_mode.name().to_string(),
+                trigger: self.trigger_key.clone(),
+                available: self
+                    .vinput
+                    .as_ref()
+                    .is_some_and(|control| control.available()),
+                last_error: self
+                    .vinput
+                    .as_ref()
+                    .and_then(|control| control.last_error().map(str::to_string)),
+            },
             config: ConfigView {
                 path: Some(self.config_path.display().to_string()),
                 loaded: self.config_loaded,
@@ -862,11 +929,18 @@ impl Daemon {
     }
 }
 
-fn start_input(profile: DeviceProfile, enabled: bool) -> (Option<InputRuntime>, Vec<String>) {
+fn start_input(
+    profile: DeviceProfile,
+    enabled: bool,
+    voice_trigger: Option<&str>,
+) -> (Option<InputRuntime>, Vec<String>) {
     if !enabled {
         return (None, Vec::new());
     }
-    match InputRuntime::start(profile, ActionMap::defaults()) {
+    let options = InputOptions {
+        voice_trigger: voice_trigger.map(str::to_string),
+    };
+    match InputRuntime::start_with_options(profile, ActionMap::defaults(), options) {
         Ok(runtime) => {
             let degraded = runtime.degraded().to_vec();
             (Some(runtime), degraded)
@@ -978,6 +1052,34 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct RecordingVinput {
+        calls: Arc<Mutex<Vec<&'static str>>>,
+        available: bool,
+    }
+
+    impl crate::vinput::VinputControl for RecordingVinput {
+        fn start(&mut self) -> Result<(), crate::vinput::VinputError> {
+            self.calls.lock().unwrap().push("start");
+            self.available = true;
+            Ok(())
+        }
+
+        fn stop(&mut self) -> Result<(), crate::vinput::VinputError> {
+            self.calls.lock().unwrap().push("stop");
+            self.available = true;
+            Ok(())
+        }
+
+        fn available(&self) -> bool {
+            self.available
+        }
+
+        fn last_error(&self) -> Option<&str> {
+            None
+        }
+    }
+
     fn start() -> (DaemonHandle, MockHandle, Arc<RecordingSink>) {
         let (transport, mock) = MockTransport::new(MockConfig::default());
         let signals = Arc::new(RecordingSink::default());
@@ -992,6 +1094,7 @@ mod tests {
             Box::new(transport),
             Box::new(CountingSink { samples: 0 }),
             signals.clone(),
+            None,
         );
         std::thread::spawn(move || daemon.run());
         (handle, mock, signals)
@@ -1014,6 +1117,43 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn voice_key_drives_vinput_in_dbus_mode() {
+        let (transport, mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.input_enabled = false;
+        config.vinput = VinputMode::Dbus;
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let vinput = RecordingVinput {
+            calls: Arc::clone(&calls),
+            available: false,
+        };
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            Some(Box::new(vinput)),
+        );
+
+        daemon.on_input_event(RemoteEvent::Voice { pressed: true });
+        daemon.on_input_event(RemoteEvent::Voice { pressed: false });
+
+        assert_eq!(*calls.lock().unwrap(), vec!["start", "stop"]);
+        let status = crate::status::lock(&handle.status()).clone();
+        assert_eq!(status.vinput.mode, "dbus");
+        assert!(status.vinput.available);
+        assert_eq!(status.input.voice_key, Some(false));
+        let _ = mock;
+    }
+
+    #[test]
+    fn trigger_mode_is_the_default() {
+        let config = DaemonConfig::new(RC003, "02:00:00:00:00:01");
+        assert_eq!(config.vinput, VinputMode::Trigger);
+        assert_eq!(config.trigger_key.as_deref(), Some("Alt_R"));
     }
 
     #[test]
@@ -1118,6 +1258,7 @@ mod tests {
             Box::new(transport),
             Box::new(CountingSink { samples: 0 }),
             Arc::new(NullSink),
+            None,
         );
         std::thread::spawn(move || daemon.run());
 
@@ -1138,6 +1279,7 @@ mod tests {
             Box::new(transport),
             Box::new(CountingSink { samples: 0 }),
             Arc::new(NullSink),
+            None,
         );
         std::thread::spawn(move || daemon.run());
         let status = wait_for(&handle, |status| status.state == "ready");
@@ -1157,6 +1299,7 @@ mod tests {
             Box::new(transport),
             Box::new(DegradedSink),
             Arc::new(NullSink),
+            None,
         );
         std::thread::spawn(move || daemon.run());
         let status = wait_for(&handle, |status| status.state == "ready");

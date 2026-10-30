@@ -99,6 +99,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     config.config_loaded = loaded.existed;
     config.gain_db = loaded.gain_db;
     config.input_enabled = loaded.input;
+    config.vinput = loaded.vinput;
+    config.trigger_key = loaded.trigger_key.clone();
     config.verbose = args.verbose;
 
     let audio = PipeWireSink::start(AudioSourceConfig {
@@ -111,14 +113,25 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let connection = dbus::connect_session()?;
     let signals: Arc<dyn EventSink> = Arc::new(DbusSink::new(&connection)?);
-    let (daemon, handle) = atvv_daemon::Daemon::new(config, transport, Box::new(audio), signals);
+    // Only D-Bus mode needs a vinput client; trigger mode emits keys from the
+    // input runtime and needs nothing here.
+    let vinput: Option<Box<dyn atvv_daemon::VinputControl>> = (loaded.vinput
+        == atvv_daemon::VinputMode::Dbus)
+        .then(|| Box::new(atvv_daemon::VinputClient::new()) as Box<dyn atvv_daemon::VinputControl>);
+    let (daemon, handle) =
+        atvv_daemon::Daemon::new(config, transport, Box::new(audio), signals, vinput);
     let interface = DaemonInterface::new(handle.status(), handle.commands(), address);
     dbus::serve(&connection, interface)?;
 
     println!(
-        "atvvd: {transport_label} on {} {}",
+        "atvvd: {transport_label} on {} {}; vinput={}{}",
         dbus::SERVICE,
-        dbus::PATH
+        dbus::PATH,
+        loaded.vinput.name(),
+        loaded
+            .trigger_key
+            .as_deref()
+            .map_or_else(String::new, |key| format!(" trigger={key}"))
     );
     daemon.run();
     Ok(())
