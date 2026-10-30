@@ -49,6 +49,12 @@ a policy choice, not an evdevil requirement; `F24` remains an explicit
 `trigger_key`. The real-device run is recorded in
 [step 11](../plans/11-input-evdevil.md).
 
+Follow-up (2026-10-31): `F24` is not a documented fallback. The declared
+recording keys are `DICTATE`, `VOICECOMMAND`, and `ASSISTANT`; `F24` remains
+only a raw configurable key for experiments. See
+[ADR 0007](0007-integration-direction.md) and the
+[provider contract](../integrations/provider-contract.md).
+
 ## Consequences
 
 - `atvv-input` types move from `evdev::KeyCode` to

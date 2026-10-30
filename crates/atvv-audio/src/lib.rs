@@ -6,4 +6,6 @@
 
 mod source;
 
-pub use source::{AudioSource, AudioSourceConfig, AudioSourceError, PcmQueue};
+pub use source::{
+    AudioSource, AudioSourceConfig, AudioSourceError, PcmQueue, RECORDING_KEYS, contract_properties,
+};

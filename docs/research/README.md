@@ -51,6 +51,7 @@ not a second plan and it does not override `docs/plans/`.
 | 09 packaging | `reference-projects.md` §License boundaries, `landscape.md` §4 |
 | 10 vinput zero-config | `vinput-upstream-api.md`, `protocol-and-device.md` §8 |
 | 11 input backend | `consumer-keys.md`, `reference-projects.md` §License boundaries |
+| 12 integration contract | `../integrations/provider-contract.md`, `../decisions/0007-integration-direction.md` |
 
 ## Current deltas after the research snapshot
 
@@ -95,6 +96,12 @@ implementation direction:
   `org.fcitx.Vinput` is not viable, and ATVV does not call
   `SetCaptureDevice` in the primary path (ADR 0007). See
   [`vinput-upstream-api.md`](vinput-upstream-api.md).
+- **Consumer integration.** The provider contract is recorded in `AGENTS.md`
+  and [`../integrations/provider-contract.md`](../integrations/provider-contract.md):
+  PipeWire source, declared recording keys (`DICTATE`, `VOICECOMMAND`,
+  `ASSISTANT`), generic control/status, and consumer-owned configuration.
+  `F24` is not a fallback; `VOICECOMMAND`/`ASSISTANT` are. Per-application
+  diagnostics are out of scope.
 - **RC003 mic gating.** A host `MIC_OPEN` alone produces `AUDIO_START` but no
   audio frames; the physical voice key must be held. The daemon opens
   `MIC_OPEN` on the grabbed voice-key edge and closes on release, and the input

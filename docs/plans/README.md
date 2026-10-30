@@ -39,7 +39,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default |
+| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **in progress**: consumer-side source selection and one-time vinput setup; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **in progress**: provider contract and consumer recipes |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
@@ -61,6 +61,7 @@ step 11 is complete.
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | 🚧 in-progress | 08 |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
+| 12 | D | [integration-contract](12-integration-contract.md) | 🚧 in-progress | 10 |
 
 ## Architecture contract
 
@@ -85,6 +86,11 @@ Binding rules:
   and read-only status. Consumers such as fcitx5-vinput own source selection
   and trigger binding; ATVV does not write their configuration or call their
   daemon in the primary path (ADR 0007).
+- The source advertises the provider contract: `atvv.contract_version=1`,
+  `atvv.profile`, and `atvv.recording_keys` (`DICTATE`, `VOICECOMMAND`,
+  `ASSISTANT`). Consumers bind the declared set; the provider emits one active
+  key. See
+  [`docs/integrations/provider-contract.md`](../integrations/provider-contract.md).
 
 ## RC003 profile facts
 
@@ -131,14 +137,25 @@ GitHub Actions daily.
 Step 10 is in progress. ATVV is the provider: it exposes the resident
 `Audio/Source` and the standard `Dictate` key. vinput is the consumer and owns
 source selection and trigger binding. The primary upstream request is a
-consumer-side capture-device auto-selection/priority list; until it exists,
-the one-time `vinput device use` plus `2=Dictate` is the correct layered setup.
+consumer-side capture-device auto-selection/priority list plus auto-binding of
+the declared recording keys; until it exists, the one-time
+`vinput device use` plus `Dictate` at the next free index (default
+`1=Dictate`) is the correct layered setup.
 The earlier ATVV-side `SetCaptureDevice` push and the `vinput_device` policy
 are dropped (ADR 0007). D-Bus mode remains an opt-in fallback, not the
 zero-config default. The daemon trigger default is `DICTATE` (`KEY_DICTATE`),
 not `F24`; `F24` remains an explicit alternative. Evidence:
 [`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md) and
 [ADR 0007](../decisions/0007-integration-direction.md).
+
+Step 12 is in progress: the provider contract
+(`atvv.contract_version`, `atvv.profile`, `atvv.recording_keys`) is on the
+source and documented in
+[`docs/integrations/provider-contract.md`](../integrations/provider-contract.md).
+The target consumers are fcitx5-vinput, browser AI chat pages, coding agents
+(Claude Code, Codex, OMP), and IM applications (Telegram, WeChat). Generic
+`atvvctl`/MCP contract output and the remaining consumer recipes are open. No
+per-application diagnostics are planned.
 
 Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
 `evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and

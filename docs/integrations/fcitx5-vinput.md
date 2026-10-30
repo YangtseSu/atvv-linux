@@ -57,16 +57,26 @@ key edge opens the microphone; a software start cannot produce frames.
    # ~/.config/fcitx5/conf/vinput.conf
    [TriggerKey]
    0=<the user's existing trigger>
-   2=Dictate
+   1=Dictate
    ```
 
-   `atvvd` defaults to `trigger_key = "DICTATE"`, which emits the dictation
-   consumer key. Stop fcitx5 before editing this file: the addon rewrites its
-   in-memory configuration on exit, so an edit made while fcitx5 is running
-   can be overwritten. Restart fcitx5 after editing.
+   On a default install the existing entry is `0=Alt_R`, so `Dictate` is
+   `1=Dictate`. A customized list uses its next free index; never copy a
+   higher index from another machine. `atvvd` defaults to
+   `trigger_key = "DICTATE"`, which emits the dictation consumer key. Stop
+   fcitx5 before editing this file: the addon rewrites its in-memory
+   configuration on exit, so an edit made while fcitx5 is running can be
+   overwritten. Restart fcitx5 after editing.
 
-   `F24` remains an explicit alternative if the IME cannot bind a consumer
-   key: use `trigger_key = "F24"` and add `2=F24` instead.
+   `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks if the IME
+   cannot bind the dictation key. `F24` was a temporary experiment and is not
+   a documented fallback.
+
+   The source advertises the declared keys as `atvv.recording_keys`; the
+   upstream vinput request is to append the mapped set automatically when the
+   user selects the ATVV source. Until that lands, the manual entry above is
+   the supported setup. See
+   [`provider-contract.md`](provider-contract.md).
 
 Do not make the ATVV source the system default. fcitx records at 16 kHz mono
 S16LE, matching the source rate.
@@ -83,14 +93,17 @@ Configure `$XDG_CONFIG_HOME/atvv/daemon.toml` (or
 vinput = "trigger"
 
 # DICTATE is the dictation consumer key (KEY_DICTATE). Keep the user's
-# existing vinput [TriggerKey] entries and add 2=Dictate.
+# existing vinput [TriggerKey] entries and add Dictate at the next free
+# index (default install: 1=Dictate).
 trigger_key = "DICTATE"
 ```
 
-`trigger_key` accepts a single key (`DICTATE`, `VOICECOMMAND`, `ASSISTANT`,
-`F24`, `F18`) or a `+` chord (`ctrl+rightctrl`). Modifiers are pressed in
-order and released in reverse. The target IME and any compositor keybind must
-use the same key or chord.
+`trigger_key` accepts a single key (`DICTATE`, `VOICECOMMAND`, `ASSISTANT`)
+or a raw key/chord (`F24`, `F18`, `ctrl+rightctrl`). `VOICECOMMAND` and
+`ASSISTANT` are the supported fallbacks; `F24`/`F18` are raw escape hatches,
+not documented fallbacks. Modifiers are pressed in order and released in
+reverse. The target IME and any compositor keybind must use the same key or
+chord.
 
 The names are layer-specific and are not interchangeable:
 
@@ -99,11 +112,16 @@ The names are layer-specific and are not interchangeable:
 | Voice command | `VOICECOMMAND` (`KEY_VOICECOMMAND`, `0x246`) | `VoiceCommand` |
 | Assistant | `ASSISTANT` (`KEY_ASSISTANT`, `0x247`) | `Assistant` |
 | Dictation | `DICTATE` (`KEY_DICTATE`, `0x24a`) | `Dictate` |
-| Dedicated fallback | `F24` (`KEY_F24`) | `F24` |
+
+`DICTATE` is the default active key; `VOICECOMMAND` and `ASSISTANT` are the
+supported fallbacks. `F24` was a temporary experiment and is not a fallback.
+Bind the declared set in the consumer and emit one active key; do not emit all
+three simultaneously.
 
 A bare modifier is accepted by fcitx in principle, but a synthetic `Alt_R`
 from the ATVV virtual keyboard did not trigger fcitx5-vinput 2.4.2 on
-2026-10-30. The dedicated `F24` key and the `Control+Control_R` chord did.
+2026-10-30. The earlier `F24` experiment and the `Control+Control_R` chord
+did work; `F24` is not a recommended fallback.
 
 `vinput` and `trigger_key` are read at daemon start; `ReloadConfig` applies
 `gain_db` and `input` only. Restart `atvvd` after changing the vinput mode.
@@ -120,14 +138,16 @@ active input context.
   # ~/.config/fcitx5/conf/vinput.conf
   [TriggerKey]
   0=<the user's existing trigger>
-  2=Dictate
+  1=Dictate
   ```
-  A fully commented `[TriggerKey]` section means no trigger. The verified
-  pair is `2=Dictate` with `trigger_key = "DICTATE"` (2026-10-30, real RC003:
-  fcitx `Key(Dictate)`, vinput `target.object=atvv-miremote-rc003`,
-  `rate=16000 channels=1 fmt=259`). The `1=F24`/`trigger_key = "F24"` pair and
-  the `Control+Control_R` chord with `trigger_key = "ctrl+rightctrl"` were
-  verified earlier.
+  On a default install the existing entry is `0=Alt_R`, so the new entry is
+  `1=Dictate`; a customized list uses its next free index. A fully commented
+  `[TriggerKey]` section means no trigger. The 2026-10-30 real RC003 run used
+  `Dictate` with `trigger_key = "DICTATE"`; that operator config already had
+  two entries, so the recorded index was `2=` (fcitx `Key(Dictate)`, vinput
+  `target.object=atvv-miremote-rc003`, `rate=16000 channels=1 fmt=259`). The
+  `Control+Control_R` chord with `trigger_key = "ctrl+rightctrl"` was verified
+  earlier; `F24` was a temporary experiment, not a fallback.
 - Hold to talk. The RC003 gates microphone data on the physical key: audio
   flows only while the key is held. A short tap produces a normal key tap for
   fcitx (which may toggle its recording state), but the remote stops sending
@@ -206,7 +226,7 @@ this file on exit, so an edit made while fcitx5 runs can be overwritten.
 ```ini
 [TriggerKey]
 0=Control+Control_R   # or the user's existing trigger
-2=Dictate
+1=Dictate
 ```
 
 ```toml
@@ -214,10 +234,11 @@ this file on exit, so an edit made while fcitx5 runs can be overwritten.
 trigger_key = "DICTATE"
 ```
 
-Restart `fcitx5` and `atvvd` after changing them. Substituting `1=F24` and
-`trigger_key = "F24"` is the dedicated-function-key alternative; the
-`Control+Control_R` chord with `trigger_key = "ctrl+rightctrl"` is another
-verified path. A GNOME custom shortcut cannot bind a bare modifier key.
+Restart `fcitx5` and `atvvd` after changing them. `VOICECOMMAND` and
+`ASSISTANT` are the supported fallbacks; the `Control+Control_R` chord with
+`trigger_key = "ctrl+rightctrl"` is another verified path. A GNOME custom
+shortcut cannot bind a bare modifier key. `F24` was a temporary experiment and
+is not a recommended fallback.
 
 ## Why not open the mic from the source link?
 
@@ -233,7 +254,7 @@ edges, `atvvctl mic`, D-Bus, or MCP.
 |---|---|
 | Source missing | `atvvctl status`, `pw-cli info atvv-miremote-rc003`, `atvvctl doctor` |
 | Device not in `vinput device list` | the source must exist in PipeWire; the daemon re-reads `global.capture_device` at each recording, so a daemon restart is not needed |
-| Trigger does nothing | `atvvctl doctor` → `vinput` and `uinput` lines; `input = false` disables the key path. Ensure `[TriggerKey]` contains `2=Dictate` (or another configured key) and `trigger_key` matches; a commented section disables the trigger. |
+| Trigger does nothing | `atvvctl doctor` → `vinput` and `uinput` lines; `input = false` disables the key path. Ensure `[TriggerKey]` contains `Dictate` (or another configured key) and `trigger_key` matches; a commented section disables the trigger. |
 | Recording but silence | hold the key; `atvvctl status` must show `streaming`; the key gates RC003 frames |
 | F5 still leaks | the RC003 evdev node is not grabbed; check `input.grabbed` in status |
 | `vinput` line says dbus mode unavailable | start `vinput-daemon` or switch to `vinput = "trigger"` |

@@ -140,17 +140,23 @@ Primary (consumer-side):
    `global.capture_device` accept an automatic mode or a pattern/priority list
    (for example `atvv-*` then `default`) and pick the first available source.
    This is the only way to reach true zero-config; ATVV must not call a setter.
-2. **Optional: trigger defaults or docs.** Include `Dictate` in vinput's
+2. **Auto-bind the declared recording keys.** The source exposes
+   `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`. On
+   `vinput device use <source>`, map the canonical names to fcitx names and
+   append them to `[TriggerKey]`, preserving existing entries and using the
+   next free indices. On a default install (`0=Alt_R`) `Dictate` becomes
+   `1=Dictate`. If automatic apply is rejected, print the exact entries.
+3. **Optional: trigger defaults or docs.** Include `Dictate` in vinput's
    default trigger list, or document the one-entry addition. Do not change the
    upstream default without maintainer agreement.
 
 Generic control API (optional, not used by ATVV):
 
-3. `GetCaptureDevice()`/`SetCaptureDevice(s)` remains a reasonable API for
-   settings UIs and other controllers. If it lands, `atvvctl vinput` may read
-   it for diagnostics; ATVV does not call `SetCaptureDevice` in the primary
-   path.
-4. The addon focus fallback is only relevant to the opt-in D-Bus fallback, not
+4. `GetCaptureDevice()`/`SetCaptureDevice(s)` remains a reasonable API for
+   settings UIs and other controllers. If it lands, `atvvctl contract` may
+   read it for diagnostics; ATVV does not call `SetCaptureDevice` in the
+   primary path.
+5. The addon focus fallback is only relevant to the opt-in D-Bus fallback, not
    to the primary key path.
 
 Do not file:

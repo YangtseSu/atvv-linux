@@ -34,19 +34,24 @@ edge is the control signal; both the microphone gate and the synthetic
 3. `vinput = "trigger"` remains the default. `vinput = "dbus"` remains an
    explicit fallback for environments where the virtual keyboard cannot reach
    the input method; it is never the zero-config path.
-4. Device-selection policy belongs in vinput. If a consumer-side
-   auto-selection feature is added upstream, it is a source priority/pattern
-   list or equivalent; ATVV only exposes standard node metadata.
-5. `atvvctl vinput` is read-only diagnostics: it reports the consumer's state
-   and the exact one-time command, and never changes another application's
-   configuration.
+4. The source declares the recording contract as properties:
+   `atvv.contract_version=1`, `atvv.profile=<id>`, and
+   `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`. Consumers bind the
+   declared set and preserve the user's own shortcuts; the provider emits one
+   active key. Device-selection policy and trigger binding belong in the
+   consumer.
+5. Diagnostics are generic, not per-application: `atvvctl status`, `doctor`,
+   and a planned `contract` output. There is no `atvvctl vinput` and no
+   WeChat/Telegram/Codex/OMP-specific check. Per-consumer recipes live under
+   `docs/integrations/`.
 
 ## Consequences
 
 - Drop the step-10 deliverables that push `SetCaptureDevice` from `atvvd` and
   the `vinput_device = "auto" | "none"` policy from the ATVV daemon.
 - The one-time consumer setup is `vinput device use atvv-miremote-rc003` plus
-  `[TriggerKey] 2=Dictate`. That is correct layering, not a workaround.
+  `[TriggerKey] 1=Dictate` on a default install (`0=Alt_R`). A customized list
+  uses its next free index. That is correct layering, not a workaround.
 - True zero-config now depends on a vinput-side auto-selection feature. Until
   it exists, the plan must say "one-time consumer configuration", not
   "zero-config".

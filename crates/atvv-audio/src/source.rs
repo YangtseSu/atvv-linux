@@ -33,6 +33,26 @@ pub struct AudioSourceConfig {
     pub channels: u32,
     /// Maximum number of i16 samples buffered ahead of the RT callback.
     pub queue_capacity: usize,
+    /// Additional PipeWire properties exposed to consumers. The daemon uses
+    /// this for the ATVV provider contract (`atvv.*`); other callers may leave
+    /// it empty.
+    pub extra_properties: Vec<(String, String)>,
+}
+
+/// Canonical recording keys declared by an ATVV source, in priority order.
+///
+/// These are evdev names. Consumers map them to their own vocabulary (for
+/// example fcitx5 `Dictate`/`VoiceCommand`/`Assistant`) and bind the set.
+pub const RECORDING_KEYS: &[&str] = &["DICTATE", "VOICECOMMAND", "ASSISTANT"];
+
+/// PipeWire properties implementing version 1 of the provider contract.
+#[must_use]
+pub fn contract_properties(profile: &str) -> Vec<(String, String)> {
+    vec![
+        ("atvv.contract_version".to_string(), "1".to_string()),
+        ("atvv.profile".to_string(), profile.to_string()),
+        ("atvv.recording_keys".to_string(), RECORDING_KEYS.join(",")),
+    ]
 }
 
 impl AudioSourceConfig {
@@ -247,7 +267,7 @@ fn run_session(
         })
         .register();
 
-    let props = properties! {
+    let mut props = properties! {
         *pw::keys::MEDIA_TYPE => "Audio",
         *pw::keys::MEDIA_CATEGORY => "Capture",
         *pw::keys::MEDIA_CLASS => "Audio/Source",
@@ -264,6 +284,9 @@ fn run_session(
         "device.class" => "sound",
         "device.icon-name" => "audio-input-microphone",
     };
+    for (key, value) in &config.extra_properties {
+        props.insert(key.as_str(), value.as_str());
+    }
 
     let stream = StreamBox::new(&core, &config.name, props).map_err(|error| error.to_string())?;
     let our_node_id = Rc::new(Cell::new(u32::MAX));
@@ -409,6 +432,7 @@ mod tests {
             sample_rate: 16_000,
             channels: 1,
             queue_capacity: 160,
+            extra_properties: Vec::new(),
         };
         assert!(config.validate().is_ok());
         config.sample_rate = 0;
@@ -422,5 +446,17 @@ mod tests {
             config.validate(),
             Err(AudioSourceError::InvalidConfig(_))
         ));
+    }
+
+    #[test]
+    fn contract_declares_the_recording_keys() {
+        let props = contract_properties("miremote-rc003");
+        assert!(props.contains(&("atvv.contract_version".to_string(), "1".to_string())));
+        assert!(props.contains(&("atvv.profile".to_string(), "miremote-rc003".to_string())));
+        assert!(props.contains(&(
+            "atvv.recording_keys".to_string(),
+            "DICTATE,VOICECOMMAND,ASSISTANT".to_string()
+        )));
+        assert_eq!(RECORDING_KEYS, &["DICTATE", "VOICECOMMAND", "ASSISTANT"]);
     }
 }

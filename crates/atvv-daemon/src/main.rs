@@ -78,6 +78,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         sample_rate: profile.sample_rate,
         channels: 1,
         queue_capacity: profile.sample_rate as usize,
+        extra_properties: atvv_audio::contract_properties(profile.id),
     });
 
     let connection = dbus::connect_session()?;

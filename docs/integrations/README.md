@@ -9,9 +9,17 @@ else consumes one of two boundaries:
 
 | Integration | Document | Boundary |
 |---|---|---|
-| fcitx5-vinput | [fcitx5-vinput](fcitx5-vinput.md) | source + trigger key or `org.fcitx.Vinput` |
+| Provider contract | [provider-contract](provider-contract.md) | source metadata + recording keys + generic control |
+| fcitx5-vinput | [fcitx5-vinput](fcitx5-vinput.md) | source + declared recording keys |
 | Coding agents | [coding-agents](coding-agents.md) | MCP tools + agent text delivery |
+| Browser AI chat | [provider-contract](provider-contract.md#browser-ai-chat-pages) | `getUserMedia` device selection |
+| IM applications | [provider-contract](provider-contract.md#im-applications) | source selection in the app |
 | CLI | [`atvvctl`](../../README.md) | `org.atvv.Daemon` |
+
+The provider declares its contract on the source
+(`atvv.contract_version`, `atvv.profile`, `atvv.recording_keys`). Consumers
+own their configuration and should bind the declared keys; the provider does
+not add per-application diagnostics or per-application control paths.
 
 The mic is never opened because a consumer linked to the source. On the RC003
 the physical voice key gates microphone data, so the daemon opens `MIC_OPEN` on

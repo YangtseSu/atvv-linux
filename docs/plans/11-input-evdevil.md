@@ -57,7 +57,9 @@ The decision and evidence are in
 - ✅ Document the fcitx5-vinput names (`VoiceCommand`, `Assistant`, `Dictate`)
   and the evdev/daemon names side by side.
 - ✅ Change `DEFAULT_TRIGGER_KEY` from `F24` to `DICTATE`; keep `F24`
-  configurable. vinput keeps the user's entries and adds `2=Dictate`.
+  configurable. vinput keeps the user's entries and adds `Dictate` at the next
+  free index; the live test config already had two entries, so the recorded
+  index was `2=`.
 - ✅ Update the plan index, research index, and handoff in the same commit.
 
 ## Verification
@@ -151,9 +153,10 @@ installed `0.1.0-3` unit was stopped for the run and restarted afterwards.
   and consumer-key regression tests. Workspace checks and both ignored uinput
   tests pass.
 - 2026-10-30 — user direction: the default trigger changes from `F24` to
-  `DICTATE`; vinput keeps `0=Alt_R` and `1=Assistant` and adds `2=Dictate`.
-  The daemon default is now `DEFAULT_TRIGGER_KEY = "DICTATE"`; `F24` remains
-  configurable.
+  `DICTATE`; vinput keeps `0=Alt_R` and `1=Assistant` and adds `2=Dictate`
+  (that live config already had two entries; a default install uses
+  `1=Dictate`). The daemon default is now `DEFAULT_TRIGGER_KEY = "DICTATE"`;
+  `F24` remains configurable, not a documented fallback.
 - 2026-10-30 — real RC003 run: evdevil grabbed `/dev/input/event25`, emitted
   `KEY_DICTATE`, streamed 104 frames / 24,960 samples on a press, and
   fcitx5-vinput recorded from `atvv-miremote-rc003` at 16 kHz on the same

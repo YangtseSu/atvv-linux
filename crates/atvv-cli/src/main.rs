@@ -738,6 +738,7 @@ fn audio_test(seconds: u64) -> Result<(), String> {
         sample_rate: 16_000,
         channels: 1,
         queue_capacity: 16_000,
+        extra_properties: atvv_audio::contract_properties("test"),
     };
     let mut source = AudioSource::start(config).map_err(|error| error.to_string())?;
     println!(

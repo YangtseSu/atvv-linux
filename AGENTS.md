@@ -33,6 +33,47 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
 - Do not push without explicit user approval for that push. Do not rewrite
   published history.
 
+## Project goal: be easy for consumers to call
+
+ATVV is the provider; every other application is a consumer. Optimize for
+consumers that integrate without reading our source or linking our crates.
+Target consumers include fcitx5-vinput, browser AI chat pages, coding agents
+(Claude Code, Codex, OMP), and IM applications (Telegram, WeChat).
+
+- The public contract is standard: a resident PipeWire `Audio/Source`
+  (`atvv-<profile>`), uinput recording keys, `org.atvv.Daemon`, and
+  `atvv-mcp`. Do not invent a per-application transport.
+- Consumers own capture-device selection, trigger binding, ASR, and text
+  commit. Do not write another application's configuration and do not call
+  its daemon in the primary path. `vinput = "dbus"` is an explicit fallback,
+  never the default.
+- Declare recording capability on the source: `atvv.contract_version=1`,
+  `atvv.profile=<id>`, and `atvv.recording_keys` as canonical evdev names.
+  Consumers that can bind keys should add the declared set when the user
+  selects the source; consumers that cannot are told by the docs to match
+  their shortcut to one of those keys.
+- The declared recording keys are `DICTATE`, `VOICECOMMAND`, and
+  `ASSISTANT`. `DICTATE` is the default active key. `VOICECOMMAND` and
+  `ASSISTANT` are the fallbacks. `F24` is **not** a fallback; it was a
+  temporary experiment and remains only a raw configurable key. Bind the
+  declared set in the consumer and emit one active key; do not emit all three
+  simultaneously (chord parsing and duplicate actions).
+- Automatic adaptation to an arbitrary application's own shortcut is not
+  possible from the provider side. The supported path is: the consumer binds
+  a declared key, or the user sets `trigger_key` to the application's
+  shortcut. Document that instead of adding per-application detection.
+- Do not add per-application diagnostics. There is no `atvvctl vinput`, and
+  there will be no WeChat/Telegram/Codex/OMP-specific checks. Provide generic
+  `atvvctl status`/`doctor`/contract output plus per-consumer docs under
+  `docs/integrations/`.
+- Documentation examples use the consumer's default install, not the
+  developer's customized file. fcitx5-vinput's default `[TriggerKey]` is
+  `0=Alt_R`; adding `Dictate` is `1=Dictate`. A customized list uses the next
+  free index; never hardcode `2=` from a local test configuration.
+
+See [`docs/integrations/provider-contract.md`](docs/integrations/provider-contract.md)
+and [ADR 0007](docs/decisions/0007-integration-direction.md).
+
 ## Plan workflow
 
 `docs/plans/README.md` is the canonical index. There is no hidden second plan.
