@@ -194,6 +194,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   `atvv-linux 0.1.0-4` (5.9 MiB) plus a debug package; source checksum
   `e3693e441679fdbb623a7775308e3d5792129bc7142217ff8bbf7f0a4044d38c`.
   Root install is pending the operator; `pkexec` was dismissed.
+- CI run 41080061199 on `d6a09b0` failed in `cargo clippy`: `libdbus-sys`
+  could not find `dbus-1.pc`. The test job now installs `libdbus-1-dev` and
+  `pkg-config`; the next run is pending.
   Contents: three binaries, user unit, udev rule, modules-load, 24 man pages,
   bash/zsh/fish completions, LICENSE, third-party notices, README,
   device-support matrix.
