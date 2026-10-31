@@ -3,9 +3,10 @@
 <!--
   Interface reference for the atvv-gui board: the step 15 mapping board, the
   step 17 layout chip/popover/manager, and the step 21 device chip/popover.
-  The second remote, its address, battery, and per-device mappings are
-  illustrative, not verified hardware. The implementation uses GTK4 and
-  libadwaita widgets, not this HTML.
+  Default is a template: editing it stages a working copy, and Apply saves the
+  copy as a new layout. The second remote, its address, battery, and
+  per-device mappings are illustrative, not verified hardware. The
+  implementation uses GTK4 and libadwaita widgets, not this HTML.
 -->
 <html lang="en">
 <head>
@@ -492,7 +493,7 @@
     white-space: nowrap;
   }
   .layout-chip-chev { display: flex; color: var(--faint); flex: none; }
-  .layout-chip.readonly .layout-chip-icon { color: var(--faint); }
+  .layout-chip.template .layout-chip-icon { color: var(--faint); }
 
   .layout-pop {
     position: absolute;
@@ -558,7 +559,7 @@
     border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
     background: var(--accent-weak);
   }
-  .layout-tag.readonly { color: var(--faint); }
+  .layout-tag.template { color: var(--faint); }
   .layout-manage {
     width: 100%;
     text-align: left;
@@ -573,8 +574,6 @@
     cursor: pointer;
   }
   .layout-manage:hover { background: var(--accent-weak); }
-
-  .banner.readonly { background: var(--surface); }
 
   .layout-dialog { width: 520px; }
   #layoutManagerList { max-height: 360px; overflow: auto; }
@@ -1285,7 +1284,7 @@
         <span class="banner-icon">
           <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 14.2 13H1.8L8 2.2Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.2v3.2M8 11.4v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        Unsaved changes — Apply saves the whole map.
+        <span id="dirtyBannerText">Unsaved changes — Apply saves the whole map.</span>
         <button class="banner-action" id="bannerRevert">Revert</button>
       </div>
       <div class="banner" id="testBanner" hidden>
@@ -1294,13 +1293,6 @@
         </span>
         Press a remote key to test it. Shortcuts, volume, and dictation are suppressed.
         <button class="banner-action" id="bannerCancelTest">Cancel</button>
-      </div>
-      <div class="banner readonly" id="readonlyBanner" hidden>
-        <span class="banner-icon">
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
-        </span>
-        Default is read-only. Duplicate it to edit the board.
-        <button class="banner-action" id="duplicateDefaultBanner">Duplicate</button>
       </div>
     </div>
 
@@ -1669,7 +1661,8 @@
             </div>
           </div>
           <p class="field-error" id="layoutFormError" hidden></p>
-          <p class="dialog-hint" id="layoutManagerHint">The active layout drives the board and the input runtime. The Default layout is read-only.</p>
+          <p class="dialog-hint" id="layoutManagerHint">The active layout drives the board and the input runtime. Default is a template: edit it and Apply saves the changes as a new layout.</p>
+          <p class="dialog-hint" id="layoutFormHint" hidden></p>
           <div class="layout-form-actions" id="layoutFormActions" hidden>
             <button class="btn flat" id="layoutFormCancel">Cancel</button>
             <button class="btn suggested" id="layoutFormSubmit">Create</button>
@@ -1690,7 +1683,7 @@
 
 <div class="page-note">
   <span><strong>Board</strong> 12 × 3 slots · <strong>Editor</strong> modal + inline validation · <strong>States</strong> accent selected, amber conflict · <strong>Test</strong> pressed slot + explicit Run once.</span>
-  <span><strong>Layouts</strong> the header chip switches the active layout; the manager edits it. <strong>Devices</strong> the device chip switches the remote. <strong>Preview</strong> controls above the window are not app UI.</span>
+  <span><strong>Layouts</strong> the header chip switches the active layout; Default is a template, and Apply saves its edits as a new layout. <strong>Devices</strong> the device chip switches the remote. <strong>Preview</strong> controls above the window are not app UI.</span>
 </div>
 
 <script>
@@ -1770,15 +1763,15 @@
     {
       id: "default",
       name: "Default",
-      description: "Profile defaults",
-      readonly: true,
+      description: "Profile defaults; edits save as a new layout",
+      template: true,
       map: {},
     },
     {
       id: "coding",
       name: "Coding",
       description: "Enter/Escape navigation plus editor and browser shortcuts",
-      readonly: false,
+      template: false,
       map: {
         "up:single": "combo:ctrl+alt+v",
         "ok:single": "dictation:toggle",
@@ -1789,7 +1782,7 @@
       id: "media",
       name: "Media",
       description: "Playback and volume shortcuts",
-      readonly: false,
+      template: false,
       map: {
         "up:single": "combo:ctrl+alt+v",
         "ok:single": "key:KEY_PLAYPAUSE",
@@ -1801,7 +1794,7 @@
     id: layout.id,
     name: layout.name,
     description: layout.description,
-    readonly: layout.readonly,
+    template: layout.template,
     map: { ...layout.map },
   }));
   let savedLayouts = INITIAL_LAYOUTS.map((layout) => ({ ...layout, map: { ...layout.map } }));
@@ -1833,7 +1826,17 @@
   ];
   let activeDevice = 0;
   const currentLayout = () => layoutById(DEVICES[activeDevice].activeLayout);
-  let overrides = currentLayout().map;
+  const mapsEqual = (left, right) => {
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every((key, index) => key === rightKeys[index] && left[key] === right[key])
+    );
+  };
+  const templateMapChanged = () =>
+    currentLayout().template && !mapsEqual(overrides, currentLayout().map);
+  let overrides = { ...currentLayout().map };
   let selected = { button: "ok", trigger: "single" };
   let dirty = false;
   let testOn = false;
@@ -2079,12 +2082,11 @@
   function renderLayoutChrome() {
     const layout = currentLayout();
     $("#layoutChipName").textContent = layout.name;
-    $("#layoutBtn").classList.toggle("readonly", layout.readonly);
+    $("#layoutBtn").classList.toggle("template", layout.template);
     $("#layoutBtn").title = `Switch layout · ${layout.name}`;
     $("#layoutPopDevice").textContent = DEVICES[activeDevice].label || DEVICES[activeDevice].short;
     $("#layoutSub").textContent =
       `${DEVICES[activeDevice].label || DEVICES[activeDevice].name} · ${DEVICES[activeDevice].profile}`;
-    $("#readonlyBanner").hidden = !layout.readonly;
     const managerOpen = activeScrim?.id === "layoutScrim";
     const showManagerActions = managerOpen && dirty && !layoutFormMode;
     $("#layoutApply").hidden = !showManagerActions;
@@ -2117,8 +2119,8 @@
       copy.append(name, desc);
 
       const tag = document.createElement("span");
-      tag.className = `layout-tag${layout.readonly ? " readonly" : ""}`;
-      tag.textContent = layout.readonly ? "Read-only" : "";
+      tag.className = `layout-tag${layout.template ? " template" : ""}`;
+      tag.textContent = layout.template ? "Template" : "";
 
       row.append(check, copy, tag);
       host.append(row);
@@ -2158,10 +2160,10 @@
         tag.textContent = "Active";
         tags.append(tag);
       }
-      if (layout.readonly) {
+      if (layout.template) {
         const tag = document.createElement("span");
-        tag.className = "layout-tag readonly";
-        tag.textContent = "Read-only";
+        tag.className = "layout-tag template";
+        tag.textContent = "Template";
         tags.append(tag);
       }
       main.append(check, copy, tags);
@@ -2187,7 +2189,7 @@
         button.dataset.action = action;
         button.dataset.layout = layout.id;
         button.textContent = label;
-        if (layout.readonly && action !== "duplicate") button.disabled = true;
+        if (layout.template && action !== "duplicate") button.disabled = true;
         if (action === "delete" && active) button.disabled = true;
         actions.append(button);
       }
@@ -2198,6 +2200,10 @@
   }
 
   function renderChrome() {
+    $("#dirtyBannerText").textContent =
+      dirty && currentLayout().template && templateMapChanged()
+        ? "Unsaved changes on Default — Apply saves them as a new layout."
+        : "Unsaved changes — Apply saves the whole map.";
     $("#dirtyBanner").hidden = !dirty;
     $("#testBanner").hidden = !testOn;
     $("#applyBtn").disabled = !dirty;
@@ -2342,10 +2348,6 @@
   document.addEventListener("click", (event) => {
     const slot = event.target.closest(".slot");
     if (slot) {
-      if (currentLayout().readonly) {
-        toast("Default is read-only. Duplicate it to edit.");
-        return;
-      }
       openEditor(slot.dataset.button, slot.dataset.trigger);
       return;
     }
@@ -2353,10 +2355,6 @@
     if (hotspot) {
       if (hotspot.dataset.voice) {
         openVoice();
-        return;
-      }
-      if (currentLayout().readonly) {
-        toast("Default is read-only. Duplicate it to edit.");
         return;
       }
       openEditor(hotspot.dataset.button, "single");
@@ -2757,6 +2755,16 @@
     return id;
   }
 
+  function nextLayoutName(base) {
+    let name = base;
+    let suffix = 2;
+    while (LAYOUTS.some((layout) => layout.name.toLowerCase() === name.toLowerCase())) {
+      name = `${base} ${suffix}`;
+      suffix += 1;
+    }
+    return name;
+  }
+
   function layoutNameTaken(name, excludeId = null) {
     const lower = name.trim().toLowerCase();
     if (!lower || lower === "default") return true;
@@ -2776,7 +2784,7 @@
     }
     const layout = layoutById(id);
     DEVICES[activeDevice].activeLayout = layout.id;
-    overrides = layout.map;
+    overrides = { ...layout.map };
     dirty = false;
     pressed = null;
     selected = { button: "ok", trigger: "single" };
@@ -2793,6 +2801,8 @@
     $("#layoutFormGroup").hidden = true;
     $("#layoutFormActions").hidden = true;
     $("#layoutFormError").hidden = true;
+    $("#layoutFormHint").hidden = true;
+    $("#layoutFormHint").textContent = "";
     $("#layoutManagerHint").hidden = false;
     $("#layoutNew").hidden = false;
     $("#layoutTitle").textContent = "Layouts";
@@ -2812,12 +2822,23 @@
     $("#layoutManagerHint").hidden = true;
     $("#layoutNew").hidden = true;
     $("#layoutFormError").hidden = true;
-    $("#layoutNameInput").value = layout ? layout.name : "";
+    $("#layoutFormHint").hidden = mode !== "save";
+    $("#layoutFormHint").textContent =
+      mode === "save" ? "Default is a template. These edits become a new layout." : "";
+    $("#layoutNameInput").value =
+      layout ? layout.name : mode === "save" ? nextLayoutName("My layout") : "";
     $("#layoutDescInput").value = layout ? layout.description : "";
-    $("#layoutFormSubmit").textContent = mode === "rename" ? "Save" : "Create";
-    $("#layoutTitle").textContent = mode === "rename" ? "Rename layout" : "New layout";
+    $("#layoutFormSubmit").textContent =
+      mode === "rename" || mode === "save" ? "Save" : "Create";
+    $("#layoutTitle").textContent =
+      mode === "rename" ? "Rename layout" : mode === "save" ? "Save as layout" : "New layout";
     renderLayoutChrome();
     window.setTimeout(() => $("#layoutNameInput").focus(), 0);
+  }
+
+  function startSaveAsLayout() {
+    if (!activeScrim || activeScrim.id !== "layoutScrim") openLayoutManager();
+    showLayoutForm("save");
   }
 
   function submitLayoutForm() {
@@ -2834,8 +2855,28 @@
     if (layoutNameTaken(name, layoutFormMode === "rename" ? layoutFormTarget : null)) {
       return fail("That name is reserved or already used.");
     }
+    if (layoutFormMode === "save") {
+      const id = uniqueLayoutId(slugifyLayout(name));
+      const layout = {
+        id,
+        name,
+        description,
+        template: false,
+        map: { ...overrides },
+      };
+      LAYOUTS.push(layout);
+      DEVICES[activeDevice].activeLayout = id;
+      overrides = { ...layout.map };
+      dirty = false;
+      savedLayouts = LAYOUTS.map((item) => ({ ...item, map: { ...item.map } }));
+      hideLayoutForm();
+      refresh();
+      if (!activeScrim) toast("Saved as a new layout");
+      return;
+    }
     if (layoutFormMode === "rename") {
       const layout = layoutById(layoutFormTarget);
+      if (layout.template) return fail("Default is a template.");
       layout.name = name;
       layout.description = description;
       dirty = true;
@@ -2845,7 +2886,7 @@
       return;
     }
     const id = uniqueLayoutId(slugifyLayout(name));
-    LAYOUTS.push({ id, name, description, readonly: false, map: {} });
+    LAYOUTS.push({ id, name, description, template: false, map: {} });
     dirty = true;
     hideLayoutForm();
     refresh();
@@ -2864,14 +2905,14 @@
       id,
       name,
       description: source.description,
-      readonly: false,
+      template: false,
       map: { ...source.map },
     };
     LAYOUTS.push(layout);
     dirty = true;
     if (activate) {
       DEVICES[activeDevice].activeLayout = id;
-      overrides = layout.map;
+      overrides = { ...layout.map };
       pressed = null;
       selected = { button: "ok", trigger: "single" };
     }
@@ -2892,8 +2933,8 @@
       return;
     }
     if (action === "delete") {
-      if (layout.readonly) {
-        toast("Default is read-only.");
+      if (layout.template) {
+        toast("Default is a template.");
         return;
       }
       if (DEVICES.some((device) => device.activeLayout === id)) {
@@ -2908,12 +2949,12 @@
       return;
     }
     if (action === "reset") {
-      if (layout.readonly) {
-        toast("Default is read-only.");
+      if (layout.template) {
+        toast("Default is a template.");
         return;
       }
       layout.map = {};
-      if (currentLayout().id === id) overrides = layout.map;
+      if (currentLayout().id === id) overrides = { ...layout.map };
       dirty = true;
       openLayoutActions = null;
       refresh();
@@ -2964,10 +3005,6 @@
       hideLayoutForm();
     }
   });
-  $("#duplicateDefaultBanner").addEventListener("click", () => {
-    duplicateLayout(currentLayout(), true);
-  });
-
   /* ---------- Device switching / revert / apply / test ---------- */
   function switchDevice(index) {
     if (index === activeDevice) {
@@ -2986,7 +3023,7 @@
     const next = DEVICES[index];
     next.connected = true;
     next.lastSeen = "now";
-    overrides = currentLayout().map;
+    overrides = { ...currentLayout().map };
     dirty = false;
     testOn = false;
     pressed = null;
@@ -3007,7 +3044,7 @@
         device.activeLayout = "default";
       }
     }
-    overrides = currentLayout().map;
+    overrides = { ...currentLayout().map };
     dirty = false;
     openLayoutActions = null;
     refresh();
@@ -3016,8 +3053,15 @@
 
   function applyConfig() {
     if (!dirty) return;
-    savedLayouts = LAYOUTS.map((layout) => ({ ...layout, map: { ...layout.map } }));
+    const layout = currentLayout();
+    if (layout.template && templateMapChanged()) {
+      startSaveAsLayout();
+      return;
+    }
+    if (!layout.template) layout.map = { ...overrides };
+    savedLayouts = LAYOUTS.map((item) => ({ ...item, map: { ...item.map } }));
     dirty = false;
+    overrides = { ...currentLayout().map };
     refresh();
     if (!activeScrim) toast("Configuration applied");
   }
@@ -3067,7 +3111,7 @@
       DEVICES[i].connected = i === 0;
       DEVICES[i].lastSeen = i === 0 ? "now" : "2 days ago";
     }
-    overrides = currentLayout().map;
+    overrides = { ...currentLayout().map };
     dirty = false;
     testOn = false;
     pressed = null;

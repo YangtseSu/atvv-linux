@@ -10,7 +10,7 @@ Touches: `crates/atvv-config/`, `crates/atvv-cli/`, `crates/atvv-gui/`,
 Ship a small catalog of built-in, read-only layout presets that a user can
 preview and turn into a user layout. Presets are templates, not live state:
 the active layout is still a layout from step 17, and `default` remains the
-read-only baseline.
+synthesized profile template.
 
 ## Presets
 
@@ -101,7 +101,8 @@ dangerous system shortcuts. A user can edit the resulting layout freely.
 - Creating from a preset does not switch the active layout automatically; the
   user chooses **Use** afterwards. Reset to preset requires an explicit
   confirmation and affects only the selected user layout.
-- Preset rows are never editable/deletable, matching `default`.
+- Preset rows are never edited or deleted in place; like `default`, a preset
+  is a template that produces a user layout.
 
 ## Tests
 

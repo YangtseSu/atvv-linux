@@ -34,7 +34,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
   a design artifact, not shipped code. The device popover and per-device maps
   preview step 21; the second remote is illustrative. It also contains the
   decided step 17 layout UI: header layout chip, layout popover, manager
-  dialog, read-only Default, and the manager's Apply/Revert footer. Step 17
+  dialog, template Default, and the manager's Apply/Revert footer. Step 17
   implementation is still pending.
 
 ## Completed
@@ -248,12 +248,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   the step 21 device chip/popover and per-device maps. Depends on step 14; see
   `docs/plans/15-mapping-board.md`.
 - **17 layout profiles (planned)**: add named user layouts (button slots plus
-  gesture timing) beside the device profile, with a read-only synthesized
-  `default`; schema v2, v1 migration, `SetLayout`/`LayoutChanged`, CLI and GUI
-  switching, and live apply. Depends on 13, 14, and 15; see
+  gesture timing) beside the device profile, with a synthesized `default`
+  template whose edits save as a new layout; schema v2, v1 migration,
+  `SetLayout`/`LayoutChanged`, CLI and GUI switching, and live apply.
+  Depends on 13, 14, and 15; see
   `docs/plans/17-layout-profiles.md` and
   `docs/research/layout-profiles-presets.md`.
-- **18 layout presets (planned)**: ship read-only `media`, `coding`, and
+- **18 layout presets (planned)**: ship static `media`, `coding`, and
   `slides` templates that create editable user layouts; presets never become
   live state and never contain `exec:`. Depends on 17; see
   `docs/plans/18-layout-presets.md`.
@@ -281,8 +282,8 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - Rust 2024; MSRV 1.99 tracks the stable toolchain (zbus 6 needs 1.89,
   gtk4 0.11 needs 1.92); `atvv-protocol` is I/O-free.
 - `DeviceProfile` is hardware/firmware identity. User keymaps are separate
-  `Layout` objects (schema v2) with a read-only synthesized `default`;
-  presets are read-only templates that create user layouts. No automatic
+  `Layout` objects (schema v2) with a synthesized `default` template;
+  presets are static templates that create user layouts. No automatic
   per-app/focus switching.
 - Arch Linux packaging only; Debian/Fedora/Nix/Flatpak are out.
 - PipeWire service restart belongs to systemd (`PartOf=pipewire.service`,
@@ -564,8 +565,9 @@ interface reference `docs/plans/15-mapping-board.html` as the visual and
 interaction basis; the second remote and per-device maps there preview step
 21, so step 15 implements the one-device board and its device chip without
 switching. See `docs/plans/15-mapping-board.md`. Step 17's layout-selector UI
-is decided in the same reference; its implementation remains in step 17. B01
-(recording-key press/release actions) is backlog and does not block step 15.
+is decided in the same reference; its plan now defines Default as a template:
+board edits are staged, and Apply saves them as a new layout. Implementation
+remains in step 17. B01 (recording-key press/release actions) is backlog and does not block step 15.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
