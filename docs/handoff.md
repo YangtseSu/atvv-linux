@@ -375,6 +375,16 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   `xvfb-run -a cargo test -p atvv-gui --test ui` → 1 passed;
   `xvfb-run -a cargo test -p atvv-gui --test i18n` → 1 passed, 1 ignored;
   `cargo test -p atvv-gui --lib` → 21 passed.
+- 2026-11-01 local `-git` test build from `fcd422b`:
+  `atvv-git 0.1.0.r8.gfcd422b-1` (sha256
+  `9ea7e6ffb250aeb4fb109d7876397f6145c2452e0ce28c9937eca9c47c02e72d`) and
+  `atvv-gui-git 0.1.0.r8.gfcd422b-1` (sha256
+  `0582c339899264b2e7b357ebd3f11544f88da436363f79daadf019408e9d9200`).
+  The temporary PKGBUILD pointed at the local repository because the
+  checked-in VCS recipe tracks GitHub. The installed
+  `atvv-linux-git`/`atvv-linux-gui-git` pair owns the same binary paths, so
+  installing the new packages requires removing that pair first. `namcap`
+  reports only the expected implicit-library/runtime-service notes.
 - 2026-10-31 step 20: the tag-triggered release workflow YAML parses; it
   builds x86_64 and aarch64 binaries on GitHub runners;
   `v0.1.0` is tagged; the AUR PKGBUILD pins the source archive checksum.
