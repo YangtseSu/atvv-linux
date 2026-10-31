@@ -2,7 +2,7 @@
 
 pkgbase=atvv-linux-git
 pkgname=('atvv-linux-git' 'atvv-linux-gui-git')
-pkgver=0.1.0.r0.g0000000
+pkgver=0.1.0.r63.gcfd713e
 pkgrel=1
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
@@ -22,27 +22,18 @@ pkgver() {
     "$(git rev-parse --short=7 HEAD)"
 }
 
-prepare() {
-  cd "$pkgbase"
-  # A target/ directory left by a previous build would make Cargo treat
-  # changed sources as fresh, so packaging must start from a clean tree.
-  rm -rf target
-}
-
 build() {
   cd "$pkgbase"
   # --locked keeps the committed dependency graph; the crates are fetched from
-  # crates.io, so this is not --frozen/--offline.
+  # crates.io, so this is not --frozen/--offline. Keep target/ between builds:
+  # the VCS checkout updates only changed files, so Cargo reuses the release
+  # artifacts instead of rebuilding every dependency.
   cargo build --release --locked --workspace --bins
 }
 
-check() {
-  cd "$pkgbase"
-  # Integration tests (D-Bus, Xvfb UI, real device) run in CI with the dev
-  # profile. Compiling them with release LTO on every package rebuild adds
-  # minutes; the package check runs the release library unit tests.
-  cargo test --workspace --release --locked --lib --exclude atvv-cli
-}
+# No check(): CI runs fmt, clippy, and the workspace/integration tests. A
+# makepkg check would compile every library a second time as a release test
+# harness, which is the duplicate compile this recipe deliberately avoids.
 
 package_atvv-linux-git() {
   pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (git)"

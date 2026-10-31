@@ -71,23 +71,23 @@ on approval/upstream; steps 11–13 are complete.
 
 ## Step files
 
-| # | Phase | Step | Status | Depends on |
-|---|-------|------|--------|------------|
-| 01 | A | [protocol-core](01-protocol-core.md) | ✅ done | — |
-| 02 | A | [session-state-machine](02-session-state-machine.md) | ✅ done | 01 |
-| 03 | A | [cli-diagnostics](03-cli-diagnostics.md) | ✅ done | 01, 02 |
-| 04 | B | [pipewire-source](04-pipewire-source.md) | ✅ done | 01 |
-| 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 |
-| 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 |
-| 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 |
-| 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 |
-| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 |
-| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 |
-| 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 |
-| 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) |
-| 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 |
-| 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 |
-| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 |
+| # | Phase | Step | Status | Depends on | Exit, in one line |
+|---|-------|------|--------|------------|-------------------|
+| 01 | A | [protocol-core](01-protocol-core.md) | ✅ done | — | CAPS, control events, and ADPCM pass without I/O |
+| 02 | A | [session-state-machine](02-session-state-machine.md) | ✅ done | 01 | a fake transport reaches every state and emits actions without sleeping |
+| 03 | A | [cli-diagnostics](03-cli-diagnostics.md) | ✅ done | 01, 02 | `profile`, `caps decode`, and `simulate` print the documented output |
+| 04 | B | [pipewire-source](04-pipewire-source.md) | ✅ done | 01 | a resident source records a synthetic tone without a remote |
+| 05 | B | [input-uinput](05-input-uinput.md) | ✅ done | 01 | a fake uinput remote exercises grab, gestures, and the trigger |
+| 06 | B | [daemon-dbus](06-daemon-dbus.md) | ✅ done | 01, 02, 04, 05 | a mock BLE session drives D-Bus and ignores the stop echo |
+| 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 | real RC003 CAPS, audio, keepalive, and reconnect are recorded |
+| 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 | trigger integration and all MCP tools work end to end |
+| 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 | a split Arch package, uaccess rule, and signed hardware acceptance |
+| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
+| 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 | the evdevil path and `DICTATE` default are verified |
+| 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) | contract, status, and the consumer recipe agree and are tested |
+| 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 | `config get/set`, capture, and live apply are atomic |
+| 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
+| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one |
 
 ## Architecture contract
 

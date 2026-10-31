@@ -7,7 +7,7 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 166 passed, 4 ignored tests (two
+- Tests: `cargo test --workspace` → 167 passed, 4 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, and the new
   real-device GUI test; the first three pass with `/dev/uinput` access).
 
@@ -113,26 +113,19 @@ per-session copies; `docs/plans/` remains the canonical plan.
   refuses to run as root. The fake-remote test changed `up` to `KEY_F13` live
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
-- **0.1.0-9 packages (built, not installed)**: the recording-key tree
-  produced the split `atvv-linux 0.1.0-9` (6.2 MiB; package sha256
-  `a7b102c219771502d573da8361a0fca37ff553f0a2cbb6cf1ad5ba10b9a693d9`)
-  and `atvv-linux-gui 0.1.0-9` (1.3 MiB; package sha256
-  `20311d5a7638d36caf96c9c5f6ca0a6e2707e3eed25e22cb9d98e8c8bfa1c3a3`) from
-  source tarball sha256
-  `a727e4bb0e5b19e8782869d01277eabcdb3e8fea1f4eede97153a30100890f21`.
-  The base package keeps `pipewire`/`bluez`/`dbus` dependencies and the GUI
-  package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux`. The packaged
-  `atvv-config` launches under Xvfb with the packaged `atvvd --mock` and
-  renders the embedded diagram, which mirrors the real RC003 layout
-  (power/voice top, circular D-pad, back/home/menu left, volume/TV right).
-  `namcap` reports only the expected implicit
-  libraries and runtime-service notes. `pacman -U` needs the operator's
-  password, so 0.1.0-9 is not installed. The installed `atvv-linux 0.1.0-7`
-  (07:01 build) predates the test-mode and recording-key fixes; reinstall from
-  0.1.0-9 to get capture suppression, `KEY_HOME`/`KEY_COMPOSE`, the SVG region
-  highlight, the pointer-click fix, and the selectable recording-key output.
-  The package check now runs release library unit tests only; D-Bus, Xvfb, and
-  real-device integration tests run in CI to keep package rebuilds short.
+- **`atvv-linux-git` packages (built, not installed)**: the split VCS
+  package `atvv-linux-git 0.1.0.r63.gcfd713e-1` (6.3 MiB; package sha256
+  `dd255917a50756e3f8835b0cfc3f3a5565c636c50887e0fe55f84e99947d7df3`) and
+  `atvv-linux-gui-git 0.1.0.r63.gcfd713e-1` (1.3 MiB; package sha256
+  `3dd2da8bed0165acec69341e2fc392e827a902ea10a83d34ea7103b18288ad80`)
+  were built from commit `cfd713e` with `makepkg -f`. They provide and replace
+  `atvv-linux` / `atvv-linux-gui`; the installed `0.1.0-7` packages remain
+  active until the operator installs them. `makepkg` now compiles the release
+  binaries once (CI owns the test suite) and keeps
+  `src/atvv-linux-git/target/`, so rebuilds reuse unchanged dependencies.
+  The GUI package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux-git`;
+  the base package keeps `pipewire`/`bluez`/`dbus`. `namcap` reports only the
+  expected implicit libraries and runtime-service notes.
 - **14 configuration GUI (complete and verified)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
   embedded SVG remote diagram matching the RC003 layout (power/voice at the
@@ -246,12 +239,15 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - The RC003 mic is gated by the physical voice key; host `MIC_OPEN` alone
   yields `AUDIO_START` and then a frame timeout. Voice-key edges drive both
   `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger.
-- Package facts: `atvv-linux` version `0.1.0`; binaries `atvvd`, `atvvctl`,
-  `atvv-mcp`; user unit at `/usr/lib/systemd/user/atvvd.service`; udev rule
+- Package facts: `atvv-linux-git` (version
+  `0.1.0.r<commit-count>.g<short-hash>`) and `atvv-linux-gui-git`; binaries
+  `atvvd`, `atvvctl`, `atvv-mcp`, `atvv-config`; user unit at
+  `/usr/lib/systemd/user/atvvd.service`; udev rule
   `/usr/lib/udev/rules.d/70-atvv-linux.rules`; modules-load
   `/usr/lib/modules-load.d/atvv-linux.conf`; no system D-Bus policy.
-- The Arch source tarball is deterministic (`packaging/arch/make-source.sh`);
-  `packaging/arch` is `export-ignore`, so the pinned checksum is stable.
+- The Arch package is a split VCS package (`atvv-linux-git`,
+  `atvv-linux-gui-git`) built from the local HEAD; `makepkg` compiles release
+  binaries once, keeps `src/atvv-linux-git/target/`, and leaves tests to CI.
 - Man pages are generated from clap by `atvvctl manpages`; `atvvctl
   completions <shell>` prints completions. `atvvd` shares its clap definition
   from `atvv-daemon/src/cli.rs`.
@@ -413,24 +409,29 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 ## Next step
 
 **Step 14 GTK4/libadwaita GUI is complete and verified.** The split
-`0.1.0-9` packages are built in `packaging/arch/` but not installed;
-the stale `atvv-linux 0.1.0-7` build remains active. Install them with
-`sudo pacman -U packaging/arch/atvv-linux-0.1.0-9-x86_64.pkg.tar.zst
-packaging/arch/atvv-linux-gui-0.1.0-9-x86_64.pkg.tar.zst` and restart the
-user unit. The GUI uses `GetConfig`/`SetConfig`, `BeginCapture`/`EndCapture`,
-and `RunAction`; it never writes `daemon.toml` or grabs evdev. See
-`docs/gui.md` and `docs/plans/14-config-gui.md`.
+`atvv-linux-git 0.1.0.r63.gcfd713e-1` and
+`atvv-linux-gui-git 0.1.0.r63.gcfd713e-1` packages are built in
+`packaging/arch/` but not installed; the stale `atvv-linux 0.1.0-7` build
+remains active. Install them with
+`sudo pacman -U packaging/arch/atvv-linux-git-0.1.0.r63.gcfd713e-1-x86_64.pkg.tar.zst
+packaging/arch/atvv-linux-gui-git-0.1.0.r63.gcfd713e-1-x86_64.pkg.tar.zst`
+and restart the user unit. The `-git` packages provide and replace
+`atvv-linux` / `atvv-linux-gui`. The GUI uses
+`GetConfig`/`SetConfig`, `BeginCapture`/`EndCapture`, and `RunAction`; it never
+writes `daemon.toml` or grabs evdev. See `docs/gui.md` and
+`docs/plans/14-config-gui.md`.
 
 **Step 15 is the next UI step.** It replaces the single-key inspector with a
 sayall-style board (central remote + per-key single/double/long cards) while
-staying GTK4/libadwaita. See `docs/plans/15-mapping-board.md`.
+staying GTK4/libadwaita. See `docs/plans/15-mapping-board.md`. B01
+(recording-key press/release actions) is backlog and does not block step 15.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: install the 0.1.0-9 packages; then start step 15.
+Immediate action: install the `atvv-linux-git` packages; then start step 15.
 In parallel, wait for upstream review on PR #493; after it merges, rebase PR
 #494 onto `main`, then PR #495, rebuild vinput, and record the real auto-bind
 acceptance.
@@ -448,7 +449,6 @@ cargo deny check
 cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
-./packaging/arch/make-source.sh
 cd packaging/arch && makepkg -f
 cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- simulate miremote-rc003

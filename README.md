@@ -64,7 +64,7 @@ installed-unit PipeWire restart).
 
 Requirements: Arch Linux, a systemd user session, PipeWire, BlueZ, and (for
 voice-key integration) fcitx5-vinput. The daemon is a user service; never run
-it as root. `atvv-linux-gui` additionally needs GTK4, libadwaita, and
+it as root. `atvv-linux-gui-git` additionally needs GTK4, libadwaita, and
 librsvg.
 
 ```sh

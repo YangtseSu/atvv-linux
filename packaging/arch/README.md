@@ -9,6 +9,11 @@ Both packages are built from this checkout's HEAD. `source` clones the local
 repository, so uncommitted files are not part of the build; commit first.
 `pkgver` is `0.1.0.r<commit-count>.g<short-hash>`.
 
+`makepkg` compiles the release binaries once and does not run the test suite;
+CI owns fmt, clippy, and the workspace/integration tests. The VCS
+`src/atvv-linux-git/target/` directory is kept between builds, so a rebuild
+only compiles changed crates.
+
 ## Build and install
 
 ```sh
