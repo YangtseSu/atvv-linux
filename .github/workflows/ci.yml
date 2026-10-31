@@ -23,7 +23,7 @@ jobs:
         with:
           # paths-filter compares against the previous commit on push.
           fetch-depth: 0
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
