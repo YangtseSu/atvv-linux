@@ -30,7 +30,10 @@ build() {
 
 check() {
   cd "$pkgbase-$pkgver"
-  cargo test --workspace --release --locked
+  # Integration tests (D-Bus, Xvfb UI, real device) run in CI with the dev
+  # profile. Compiling them with release LTO on every package rebuild adds
+  # minutes; the package check runs the release library unit tests.
+  cargo test --workspace --release --locked --lib --exclude atvv-cli
 }
 
 package_atvv-linux() {

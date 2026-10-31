@@ -113,33 +113,36 @@ per-session copies; `docs/plans/` remains the canonical plan.
   refuses to run as root. The fake-remote test changed `up` to `KEY_F13` live
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
-- **0.1.0-8 packages (built, not installed)**: the final step-14 tree
-  (`5123b6f`) produced the split `atvv-linux 0.1.0-8` (6.2 MiB; package
-  sha256 `d6792082d515946e0073199faa3f9aa288b185b67c5b3bb3e731b12c71418076`)
-  and `atvv-linux-gui 0.1.0-8` (1.3 MiB; package sha256
-  `7fc99deb0609ac294f8dceac30e6d6581cfce833508ab5a838c27e8885c4c117`) from
+- **0.1.0-9 packages (built, not installed)**: the recording-key tree
+  produced the split `atvv-linux 0.1.0-9` (6.2 MiB; package sha256
+  `a7b102c219771502d573da8361a0fca37ff553f0a2cbb6cf1ad5ba10b9a693d9`)
+  and `atvv-linux-gui 0.1.0-9` (1.3 MiB; package sha256
+  `20311d5a7638d36caf96c9c5f6ca0a6e2707e3eed25e22cb9d98e8c8bfa1c3a3`) from
   source tarball sha256
-  `1752544fcb4744f35fe4cfa651a262e2a4c76d0675a81d7545d25e254c541451`.
+  `a727e4bb0e5b19e8782869d01277eabcdb3e8fea1f4eede97153a30100890f21`.
   The base package keeps `pipewire`/`bluez`/`dbus` dependencies and the GUI
   package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux`. The packaged
   `atvv-config` launches under Xvfb with the packaged `atvvd --mock` and
-  renders the embedded diagram, which now mirrors the real RC003 layout
+  renders the embedded diagram, which mirrors the real RC003 layout
   (power/voice top, circular D-pad, back/home/menu left, volume/TV right).
   `namcap` reports only the expected implicit
   libraries and runtime-service notes. `pacman -U` needs the operator's
-  password, so 0.1.0-8 is not installed. The installed `atvv-linux 0.1.0-7`
-  (07:01 build) predates the test-mode fixes; reinstall from 0.1.0-8 to get
-  capture suppression, `KEY_HOME`/`KEY_COMPOSE`, and the SVG region highlight.
-  The 0.1.0-8 packages include the pointer-click fix; a staged `atvv-config`
-  click selected `Back` (`KEY_BACK`) under Xvfb.
+  password, so 0.1.0-9 is not installed. The installed `atvv-linux 0.1.0-7`
+  (07:01 build) predates the test-mode and recording-key fixes; reinstall from
+  0.1.0-9 to get capture suppression, `KEY_HOME`/`KEY_COMPOSE`, the SVG region
+  highlight, the pointer-click fix, and the selectable recording-key output.
+  The package check now runs release library unit tests only; D-Bus, Xvfb, and
+  real-device integration tests run in CI to keep package rebuilds short.
 - **14 configuration GUI (complete and verified)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
   embedded SVG remote diagram matching the RC003 layout (power/voice at the
-  top, circular D-pad, back/home/menu left, volume/TV right; the voice key is
-  not a hotspot), twelve pointer-clickable `GtkButton` hotspots (XTest
-  verified all twelve), the
-  single/double/long action editor, keyboard and remote learning, test mode,
-  `exec` confirmation, banners/toasts, and a daemon-unavailable state.
+  top, circular D-pad, back/home/menu left, volume/TV right; the voice key
+  opens the recording-key page), twelve action hotspots plus the recording-key
+  hotspot (XTest verified the twelve action keys; the UI test selects the
+  recording key), the single/double/long action editor, keyboard and remote
+  learning, test mode, `exec` confirmation, banners/toasts, and a
+  daemon-unavailable state. The recording-key page edits only `trigger_key`
+  (`DICTATE` default; `F23`, a chord, or `none`), not action slots.
   `RunAction` was added to `org.atvv.Daemon` for test mode. Split packaging is
   implemented (`atvv-linux-gui` with desktop entry, AppStream metadata, icon,
   and GTK runtime dependencies). Worker tests run against the real daemon
@@ -410,10 +413,10 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 ## Next step
 
 **Step 14 GTK4/libadwaita GUI is complete and verified.** The split
-`0.1.0-8` packages are built in `packaging/arch/` but not installed;
+`0.1.0-9` packages are built in `packaging/arch/` but not installed;
 the stale `atvv-linux 0.1.0-7` build remains active. Install them with
-`sudo pacman -U packaging/arch/atvv-linux-0.1.0-8-x86_64.pkg.tar.zst
-packaging/arch/atvv-linux-gui-0.1.0-8-x86_64.pkg.tar.zst` and restart the
+`sudo pacman -U packaging/arch/atvv-linux-0.1.0-9-x86_64.pkg.tar.zst
+packaging/arch/atvv-linux-gui-0.1.0-9-x86_64.pkg.tar.zst` and restart the
 user unit. The GUI uses `GetConfig`/`SetConfig`, `BeginCapture`/`EndCapture`,
 and `RunAction`; it never writes `daemon.toml` or grabs evdev. See
 `docs/gui.md` and `docs/plans/14-config-gui.md`.
@@ -427,7 +430,7 @@ the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: install the 0.1.0-8 packages; then start step 15.
+Immediate action: install the 0.1.0-9 packages; then start step 15.
 In parallel, wait for upstream review on PR #493; after it merges, rebase PR
 #494 onto `main`, then PR #495, rebuild vinput, and record the real auto-bind
 acceptance.

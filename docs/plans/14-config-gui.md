@@ -222,10 +222,12 @@ Manual:
   and grab are unchanged; the GUI edits the existing config document through
   `SetConfig`. UI test covers selecting the key, changing the output to `F23`,
   and returning to a logical key.
-- 2026-10-31 — final `0.1.0-8` rebuild: `atvv-linux` sha256
-  `d6792082…718076`, `atvv-linux-gui` sha256 `7fc99deb…c4c117`, source
-  tarball `1752544f…c541451`. Built from the completed step-14 tree; not
-  installed. The earlier installed 0.1.0-7 predates these fixes.
+- 2026-10-31 — final `0.1.0-9` rebuild with the recording-key page:
+  `atvv-linux` sha256 `a7b102c2…a693d9`, `atvv-linux-gui` sha256
+  `20311d5a…a1c3a3`, source tarball `a727e4bb…890f21`. Built from the
+  completed step-14 tree; not installed. The installed 0.1.0-7 predates the
+  test-mode and recording-key fixes. The package check now runs release
+  library unit tests only; integration tests run in CI.
 - 2026-10-31 — test-mode fixes verified on the RC003: capture now suppresses
   mapped keys, exec, dictation, the synthetic voice trigger, and voice-session
   start/stop; voice edges and release edges are forwarded as `ButtonEvent`.
@@ -233,4 +235,6 @@ Manual:
   stayed unchanged. `KEY_HOME`/`KEY_COMPOSE` replace the old
   `KEY_HOMEPAGE`/`KEY_MENU` home/menu mapping. The CSS provider is installed
   after GTK init, so the selected/pressed SVG regions render; the voice key has
-  a non-editable hotspot and a fixed-key note.
+  a hotspot that opens the recording-key page and a fixed-physical-key note.
+  The recording-key page edits only the output `trigger_key`; action slots are
+  not shown.

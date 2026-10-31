@@ -195,17 +195,19 @@ mappings, gesture overrides, `exec:` opt-in, and live D-Bus
 remote.
 
 Step 14 is complete and packaged: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
-client with an embedded SVG remote diagram, twelve accessible hotspots, a
-per-slot action editor, keyboard and remote learning, test mode with an
-explicit Run once, `exec` confirmation, banners/toasts, and a daemon-unavailable
-state. `RunAction` was added to `org.atvv.Daemon` for test mode. The worker
-tests use a private bus and the real daemon service; a headless `xvfb-run`
-test drives the window. A real RC003 run saved a mapping through the GUI and
+client with an embedded SVG remote diagram, twelve action hotspots plus the
+recording key, a per-slot action editor, keyboard and remote learning, test
+mode with an explicit Run once, `exec` confirmation, banners/toasts, and a
+daemon-unavailable state. The recording key opens a settings page that edits
+only its output `trigger_key`; the physical key and microphone path stay fixed.
+`RunAction` was added to `org.atvv.Daemon` for test mode. The worker tests use
+a private bus and the real daemon service; a headless `xvfb-run` test drives
+the window. A real RC003 run saved a mapping through the GUI and
 verified it after a daemon restart. The physical test-mode run observed all
 thirteen keys, kept Test mode active after OK, and left system volume
 unchanged; Home/Menu use `KEY_HOME`/`KEY_COMPOSE`. Packaging is a split
 `atvv-linux-gui` package with desktop entry, AppStream metadata, icon, and GTK
-runtime dependencies kept out of `atvv-linux`; `0.1.0-8` is built and staged
+runtime dependencies kept out of `atvv-linux`; `0.1.0-9` is built and staged
 but not installed. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
 sayall-style mapping board (central remote + per-button cards with all three
