@@ -15,7 +15,7 @@ use gtk::{gdk, glib};
 use crate::model::button_label;
 
 const VIEWBOX_WIDTH: f64 = 320.0;
-const VIEWBOX_HEIGHT: f64 = 820.0;
+const VIEWBOX_HEIGHT: f64 = 950.0;
 
 #[derive(Debug, Clone, Copy)]
 struct Hotspot {
@@ -29,94 +29,94 @@ struct Hotspot {
 const HOTSPOTS: [Hotspot; 13] = [
     Hotspot {
         button: RemoteButton::Power,
-        x: 0.275,
-        y: 0.060976,
-        width: 0.15,
-        height: 0.058537,
+        x: 0.222813,
+        y: 0.036632,
+        width: 0.1875,
+        height: 0.063158,
     },
     Hotspot {
         button: RemoteButton::Voice,
-        x: 0.575,
-        y: 0.060976,
-        width: 0.15,
-        height: 0.058537,
+        x: 0.589688,
+        y: 0.036632,
+        width: 0.1875,
+        height: 0.063158,
     },
     Hotspot {
         button: RemoteButton::Tv,
-        x: 0.56875,
-        y: 0.592683,
-        width: 0.175,
-        height: 0.068293,
+        x: 0.519375,
+        y: 0.497158,
+        width: 0.25,
+        height: 0.084211,
     },
     Hotspot {
         button: RemoteButton::Up,
-        x: 0.3375,
-        y: 0.153659,
-        width: 0.325,
-        height: 0.07561,
+        x: 0.353125,
+        y: 0.115789,
+        width: 0.29375,
+        height: 0.048421,
     },
     Hotspot {
         button: RemoteButton::Down,
-        x: 0.3375,
-        y: 0.331707,
-        width: 0.325,
-        height: 0.07561,
+        x: 0.353125,
+        y: 0.258947,
+        width: 0.29375,
+        height: 0.048421,
     },
     Hotspot {
         button: RemoteButton::Left,
-        x: 0.175,
-        y: 0.229268,
-        width: 0.19375,
-        height: 0.102439,
+        x: 0.20625,
+        y: 0.162105,
+        width: 0.146875,
+        height: 0.098947,
     },
     Hotspot {
         button: RemoteButton::Right,
-        x: 0.63125,
-        y: 0.229268,
-        width: 0.19375,
-        height: 0.102439,
+        x: 0.646875,
+        y: 0.162105,
+        width: 0.146875,
+        height: 0.098947,
     },
     Hotspot {
         button: RemoteButton::Ok,
-        x: 0.36875,
-        y: 0.229268,
-        width: 0.2625,
-        height: 0.102439,
+        x: 0.353125,
+        y: 0.162105,
+        width: 0.29375,
+        height: 0.098947,
     },
     Hotspot {
         button: RemoteButton::Back,
-        x: 0.2625,
-        y: 0.417073,
-        width: 0.175,
-        height: 0.068293,
+        x: 0.229063,
+        y: 0.315789,
+        width: 0.25,
+        height: 0.084211,
     },
     Hotspot {
         button: RemoteButton::Home,
-        x: 0.2625,
-        y: 0.504878,
-        width: 0.175,
-        height: 0.068293,
+        x: 0.229063,
+        y: 0.405474,
+        width: 0.25,
+        height: 0.084211,
     },
     Hotspot {
         button: RemoteButton::Menu,
-        x: 0.2625,
-        y: 0.592683,
-        width: 0.175,
-        height: 0.068293,
+        x: 0.229063,
+        y: 0.496526,
+        width: 0.25,
+        height: 0.084211,
     },
     Hotspot {
         button: RemoteButton::VolumeUp,
-        x: 0.55625,
-        y: 0.421951,
-        width: 0.2,
-        height: 0.068293,
+        x: 0.51875,
+        y: 0.315789,
+        width: 0.257813,
+        height: 0.087474,
     },
     Hotspot {
         button: RemoteButton::VolumeDown,
-        x: 0.55625,
-        y: 0.490244,
-        width: 0.2,
-        height: 0.068293,
+        x: 0.51875,
+        y: 0.402105,
+        width: 0.257813,
+        height: 0.088105,
     },
 ];
 
@@ -136,7 +136,7 @@ const HOTSPOT_CSS: [&str; 13] = [
     "hotspot-volume-down",
 ];
 
-const DIAGRAM_WIDTH: f64 = 220.0;
+const DIAGRAM_WIDTH: f64 = 200.0;
 const DIAGRAM_HEIGHT: f64 = DIAGRAM_WIDTH * VIEWBOX_HEIGHT / VIEWBOX_WIDTH;
 
 fn scaled(hotspot: Hotspot, width: f64, height: f64) -> (f64, f64, i32, i32) {
@@ -166,7 +166,7 @@ impl RemoteDiagram {
             .vexpand(true)
             .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
-            .width_request(220)
+            .width_request(DIAGRAM_WIDTH as i32)
             .build();
 
         let fixed = gtk::Fixed::new();

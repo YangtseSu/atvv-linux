@@ -133,7 +133,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   hotspot (XTest verified the twelve action keys; the UI test selects the
   recording key), the single/double/long action editor, keyboard and remote
   learning, test mode, `exec` confirmation, banners/toasts, and a
-  daemon-unavailable state. The recording-key page edits only `trigger_key`
+  daemon-unavailable state. The remote illustration follows the straight-on
+  product proportions (slim body, silver power/mic keys, 50%-diameter D-pad
+  center, rounded-square `TV` key, NFC N-mark, `xiaomi` wordmark); the voice
+  key uses the standard microphone glyph. Re-verified on 2026-10-31 with
+  `cargo fmt`, `cargo clippy -p atvv-gui`, `xvfb-run cargo test -p atvv-gui`
+  (20 passed, 1 ignored), and a headless mock-daemon capture. The
+  recording-key page edits only `trigger_key`
   (`DICTATE` default; `F23`, a chord, or `none`), not action slots.
   `RunAction` was added to `org.atvv.Daemon` for test mode. Split packaging is
   implemented (`atvv-linux-gui` with desktop entry, AppStream metadata, icon,
