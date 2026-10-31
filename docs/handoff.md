@@ -114,18 +114,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and observed it without a daemon restart. See
   `docs/configuration.md` and `docs/plans/13-keymap-config.md`.
 - **`atvv-linux-git` packages (built, not installed)**: the split VCS
-  package `atvv-linux-git 0.1.0.r63.gcfd713e-1` (6.3 MiB; package sha256
-  `dd255917a50756e3f8835b0cfc3f3a5565c636c50887e0fe55f84e99947d7df3`) and
-  `atvv-linux-gui-git 0.1.0.r63.gcfd713e-1` (1.3 MiB; package sha256
-  `3dd2da8bed0165acec69341e2fc392e827a902ea10a83d34ea7103b18288ad80`)
-  were built from commit `cfd713e` with `makepkg -f`. They provide and replace
+  package `atvv-linux-git 0.1.0.r64.g6f86ec3-1` (6.3 MiB; package sha256
+  `9b71c0ad126b41392d5d56575f6a4559e69a09e67af3581f2e39c9e3aa4d9495`) and
+  `atvv-linux-gui-git 0.1.0.r64.g6f86ec3-1` (1.3 MiB; package sha256
+  `bdcab38c44a0ba2c8e1e4fe32e8a3e8ab2887b1fb4aaa0215915152f796e9e5a`)
+  were built from commit `6f86ec3` with `makepkg -f`. They provide and replace
   `atvv-linux` / `atvv-linux-gui`; the installed `0.1.0-7` packages remain
   active until the operator installs them. `makepkg` now compiles the release
-  binaries once (CI owns the test suite) and keeps
-  `src/atvv-linux-git/target/`, so rebuilds reuse unchanged dependencies.
-  The GUI package adds `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux-git`;
-  the base package keeps `pipewire`/`bluez`/`dbus`. `namcap` reports only the
-  expected implicit libraries and runtime-service notes.
+  binaries once (CI owns the test suite); the VCS target is preserved, and a
+  repeat `cargo build --release` finishes in 0.1 s. The GUI package adds
+  `gtk4`/`libadwaita`/`librsvg` plus `atvv-linux-git`; the base package keeps
+  `pipewire`/`bluez`/`dbus`.
 - **14 configuration GUI (complete and verified)**:
   `atvv-gui` / `atvv-config` is a GTK4/libadwaita D-Bus client with an
   embedded SVG remote diagram matching the RC003 layout (power/voice at the
@@ -409,12 +408,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 ## Next step
 
 **Step 14 GTK4/libadwaita GUI is complete and verified.** The split
-`atvv-linux-git 0.1.0.r63.gcfd713e-1` and
-`atvv-linux-gui-git 0.1.0.r63.gcfd713e-1` packages are built in
+`atvv-linux-git 0.1.0.r64.g6f86ec3-1` and
+`atvv-linux-gui-git 0.1.0.r64.g6f86ec3-1` packages are built in
 `packaging/arch/` but not installed; the stale `atvv-linux 0.1.0-7` build
 remains active. Install them with
-`sudo pacman -U packaging/arch/atvv-linux-git-0.1.0.r63.gcfd713e-1-x86_64.pkg.tar.zst
-packaging/arch/atvv-linux-gui-git-0.1.0.r63.gcfd713e-1-x86_64.pkg.tar.zst`
+`sudo pacman -U packaging/arch/atvv-linux-git-0.1.0.r64.g6f86ec3-1-x86_64.pkg.tar.zst
+packaging/arch/atvv-linux-gui-git-0.1.0.r64.g6f86ec3-1-x86_64.pkg.tar.zst`
 and restart the user unit. The `-git` packages provide and replace
 `atvv-linux` / `atvv-linux-gui`. The GUI uses
 `GetConfig`/`SetConfig`, `BeginCapture`/`EndCapture`, and `RunAction`; it never

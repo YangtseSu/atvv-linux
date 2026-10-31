@@ -2,7 +2,7 @@
 
 pkgbase=atvv-linux-git
 pkgname=('atvv-linux-git' 'atvv-linux-gui-git')
-pkgver=0.1.0.r63.gcfd713e
+pkgver=0.1.0.r64.g6f86ec3
 pkgrel=1
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
