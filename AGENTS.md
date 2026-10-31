@@ -18,6 +18,11 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
 - No unofficial cloud protocols in the core. ASR is an external integration
   (fcitx5-vinput, voxtype, sherpa, an agent adapter).
 - No `unsafe` code. `atvv-protocol` is `#![forbid(unsafe_code)]`.
+- Software policy: track current stable releases. Use current GitHub-hosted
+  runner images, the latest major tags of GitHub Actions, current stable Rust,
+  and current distro packages; upgrade dependencies instead of holding old
+  versions. A pin is allowed only for a documented compatibility or MSRV
+  constraint, and it must be revisited.
 - Do not add a PKGBUILD to this repository. Arch packaging lives outside it:
   AUR packages `atvv` and `atvv-gui`, plus the VCS recipes in the personal
   packaging repository. Release tags are `v<version>`; the tag workflow
