@@ -507,9 +507,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 **Step 20 is complete and published.** The tag `v0.1.0`, the source archive,
 and the x86_64/aarch64 binary archives are on the GitHub release. The AUR
-split pkgbase `atvv` and the personal `arch-pkgs` split pkgbase `atvv-git`
-are ready; the repository carries no PKGBUILD. See
-`docs/plans/20-release-and-external-packaging.md`.
+split pkgbase `atvv` is published as `atvv`/`atvv-gui` `0.1.0-1`; the
+personal `arch-pkgs` split pkgbase `atvv-git` is ready. The repository carries
+no PKGBUILD. See `docs/plans/20-release-and-external-packaging.md`.
 
 **Step 19 (localization) is complete.** The GUI follows the desktop locale
 (English or Simplified Chinese) and the user-facing docs have Chinese
