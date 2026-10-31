@@ -1,22 +1,26 @@
 # Layout profiles, presets, and NFC
 
-Research snapshot for steps 17–18 and backlog B02 (2026-10-31). Each project
-is identified by its GitHub URL and the commit that was read; no local clone
-path is part of this repository.
+Research snapshot for steps 17–18 and backlog B02 (2026-10-31). URLs,
+pinned commits, and licenses are kept in
+[`reference-projects.md`](reference-projects.md); no local clone path is part
+of this repository.
 
-## 1. Snapshots
+## 1. Projects read
 
-| Project | URL | Snapshot | License | Relevant feature |
-|---|---|---|---|---|
-| Open Voice Bridge | <https://github.com/nijez/open-voice-bridge> | `1796b149f752` | GPL-3.0 | hardware device profiles, hotspot layout, per-device mapping |
-| mi-ao | <https://github.com/fanxeon/mi-ao> | `d6019bcede80` | MIT | two-layer hardware profile + button presets |
-| vimo_remote | <https://github.com/zyxkv/vimo_remote> | `56963df494bf` | MIT | mode/profile switch (cursor vs 3D teleop) |
-| sayall-omarchy | <https://github.com/fan-tastic-z/sayall-omarchy> | `4d10971c88eb` | MIT | single `[button_map]` TOML, hot reload |
-| remote-mic-app-windows | <https://github.com/GetSayAll/remote-mic-app-windows> | `6dcc34b663b0` | GPL-3.0-only | button-profile host, app preset probes (private impl) |
-| remote-mic-app | <https://github.com/HD838A/remote-mic-app> | `834d6a789e43` | GPL-3.0-only | per-device layouts, base mapping + profile overrides |
+URLs, pinned snapshots, and licenses are in
+[`reference-projects.md`](reference-projects.md) §1. This document records
+behavior and data-model observations only; no source is copied.
 
-Only behavior and data-model ideas are used. No source is copied, in
-particular from the GPL-3.0-only projects.
+| Project | Relevant feature |
+|---|---|
+| Open Voice Bridge | hardware device profiles, hotspot layout, per-device mapping |
+| mi-ao | two-layer hardware profile + button presets |
+| vimo_remote | mode/profile switch (cursor vs 3D teleop) |
+| sayall-omarchy | single `[button_map]` TOML, hot reload |
+| remote-mic-app-windows | button-profile host, app preset probes (private impl) |
+| remote-mic-app | per-device layouts, base mapping + profile overrides |
+
+No source is copied, in particular from the GPL-3.0-only projects.
 
 ## 2. What each reference does
 

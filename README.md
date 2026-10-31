@@ -175,6 +175,12 @@ coding-agent integration, device profiles, packaging.
 Out of scope for now: ATVV v0.4, ASR engines, unofficial cloud protocols,
 non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 
+## Acknowledgements
+
+This project referenced several open-source projects during development.
+Sources, pinned snapshots, licenses, and reuse boundaries are listed in
+[`docs/research/reference-projects.md`](docs/research/reference-projects.md).
+
 ## License
 
 GPL-3.0-or-later. See `LICENSE`.
