@@ -56,21 +56,24 @@ ATVV 源并手动添加声明的触发键；见
 ## 安装（Arch）
 
 要求：Arch Linux、systemd 用户会话、PipeWire、BlueZ，以及（语音键集成所需的）
-fcitx5-vinput。守护进程是用户服务；不要以 root 运行。`atvv-linux-gui-git`
+fcitx5-vinput。守护进程是用户服务；不要以 root 运行。可选的 `atvv-gui` 软件包
 额外需要 GTK4、libadwaita 和 librsvg。
 
+AUR 软件包从发布源码归档构建：
+
 ```sh
-git clone https://github.com/YangtseSu/atvv-linux.git
-cd atvv-linux
-# 本地 Arch 包从当前检出的 HEAD 构建；请先提交。
-cd packaging/arch
-makepkg
-sudo pacman -U atvv-linux-git-*.pkg.tar.zst
+git clone https://aur.archlinux.org/atvv.git
+cd atvv
+makepkg -si
+
 # 可选 GUI：
-sudo pacman -U atvv-linux-gui-git-*.pkg.tar.zst
+git clone https://aur.archlinux.org/atvv-gui.git
+cd atvv-gui
+makepkg -si
 ```
 
-`makepkg -si` 会安装两个软件包。GUI 应用是可选的；守护进程和 CLI 不依赖 GTK。
+先安装 `atvv` 再安装 `atvv-gui`；AUR 助手会解析该依赖。GUI 应用是可选的；
+守护进程和 CLI 不依赖 GTK。
 
 先配对遥控器，再启用用户服务：
 
@@ -150,7 +153,7 @@ crates/atvv-daemon/     atvvd 会话守护进程、mock 传输、D-Bus API
 crates/atvv-cli/        atvvctl 诊断和 D-Bus 控制
 crates/atvv-mcp/        面向 agent 的 stdio MCP 服务器
 crates/atvv-gui/        GTK4/libadwaita 配置应用（atvv-config）
-packaging/              systemd 用户单元、GUI 桌面元数据（步骤 09）
+packaging/              systemd 用户单元、udev 规则、GUI 桌面元数据
 docs/plans/             规范实现计划和验收标准
 docs/decisions/         架构决策
 docs/research/          领域调研、协议事实、参考快照

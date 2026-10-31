@@ -68,6 +68,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
 | H — Layout profiles | 17–18 | **planned**: named user layouts with a read-only default, plus built-in presets |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
+| J — Release | 20 | **in progress**: v0.1.0 release and external Arch packaging |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -96,6 +97,7 @@ on approval/upstream; steps 11–13 are complete.
 | 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a read-only default; the active layout is explicit and switches live |
 | 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
+| 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | 🚧 in-progress | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |
 
 ## Architecture contract
 

@@ -1,0 +1,32 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build source archive
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="atvv-linux-$version.tar"
+          git archive --format=tar --prefix="atvv-linux-$version/" HEAD > "$archive"
+          sha256sum "$archive" > "$archive.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          assets=("atvv-linux-$version.tar" "atvv-linux-$version.tar.sha256")
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "atvv-linux $version" --generate-notes
+          fi

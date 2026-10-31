@@ -486,18 +486,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Step 14 GTK4/libadwaita GUI is complete and verified.** The split
-`atvv-linux-git 0.1.0.r64.g6f86ec3-1` and
-`atvv-linux-gui-git 0.1.0.r64.g6f86ec3-1` packages are built in
-`packaging/arch/` but not installed; the stale `atvv-linux 0.1.0-7` build
-remains active. Install them with
-`sudo pacman -U packaging/arch/atvv-linux-git-0.1.0.r64.g6f86ec3-1-x86_64.pkg.tar.zst
-packaging/arch/atvv-linux-gui-git-0.1.0.r64.g6f86ec3-1-x86_64.pkg.tar.zst`
-and restart the user unit. The `-git` packages provide and replace
-`atvv-linux` / `atvv-linux-gui`. The GUI uses
-`GetConfig`/`SetConfig`, `BeginCapture`/`EndCapture`, and `RunAction`; it never
-writes `daemon.toml` or grabs evdev. See `docs/gui.md` and
-`docs/plans/14-config-gui.md`.
+**Step 20 (first release and external packaging) is in progress.** The
+repository now carries `.github/workflows/release.yml` and no PKGBUILD. The
+remaining work is the `v0.1.0` tag/release, the AUR package repositories
+`atvv` and `atvv-gui`, and the `atvv-git`/`atvv-gui-git` recipes in the
+personal `arch-pkgs` repository. See
+`docs/plans/20-release-and-external-packaging.md`.
 
 **Step 19 (localization) is complete.** The GUI follows the desktop locale
 (English or Simplified Chinese) and the user-facing docs have Chinese
@@ -530,7 +524,8 @@ cargo deny check
 cargo tree -i evdev                  # expected to fail: no evdev dependency
 reuse lint
 udevadm verify packaging/udev/70-atvv-linux.rules
-cd packaging/arch && makepkg -f
+git tag -l
+makepkg -f                           # in an AUR package checkout
 cargo run -q -p atvv-cli -- profile show miremote-rc003
 cargo run -q -p atvv-cli -- simulate miremote-rc003
 cargo run -q -p atvv-cli -- audio test --seconds 3

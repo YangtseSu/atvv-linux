@@ -12,18 +12,19 @@ BlueZ or PipeWire directly.
 
 ## Install and start
 
-The GUI is the optional `atvv-linux-gui-git` package; the daemon package does
-not depend on GTK.
+The GUI is the optional `atvv-gui` AUR package; the daemon package does not
+depend on GTK.
 
 ```sh
-cd packaging/arch
+git clone https://aur.archlinux.org/atvv-gui.git
+cd atvv-gui
 makepkg -si
 systemctl --user enable --now atvvd
 atvv-config
 ```
 
-The local `-git` packages replace the release packages `atvv-linux` and
-`atvv-linux-gui`.
+Install `atvv` first; `atvv-gui` depends on it. An AUR helper resolves the
+dependency.
 
 Without a running daemon the window opens a read-only *Daemon unavailable*
 page with a Retry button. The daemon stays headless; `atvvctl` remains the

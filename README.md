@@ -67,22 +67,24 @@ installed-unit PipeWire restart).
 
 Requirements: Arch Linux, a systemd user session, PipeWire, BlueZ, and (for
 voice-key integration) fcitx5-vinput. The daemon is a user service; never run
-it as root. `atvv-linux-gui-git` additionally needs GTK4, libadwaita, and
-librsvg.
+it as root. The optional `atvv-gui` package additionally needs GTK4,
+libadwaita, and librsvg.
+
+The AUR packages are built from the release source archive:
 
 ```sh
-git clone https://github.com/YangtseSu/atvv-linux.git
-cd atvv-linux
-# The local Arch packages build from this checkout's HEAD; commit first.
-cd packaging/arch
-makepkg
-sudo pacman -U atvv-linux-git-*.pkg.tar.zst
+git clone https://aur.archlinux.org/atvv.git
+cd atvv
+makepkg -si
+
 # optional GUI:
-sudo pacman -U atvv-linux-gui-git-*.pkg.tar.zst
+git clone https://aur.archlinux.org/atvv-gui.git
+cd atvv-gui
+makepkg -si
 ```
 
-`makepkg -si` installs both packages. The GUI app is optional; the daemon and
-CLI do not depend on GTK.
+Install `atvv` before `atvv-gui`; an AUR helper resolves that dependency. The
+GUI app is optional; the daemon and CLI do not depend on GTK.
 
 Pair the remote, then enable the user service:
 
@@ -162,7 +164,7 @@ crates/atvv-daemon/     atvvd session daemon, mock transport, D-Bus API
 crates/atvv-cli/        atvvctl diagnostics and D-Bus control
 crates/atvv-mcp/        stdio MCP server for agents
 crates/atvv-gui/        GTK4/libadwaita configuration app (atvv-config)
-packaging/              systemd user unit, GUI desktop metadata (step 09)
+packaging/              systemd user unit, udev rule, GUI desktop metadata
 docs/plans/             canonical implementation plan and acceptance criteria
 docs/decisions/         architecture decisions
 docs/research/          landscape, protocol facts, reference snapshots

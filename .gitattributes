@@ -1,2 +1,0 @@
-# Local Arch packaging is not part of release/source archives.
-packaging/arch export-ignore
