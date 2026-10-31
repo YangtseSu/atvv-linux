@@ -28,9 +28,9 @@ scriptable surface.
 - **Remote diagram**: one real button per logical key, drawn as the RC003
   layout: power and voice at the top, a circular D-pad, back/home/menu on the
   left, and the volume rocker plus TV on the right. The top-right voice key is
-  not remappable. Click a key to edit it; the outline shows bound (solid),
-  unbound (dashed), and conflicting (amber) mappings. The selected key uses
-  the system accent color.
+  fixed; its output key is configurable. Click a key to edit it; the outline
+  shows bound (solid), unbound (dashed), and conflicting (amber) mappings. The
+  selected key uses the system accent color.
 - **Selected key**: shows the current key and gesture. *Learn…* starts the
   daemon's capture mode and selects the physical remote key that is pressed.
 - **Action**: type, value, and dictation controls for the selected slot.
@@ -61,6 +61,23 @@ and writes the file atomically. Invalid input stays in the editor with an
 inline error, and the previous map remains active. **Reset** restores the
 profile default for the selected slot. **Revert** discards unsaved edits by
 reloading the daemon document.
+
+## Recording key
+
+The top-right microphone key is the physical recording key (`KEY_F5`). It is
+grabbed and fixed: it opens/closes the ATVV microphone and cannot be used as a
+normal action button. Click it to open the recording-key page; the page only
+offers the output key, not gesture/action slots.
+
+![Recording key settings](gui-recording-key.png)
+
+- **Output key** is the synthetic key emitted while the recording key is held.
+  The default is `DICTATE`; use **Learn Key** to capture another key or chord
+  (for example `F23`), or enter `none` to disable the synthetic key.
+- **Update** changes the document; **Apply** in the header persists it through
+  `SetConfig`. The physical F5 and the ATVV microphone path are unchanged.
+- Consumers such as fcitx5-vinput must bind the same output key; the provider
+  contract's `active_key` reports the current value.
 
 ## Test mode
 

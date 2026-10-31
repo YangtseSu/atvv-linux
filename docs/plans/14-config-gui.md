@@ -216,6 +216,12 @@ Manual:
 - 2026-10-31 — rebuilt `0.1.0-7` with the click fix. The packaged
   `atvv-config` selected `Back` (`KEY_BACK`) when clicked under Xvfb, so the
   staged binary has the working hit areas.
+- 2026-10-31 — recording-key page added: selecting the top-right microphone
+  hotspot shows only the physical-key note and the `trigger_key` output key
+  (`DICTATE` by default, `F23`/chord/`none` supported). The daemon edge path
+  and grab are unchanged; the GUI edits the existing config document through
+  `SetConfig`. UI test covers selecting the key, changing the output to `F23`,
+  and returning to a logical key.
 - 2026-10-31 — final `0.1.0-8` rebuild: `atvv-linux` sha256
   `d6792082…718076`, `atvv-linux-gui` sha256 `7fc99deb…c4c117`, source
   tarball `1752544f…c541451`. Built from the completed step-14 tree; not

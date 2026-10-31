@@ -156,6 +156,9 @@ pub struct AppWindow {
     error_banner: adw::Banner,
     dirty_banner: adw::Banner,
     capture_banner: adw::Banner,
+    key_group: adw::PreferencesGroup,
+    action_group: adw::PreferencesGroup,
+    voice_group: adw::PreferencesGroup,
     selected_row: adw::ActionRow,
     trigger_row: adw::ComboRow,
     type_row: adw::ComboRow,
@@ -169,6 +172,11 @@ pub struct AppWindow {
     action_error: gtk::Label,
     apply_action: gtk::Button,
     reset_action: gtk::Button,
+    voice_value_row: adw::EntryRow,
+    voice_learn_button: gtk::Button,
+    voice_apply_button: gtk::Button,
+    voice_reset_button: gtk::Button,
+    voice_error: gtk::Label,
     allow_exec_row: adw::SwitchRow,
     test_result_row: adw::ActionRow,
     run_once_button: gtk::Button,
@@ -176,6 +184,7 @@ pub struct AppWindow {
     loading: Cell<bool>,
     capture_mode: Cell<CaptureMode>,
     suppress_test_toggle: Cell<bool>,
+    voice_selected: Cell<bool>,
     pressed: Cell<Option<RemoteButton>>,
     last_action: RefCell<Option<String>>,
 }
@@ -244,7 +253,7 @@ impl AppWindow {
         sidebar_content.append(diagram.root());
         let legend = gtk::Label::new(Some(
             "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
-             The top-right voice key drives the microphone and is not remappable.",
+             The top-right voice key is fixed; its output key is configurable.",
         ));
         legend.add_css_class("caption");
         legend.add_css_class("dim-label");
@@ -328,6 +337,44 @@ impl AppWindow {
         action_group.add(&apply_row);
         action_group.add(&action_error);
 
+        let voice_group = adw::PreferencesGroup::builder()
+            .title("Recording key")
+            .build();
+        let voice_info = adw::ActionRow::builder()
+            .title("Physical key")
+            .subtitle("KEY_F5 is grabbed and fixed; it controls the ATVV microphone.")
+            .build();
+        let voice_value_row = adw::EntryRow::builder().title("Output key").build();
+        let voice_learn_button = gtk::Button::with_label("Learn Key");
+        voice_learn_button.add_css_class("flat");
+        voice_learn_button.set_tooltip_text(Some("Capture a key or chord for the output"));
+        voice_value_row.add_suffix(&voice_learn_button);
+        let voice_apply_row = adw::ActionRow::builder()
+            .title("Output key")
+            .subtitle("Emitted while the recording key is held; Apply saves.")
+            .build();
+        let voice_reset_button = gtk::Button::with_label("Reset");
+        voice_reset_button.add_css_class("flat");
+        voice_reset_button.set_tooltip_text(Some("Restore DICTATE"));
+        let voice_apply_button = gtk::Button::with_label("Update");
+        voice_apply_button.add_css_class("suggested-action");
+        voice_apply_row.add_suffix(&voice_reset_button);
+        voice_apply_row.add_suffix(&voice_apply_button);
+        let voice_error = gtk::Label::new(None);
+        voice_error.add_css_class("error");
+        voice_error.add_css_class("caption");
+        voice_error.set_wrap(true);
+        voice_error.set_xalign(0.0);
+        voice_error.set_margin_start(12);
+        voice_error.set_margin_end(12);
+        voice_error.set_margin_bottom(6);
+        voice_error.set_visible(false);
+        voice_group.add(&voice_info);
+        voice_group.add(&voice_value_row);
+        voice_group.add(&voice_apply_row);
+        voice_group.add(&voice_error);
+        voice_group.set_visible(false);
+
         let test_group = adw::PreferencesGroup::builder().title("Test mode").build();
         let test_result_row = adw::ActionRow::builder()
             .title("Last test")
@@ -350,6 +397,7 @@ impl AppWindow {
         let prefs = adw::PreferencesPage::new();
         prefs.add(&key_group);
         prefs.add(&action_group);
+        prefs.add(&voice_group);
         prefs.add(&test_group);
         prefs.add(&advanced_group);
         let content_page = adw::NavigationPage::new(&prefs, "Key mapping");
@@ -416,6 +464,9 @@ impl AppWindow {
             error_banner,
             dirty_banner,
             capture_banner,
+            key_group,
+            action_group,
+            voice_group,
             selected_row,
             trigger_row,
             type_row,
@@ -429,6 +480,11 @@ impl AppWindow {
             action_error,
             apply_action,
             reset_action,
+            voice_value_row,
+            voice_learn_button,
+            voice_apply_button,
+            voice_reset_button,
+            voice_error,
             allow_exec_row,
             test_result_row,
             run_once_button,
@@ -436,6 +492,7 @@ impl AppWindow {
             loading: Cell::new(false),
             capture_mode: Cell::new(CaptureMode::Off),
             suppress_test_toggle: Cell::new(false),
+            voice_selected: Cell::new(false),
             pressed: Cell::new(None),
             last_action: RefCell::new(None),
         });
@@ -577,6 +634,15 @@ impl AppWindow {
         ui.reset_action
             .connect_clicked(move |_| this.reset_action());
         let this = Rc::clone(ui);
+        ui.voice_apply_button
+            .connect_clicked(move |_| this.apply_voice_key());
+        let this = Rc::clone(ui);
+        ui.voice_reset_button
+            .connect_clicked(move |_| this.reset_voice_key());
+        let this = Rc::clone(ui);
+        ui.voice_learn_button
+            .connect_clicked(move |_| this.learn_voice_key());
+        let this = Rc::clone(ui);
         ui.learn_key_button
             .connect_clicked(move |_| this.learn_key());
         let this = Rc::clone(ui);
@@ -606,9 +672,12 @@ impl AppWindow {
 
     fn select_button(&self, button: RemoteButton) {
         if button == RemoteButton::Voice {
-            self.toast("The voice key drives the ATVV microphone and is not remappable.");
+            self.voice_selected.set(true);
+            self.split.set_show_content(true);
+            self.refresh_all();
             return;
         }
+        self.voice_selected.set(false);
         if let Some(model) = self.model.borrow_mut().as_mut() {
             model.selected = button;
         }
@@ -684,14 +753,12 @@ impl AppWindow {
             CaptureMode::Learn => {
                 if event.pressed {
                     if button == RemoteButton::Voice {
-                        self.force_capture_off();
-                        self.toast(
-                            "The voice key drives the ATVV microphone and is not remappable.",
-                        );
-                        return;
-                    }
-                    if let Some(model) = self.model.borrow_mut().as_mut() {
-                        model.selected = button;
+                        self.voice_selected.set(true);
+                    } else {
+                        self.voice_selected.set(false);
+                        if let Some(model) = self.model.borrow_mut().as_mut() {
+                            model.selected = button;
+                        }
                     }
                     self.force_capture_off();
                     self.split.set_show_content(true);
@@ -733,7 +800,8 @@ impl AppWindow {
                     self.pressed.set(None);
                 }
                 if let Some(model) = self.model.borrow().as_ref() {
-                    self.diagram.refresh(model, self.pressed.get());
+                    self.diagram
+                        .refresh(model, self.pressed.get(), self.voice_selected.get());
                 }
             }
             CaptureMode::Off => {}
@@ -776,7 +844,7 @@ impl AppWindow {
         self.test_button.set_active(false);
         self.suppress_test_toggle.set(false);
         if let Some(model) = self.model.borrow().as_ref() {
-            self.diagram.refresh(model, None);
+            self.diagram.refresh(model, None, self.voice_selected.get());
         }
     }
 
@@ -848,6 +916,48 @@ impl AppWindow {
         }
     }
 
+    fn apply_voice_key(&self) {
+        let raw = self.voice_value_row.text().to_string();
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .ok_or_else(|| "no configuration loaded".to_string())
+            .and_then(|model| model.set_trigger_key(Some(raw)));
+        match result {
+            Ok(_) => {
+                self.show_voice_error("");
+                self.toast("Recording output key updated");
+                self.refresh_all();
+            }
+            Err(error) => self.show_voice_error(&error),
+        }
+    }
+
+    fn reset_voice_key(&self) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .ok_or_else(|| "no configuration loaded".to_string())
+            .and_then(|model| {
+                model.set_trigger_key(Some(atvv_config::DEFAULT_TRIGGER_KEY.to_string()))
+            });
+        match result {
+            Ok(_) => {
+                self.show_voice_error("");
+                self.toast("Recording output key reset");
+                self.refresh_all();
+            }
+            Err(error) => self.show_voice_error(&error),
+        }
+    }
+
+    fn show_voice_error(&self, message: &str) {
+        self.voice_error.set_text(message);
+        self.voice_error.set_visible(!message.is_empty());
+    }
+
     fn draft_from_widgets(&self) -> ActionDraft {
         let kind = ActionKind::from_index(self.type_row.selected());
         let text = self.value_row.text().to_string();
@@ -879,7 +989,26 @@ impl AppWindow {
         self.show_action_error("");
     }
 
+    fn set_learned_voice_key(&self, learned: &str) {
+        let draft = ActionDraft::from_raw(learned);
+        let value = match draft.kind {
+            ActionKind::Key => draft.key,
+            ActionKind::Combo => draft.chord,
+            _ => return,
+        };
+        self.voice_value_row.set_text(&value);
+        self.show_voice_error("");
+    }
+
     fn learn_key(self: &Rc<Self>) {
+        self.learn_key_for(false);
+    }
+
+    fn learn_voice_key(self: &Rc<Self>) {
+        self.learn_key_for(true);
+    }
+
+    fn learn_key_for(self: &Rc<Self>, voice: bool) {
         let dialog = gtk::Window::builder()
             .title("Learn key")
             .transient_for(&self.window)
@@ -932,7 +1061,11 @@ impl AppWindow {
             );
             match learned {
                 Some(learned) => {
-                    this.set_learned_key(&learned);
+                    if voice {
+                        this.set_learned_voice_key(&learned);
+                    } else {
+                        this.set_learned_key(&learned);
+                    }
                     if let Some(dialog) = dialog_weak.upgrade() {
                         dialog.close();
                     }
@@ -1023,7 +1156,8 @@ impl AppWindow {
             self.test_button.set_sensitive(false);
             return;
         };
-        self.diagram.refresh(model, self.pressed.get());
+        self.diagram
+            .refresh(model, self.pressed.get(), self.voice_selected.get());
         self.apply_button.set_sensitive(model.dirty);
         self.revert_button.set_sensitive(model.dirty);
         self.dirty_banner.set_revealed(model.dirty);
@@ -1033,11 +1167,16 @@ impl AppWindow {
         } else {
             ""
         };
-        self.selected_row.set_subtitle(&format!(
-            "{} · {}{default_hint}",
-            button_label(model.selected),
-            trigger_label(model.trigger)
-        ));
+        if self.voice_selected.get() {
+            self.selected_row
+                .set_subtitle("Voice key · output configurable");
+        } else {
+            self.selected_row.set_subtitle(&format!(
+                "{} · {}{default_hint}",
+                button_label(model.selected),
+                trigger_label(model.trigger)
+            ));
+        }
         self.refresh_editor(model);
     }
 
@@ -1065,6 +1204,23 @@ impl AppWindow {
     }
 
     fn refresh_editor(&self, model: &GuiModel) {
+        if self.voice_selected.get() {
+            self.key_group.set_visible(false);
+            self.action_group.set_visible(false);
+            self.voice_group.set_visible(true);
+            self.loading.set(true);
+            self.voice_value_row
+                .set_text(model.document.trigger_key.as_deref().unwrap_or("none"));
+            self.voice_reset_button.set_sensitive(
+                model.document.trigger_key.as_deref() != Some(atvv_config::DEFAULT_TRIGGER_KEY),
+            );
+            self.loading.set(false);
+            self.show_voice_error("");
+            return;
+        }
+        self.key_group.set_visible(true);
+        self.action_group.set_visible(true);
+        self.voice_group.set_visible(false);
         self.loading.set(true);
         self.trigger_row.set_selected(match model.trigger {
             Trigger::Single => 0,
@@ -1192,6 +1348,24 @@ impl AppWindow {
             .borrow()
             .as_ref()
             .map(|model| model.document.clone())
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_selected(&self) -> bool {
+        self.voice_selected.get()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_value_row(&self) -> &adw::EntryRow {
+        &self.voice_value_row
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_update_button(&self) -> &gtk::Button {
+        &self.voice_apply_button
     }
 
     #[doc(hidden)]

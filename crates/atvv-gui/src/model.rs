@@ -144,6 +144,28 @@ impl GuiModel {
         self.dirty = false;
     }
 
+    /// Change the synthetic key emitted while the recording key is held.
+    ///
+    /// `None`, an empty string, or `none` disables the trigger. The physical
+    /// recording key stays `KEY_F5` and is never part of the action map.
+    pub fn set_trigger_key(&mut self, raw: Option<String>) -> Result<bool, String> {
+        let value = match raw.as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(name) if name.eq_ignore_ascii_case("none") => None,
+            Some(name) => Some(name.to_string()),
+        };
+        if self.document.trigger_key == value {
+            return Ok(false);
+        }
+        let mut next = self.document.clone();
+        next.trigger_key = value;
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document.trigger_key = next.trigger_key;
+        self.dirty = true;
+        Ok(true)
+    }
+
     /// Set the global `allow_exec` policy.
     pub fn set_allow_exec(&mut self, allow: bool) {
         if self.document.allow_exec != allow {
@@ -312,6 +334,24 @@ mod tests {
         assert!(conflicts.contains(&RemoteButton::Up));
         assert!(conflicts.contains(&RemoteButton::Down));
         assert!(!conflicts.contains(&RemoteButton::Ok));
+    }
+
+    #[test]
+    fn trigger_key_can_change_and_reset() {
+        let mut model = model();
+        assert_eq!(model.document.trigger_key.as_deref(), Some("DICTATE"));
+        assert!(model.set_trigger_key(Some("F23".into())).unwrap());
+        assert_eq!(model.document.trigger_key.as_deref(), Some("F23"));
+        assert!(model.dirty);
+        assert!(model.validate().is_ok());
+
+        let error = model.set_trigger_key(Some("not-a-key".into())).unwrap_err();
+        assert!(error.contains("not-a-key"));
+        assert_eq!(model.document.trigger_key.as_deref(), Some("F23"));
+
+        assert!(model.set_trigger_key(Some("none".into())).unwrap());
+        assert_eq!(model.document.trigger_key, None);
+        assert!(model.validate().is_ok());
     }
 
     #[test]

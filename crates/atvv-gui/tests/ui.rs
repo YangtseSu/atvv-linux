@@ -71,9 +71,21 @@ fn window_smoke() {
         selected_before,
         "the voice key must not become the selected mapping"
     );
+    assert!(window.voice_selected());
+    assert_eq!(window.voice_value_row().text(), "DICTATE");
+    assert!(!window.apply_button().is_sensitive());
+
+    window.voice_value_row().set_text("F23");
+    window.voice_update_button().emit_clicked();
+    assert_eq!(
+        window.document().expect("document").trigger_key.as_deref(),
+        Some("F23")
+    );
 
     let model = GuiModel::new(window.document().expect("document")).expect("model");
-    window.diagram().refresh(&model, Some(RemoteButton::Power));
+    window
+        .diagram()
+        .refresh(&model, Some(RemoteButton::Power), false);
     assert!(
         window
             .diagram()
@@ -81,7 +93,7 @@ fn window_smoke() {
             .unwrap()
             .has_css_class("pressed")
     );
-    window.diagram().refresh(&model, None);
+    window.diagram().refresh(&model, None, false);
     assert!(
         !window
             .diagram()
@@ -96,8 +108,12 @@ fn window_smoke() {
         .unwrap()
         .emit_clicked();
     assert_eq!(window.selected(), Some(RemoteButton::Up));
+    assert!(!window.voice_selected());
     assert_eq!(window.value_text(), "KEY_UP");
-    assert!(!window.apply_button().is_sensitive());
+    assert!(
+        window.apply_button().is_sensitive(),
+        "the output-key edit must mark the document dirty"
+    );
 
     window.trigger_row().set_selected(1);
     assert_eq!(window.value_text(), "");

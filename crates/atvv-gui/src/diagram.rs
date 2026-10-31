@@ -278,7 +278,12 @@ impl RemoteDiagram {
     }
 
     /// Refresh the visual state classes from the model.
-    pub fn refresh(&self, model: &crate::model::GuiModel, pressed: Option<RemoteButton>) {
+    pub fn refresh(
+        &self,
+        model: &crate::model::GuiModel,
+        pressed: Option<RemoteButton>,
+        voice_selected: bool,
+    ) {
         let conflicts = model.conflicts();
         for (button, widget) in &self.buttons {
             for class in [
@@ -300,6 +305,9 @@ impl RemoteDiagram {
                 }
             } else {
                 widget.add_css_class("voice");
+                if voice_selected {
+                    widget.add_css_class("selected");
+                }
             }
             if pressed == Some(*button) {
                 widget.add_css_class("pressed");
