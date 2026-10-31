@@ -5,6 +5,8 @@
 use atvv_config::parse_checked_action;
 use atvv_input::{Action, DictationMode, parse_action};
 
+use crate::i18n::tr;
+
 /// Editable action kind, in the order shown by the type selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionKind {
@@ -25,13 +27,13 @@ impl ActionKind {
     ];
 
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::None => "Do nothing",
-            Self::Key => "Single key",
-            Self::Combo => "Key combination",
-            Self::Exec => "Run a command",
-            Self::Dictation => "Dictation",
+            Self::None => tr("Do nothing"),
+            Self::Key => tr("Single key"),
+            Self::Combo => tr("Key combination"),
+            Self::Exec => tr("Run a command"),
+            Self::Dictation => tr("Dictation"),
         }
     }
 
@@ -81,11 +83,11 @@ impl DictationChoice {
     pub const ALL: [Self; 3] = [Self::Start, Self::Stop, Self::Toggle];
 
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::Start => "Start recording",
-            Self::Stop => "Stop recording",
-            Self::Toggle => "Toggle recording",
+            Self::Start => tr("Start recording"),
+            Self::Stop => tr("Stop recording"),
+            Self::Toggle => tr("Toggle recording"),
         }
     }
 

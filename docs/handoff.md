@@ -7,9 +7,10 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 168 passed, 4 ignored tests (two
-  kernel-uinput input tests, one fake-remote live-map test, and the new
-  real-device GUI test; the first three pass with `/dev/uinput` access).
+- Tests: `cargo test --workspace` → 171 passed, 5 ignored tests (two
+  kernel-uinput input tests, one fake-remote live-map test, the real-device
+  GUI test, and a locale-detection test; the first three pass with
+  `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
 
 ## Read first
 
@@ -181,6 +182,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
   Real RC003 (2026-10-31): battery 62 %, firmware `2671`, HW `V2.0`, SW
   `A.7.0.6`, serial `250519`. Evidence:
   `docs/research/rc003-hardware-evidence.md`.
+- **19 i18n and bilingual docs (complete and verified)**: `atvv-gui` resolves
+  the desktop locale once at startup and localizes every app-owned string from
+  a msgid-keyed Rust catalog (`crates/atvv-gui/src/i18n.rs`): English is the
+  source and fallback, any `zh*` locale selects Simplified Chinese. Protocol
+  values, key names, addresses, and daemon diagnostics stay untranslated.
+  Desktop entry and AppStream metadata carry Chinese names and descriptions.
+  English and Chinese headless windows are tested, and an ignored
+  locale-detection test passes with `LANG=zh_CN.UTF-8`. User-facing documents
+  have linked `.zh-CN.md` siblings (README, configuration, GUI, device
+  support, all integration guides, Arch package README); development records
+  stay English. See `docs/plans/19-i18n-and-bilingual-docs.md`.
 
 ## Not implemented
 
@@ -331,8 +343,26 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   Consumers bind the declared set; the provider emits one active key.
   Diagnostics are generic (`atvvctl`/MCP), with per-consumer recipes in
   `docs/integrations/provider-contract.md`. No per-application diagnostics.
+- Localization: the GUI ships English and Simplified Chinese through a
+  msgid-keyed Rust catalog and follows the desktop locale; English is the
+  fallback. Code, commits, CLI output, man pages, and development docs are
+  English. User-facing docs have linked `.zh-CN.md` siblings; device data and
+  quoted output may keep their source language.
 
 ## Verified
+
+- 2026-10-31 step 19: `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets -- -D warnings` are clean;
+  `cargo test --workspace` → 171 passed, 5 ignored;
+  `xvfb-run -a cargo test -p atvv-gui --test ui --test i18n` → English and
+  Chinese windows passed;
+  `LANG=zh_CN.UTF-8 LANGUAGE=zh_CN xvfb-run -a cargo test -p atvv-gui
+  --test i18n -- --ignored` → locale detection passed.
+  `desktop-file-validate packaging/gui/org.atvv.Config.desktop` and
+  `appstreamcli validate --no-net packaging/gui/org.atvv.Config.metainfo.xml`
+  are clean; `reuse lint` is compliant (151 files); a local Markdown link
+  check reports no broken targets; the msgid audit found 127 catalog entries
+  for 127 call sites.
 
 ```text
 cargo fmt --all -- --check
@@ -469,10 +499,13 @@ and restart the user unit. The `-git` packages provide and replace
 writes `daemon.toml` or grabs evdev. See `docs/gui.md` and
 `docs/plans/14-config-gui.md`.
 
-**Step 15 is the next UI step.** It replaces the single-key inspector with a
-sayall-style board (central remote + per-key single/double/long cards) while
-staying GTK4/libadwaita. See `docs/plans/15-mapping-board.md`. B01
-(recording-key press/release actions) is backlog and does not block step 15.
+**Step 19 (localization) is complete.** The GUI follows the desktop locale
+(English or Simplified Chinese) and the user-facing docs have Chinese
+counterparts. Step 15 remains the next UI step: it replaces the single-key
+inspector with a sayall-style board (central remote + per-key
+single/double/long cards) while staying GTK4/libadwaita. See
+`docs/plans/15-mapping-board.md`. B01 (recording-key press/release actions) is
+backlog and does not block step 15.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR

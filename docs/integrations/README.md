@@ -1,5 +1,7 @@
 # Integrations
 
+English | [简体中文](README.zh-CN.md)
+
 The daemon owns the ATVV session and a resident PipeWire source. Everything
 else consumes one of two boundaries:
 

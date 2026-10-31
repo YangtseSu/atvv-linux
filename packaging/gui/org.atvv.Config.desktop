@@ -1,10 +1,13 @@
 [Desktop Entry]
 Name=ATVV Remote
+Name[zh_CN]=ATVV 遥控器
 Comment=Configure ATVV remote button mappings
+Comment[zh_CN]=配置 ATVV 遥控器按键映射
 Exec=atvv-config
 Icon=org.atvv.Config
 Terminal=false
 Type=Application
 Categories=Settings;HardwareSettings;
 Keywords=remote;voice;atvv;bluetooth;keymap;
+Keywords[zh_CN]=遥控器;语音;atvv;蓝牙;按键映射;
 StartupNotify=true

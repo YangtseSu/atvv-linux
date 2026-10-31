@@ -17,6 +17,7 @@ use adw::prelude::*;
 use crate::actions::{ActionDraft, ActionKind, DictationChoice};
 use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
 use crate::diagram::RemoteDiagram;
+use crate::i18n::{self, tr, tr_args};
 use crate::keylearn;
 use crate::model::{GuiModel, button_label};
 
@@ -108,6 +109,7 @@ pub fn run() -> glib::ExitCode {
     app.add_action(&quit);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
     app.connect_activate(|app| {
+        i18n::init();
         // GTK/GDK must be initialized before a display exists; installing the
         // stylesheet here is what makes the hotspot states render.
         install_css();
@@ -143,7 +145,7 @@ enum CaptureMode {
 
 /// One Device Information Service fact shown in the Hardware group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HardwareField {
+pub enum HardwareField {
     Firmware,
     Hardware,
     Software,
@@ -164,12 +166,12 @@ impl HardwareField {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Firmware => "Firmware",
-            Self::Hardware => "Hardware revision",
-            Self::Software => "Software revision",
-            Self::Serial => "Serial number",
-            Self::Manufacturer => "Manufacturer",
-            Self::Model => "Model",
+            Self::Firmware => tr("Firmware"),
+            Self::Hardware => tr("Hardware revision"),
+            Self::Software => tr("Software revision"),
+            Self::Serial => tr("Serial number"),
+            Self::Manufacturer => tr("Manufacturer"),
+            Self::Model => tr("Model"),
         }
     }
 
@@ -253,31 +255,31 @@ impl AppWindow {
     #[must_use]
     pub fn build(application: Option<&adw::Application>, backend: Backend) -> Rc<Self> {
         let diagram = RemoteDiagram::new();
-        let title = adw::WindowTitle::new("ATVV Remote", "Connecting…");
+        let title = adw::WindowTitle::new(tr("ATVV Remote"), tr("Connecting…"));
 
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&title));
 
         let menu = gio::Menu::new();
-        menu.append(Some("About ATVV"), Some("win.about"));
-        menu.append(Some("Revert changes"), Some("win.revert"));
-        menu.append(Some("Quit"), Some("app.quit"));
+        menu.append(Some(tr("About ATVV")), Some("win.about"));
+        menu.append(Some(tr("Revert changes")), Some("win.revert"));
+        menu.append(Some(tr("Quit")), Some("app.quit"));
         let menu_button = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
             .menu_model(&menu)
-            .tooltip_text("Main menu")
+            .tooltip_text(tr("Main menu"))
             .build();
         header.pack_start(&menu_button);
 
         let test_button = gtk::ToggleButton::builder()
-            .label("Test")
-            .tooltip_text("Highlight remote presses and show the mapped action")
+            .label(tr("Test"))
+            .tooltip_text(tr("Highlight remote presses and show the mapped action"))
             .build();
         test_button.add_css_class("flat");
-        let revert_button = gtk::Button::with_label("Revert");
+        let revert_button = gtk::Button::with_label(tr("Revert"));
         revert_button.add_css_class("flat");
         revert_button.set_sensitive(false);
-        let apply_button = gtk::Button::with_label("Apply");
+        let apply_button = gtk::Button::with_label(tr("Apply"));
         apply_button.add_css_class("suggested-action");
         apply_button.add_css_class("apply");
         apply_button.set_sensitive(false);
@@ -285,14 +287,14 @@ impl AppWindow {
         header.pack_end(&revert_button);
         header.pack_end(&test_button);
 
-        let error_banner = adw::Banner::new("Daemon unavailable");
-        error_banner.set_button_label(Some("Retry"));
+        let error_banner = adw::Banner::new(tr("Daemon unavailable"));
+        error_banner.set_button_label(Some(tr("Retry")));
         error_banner.set_revealed(false);
-        let dirty_banner = adw::Banner::new("Unsaved changes");
-        dirty_banner.set_button_label(Some("Revert"));
+        let dirty_banner = adw::Banner::new(tr("Unsaved changes"));
+        dirty_banner.set_button_label(Some(tr("Revert")));
         dirty_banner.set_revealed(false);
-        let capture_banner = adw::Banner::new("Press a remote key to test it");
-        capture_banner.set_button_label(Some("Cancel"));
+        let capture_banner = adw::Banner::new(tr("Press a remote key to test it"));
+        capture_banner.set_button_label(Some(tr("Cancel")));
         capture_banner.set_revealed(false);
         let banners = gtk::Box::new(gtk::Orientation::Vertical, 0);
         banners.append(&error_banner);
@@ -311,29 +313,31 @@ impl AppWindow {
         sidebar_content.set_margin_end(18);
 
         let battery_row = adw::ActionRow::builder()
-            .title("Battery")
-            .subtitle("Unknown")
+            .title(tr("Battery"))
+            .subtitle(tr("Unknown"))
             .build();
         let battery_icon = gtk::Image::from_icon_name("battery-empty-symbolic");
         battery_icon.set_pixel_size(18);
         battery_icon.set_visible(false);
         battery_row.add_suffix(&battery_icon);
-        let device_group = adw::PreferencesGroup::builder().title("Remote").build();
+        let device_group = adw::PreferencesGroup::builder().title(tr("Remote")).build();
         device_group.add(&battery_row);
         sidebar_content.append(&device_group);
 
         sidebar_content.append(diagram.root());
-        let legend = gtk::Label::new(Some(
+        let legend = gtk::Label::new(Some(tr(
             "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
              The top-right voice key is fixed; its output key is configurable.",
-        ));
+        )));
         legend.add_css_class("caption");
         legend.add_css_class("dim-label");
         legend.set_wrap(true);
         legend.set_justify(gtk::Justification::Center);
         sidebar_content.append(&legend);
 
-        let hardware_group = adw::PreferencesGroup::builder().title("Hardware").build();
+        let hardware_group = adw::PreferencesGroup::builder()
+            .title(tr("Hardware"))
+            .build();
         hardware_group.set_visible(false);
         let mut hardware_rows = Vec::new();
         for field in HardwareField::ALL {
@@ -344,41 +348,41 @@ impl AppWindow {
         }
         sidebar_content.append(&hardware_group);
         sidebar_scroll.set_child(Some(&sidebar_content));
-        let sidebar_page = adw::NavigationPage::new(&sidebar_scroll, "Remote");
+        let sidebar_page = adw::NavigationPage::new(&sidebar_scroll, tr("Remote"));
 
-        let trigger_list = gtk::StringList::new(&["Single", "Double", "Long"]);
+        let trigger_list = gtk::StringList::new(&[tr("Single"), tr("Double"), tr("Long")]);
         let dictation_list =
             gtk::StringList::new(&DictationChoice::ALL.map(DictationChoice::label));
         let type_list = gtk::StringList::new(&ActionKind::ALL.map(ActionKind::label));
 
         let key_group = adw::PreferencesGroup::builder()
-            .title("Selected key")
+            .title(tr("Selected key"))
             .build();
-        let selected_row = adw::ActionRow::builder().title("Key").build();
-        let learn_remote = gtk::Button::with_label("Learn…");
+        let selected_row = adw::ActionRow::builder().title(tr("Key")).build();
+        let learn_remote = gtk::Button::with_label(tr("Learn…"));
         learn_remote.add_css_class("flat");
-        learn_remote.set_tooltip_text(Some("Press a physical remote key to select it"));
+        learn_remote.set_tooltip_text(Some(tr("Press a physical remote key to select it")));
         selected_row.add_suffix(&learn_remote);
         let trigger_row = adw::ComboRow::builder()
-            .title("Gesture")
+            .title(tr("Gesture"))
             .model(&trigger_list)
             .selected(0)
             .build();
         key_group.add(&selected_row);
         key_group.add(&trigger_row);
 
-        let action_group = adw::PreferencesGroup::builder().title("Action").build();
+        let action_group = adw::PreferencesGroup::builder().title(tr("Action")).build();
         let type_row = adw::ComboRow::builder()
-            .title("Type")
+            .title(tr("Type"))
             .model(&type_list)
             .selected(0)
             .build();
-        let value_row = adw::EntryRow::builder().title("Key").build();
-        let learn_key_button = gtk::Button::with_label("Learn Key");
+        let value_row = adw::EntryRow::builder().title(tr("Key")).build();
+        let learn_key_button = gtk::Button::with_label(tr("Learn Key"));
         learn_key_button.add_css_class("flat");
-        learn_key_button.set_tooltip_text(Some("Capture a keyboard key or chord"));
+        learn_key_button.set_tooltip_text(Some(tr("Capture a keyboard key or chord")));
         value_row.add_suffix(&learn_key_button);
-        let exec_row = adw::EntryRow::builder().title("Command").build();
+        let exec_row = adw::EntryRow::builder().title(tr("Command")).build();
         let exec_warning = gtk::Label::new(None);
         exec_warning.add_css_class("caption");
         exec_warning.add_css_class("dim-label");
@@ -388,18 +392,20 @@ impl AppWindow {
         exec_warning.set_margin_end(12);
         exec_warning.set_margin_bottom(6);
         let dictation_row = adw::ComboRow::builder()
-            .title("Dictation")
+            .title(tr("Dictation"))
             .model(&dictation_list)
             .selected(0)
             .build();
         let apply_row = adw::ActionRow::builder()
-            .title("Mapping")
-            .subtitle("Update this slot, then use Apply in the header to save.")
+            .title(tr("Mapping"))
+            .subtitle(tr(
+                "Update this slot, then use Apply in the header to save.",
+            ))
             .build();
-        let reset_action = gtk::Button::with_label("Reset");
+        let reset_action = gtk::Button::with_label(tr("Reset"));
         reset_action.add_css_class("flat");
-        reset_action.set_tooltip_text(Some("Restore the profile default"));
-        let apply_action = gtk::Button::with_label("Update");
+        reset_action.set_tooltip_text(Some(tr("Restore the profile default")));
+        let apply_action = gtk::Button::with_label(tr("Update"));
         apply_action.add_css_class("suggested-action");
         apply_row.add_suffix(&reset_action);
         apply_row.add_suffix(&apply_action);
@@ -421,25 +427,27 @@ impl AppWindow {
         action_group.add(&action_error);
 
         let voice_group = adw::PreferencesGroup::builder()
-            .title("Recording key")
+            .title(tr("Recording key"))
             .build();
         let voice_info = adw::ActionRow::builder()
-            .title("Physical key")
-            .subtitle("KEY_F5 is grabbed and fixed; it controls the ATVV microphone.")
+            .title(tr("Physical key"))
+            .subtitle(tr(
+                "KEY_F5 is grabbed and fixed; it controls the ATVV microphone.",
+            ))
             .build();
-        let voice_value_row = adw::EntryRow::builder().title("Output key").build();
-        let voice_learn_button = gtk::Button::with_label("Learn Key");
+        let voice_value_row = adw::EntryRow::builder().title(tr("Output key")).build();
+        let voice_learn_button = gtk::Button::with_label(tr("Learn Key"));
         voice_learn_button.add_css_class("flat");
-        voice_learn_button.set_tooltip_text(Some("Capture a key or chord for the output"));
+        voice_learn_button.set_tooltip_text(Some(tr("Capture a key or chord for the output")));
         voice_value_row.add_suffix(&voice_learn_button);
         let voice_apply_row = adw::ActionRow::builder()
-            .title("Output key")
-            .subtitle("Emitted while the recording key is held; Apply saves.")
+            .title(tr("Output key"))
+            .subtitle(tr("Emitted while the recording key is held; Apply saves."))
             .build();
-        let voice_reset_button = gtk::Button::with_label("Reset");
+        let voice_reset_button = gtk::Button::with_label(tr("Reset"));
         voice_reset_button.add_css_class("flat");
-        voice_reset_button.set_tooltip_text(Some("Restore DICTATE"));
-        let voice_apply_button = gtk::Button::with_label("Update");
+        voice_reset_button.set_tooltip_text(Some(tr("Restore DICTATE")));
+        let voice_apply_button = gtk::Button::with_label(tr("Update"));
         voice_apply_button.add_css_class("suggested-action");
         voice_apply_row.add_suffix(&voice_reset_button);
         voice_apply_row.add_suffix(&voice_apply_button);
@@ -458,22 +466,28 @@ impl AppWindow {
         voice_group.add(&voice_error);
         voice_group.set_visible(false);
 
-        let test_group = adw::PreferencesGroup::builder().title("Test mode").build();
-        let test_result_row = adw::ActionRow::builder()
-            .title("Last test")
-            .subtitle("Test mode is off")
+        let test_group = adw::PreferencesGroup::builder()
+            .title(tr("Test mode"))
             .build();
-        let run_once_button = gtk::Button::with_label("Run once");
+        let test_result_row = adw::ActionRow::builder()
+            .title(tr("Last test"))
+            .subtitle(tr("Test mode is off"))
+            .build();
+        let run_once_button = gtk::Button::with_label(tr("Run once"));
         run_once_button.add_css_class("flat");
         run_once_button.set_sensitive(false);
-        run_once_button.set_tooltip_text(Some("Run the displayed action once through atvvd"));
+        run_once_button.set_tooltip_text(Some(tr("Run the displayed action once through atvvd")));
         test_result_row.add_suffix(&run_once_button);
         test_group.add(&test_result_row);
 
-        let advanced_group = adw::PreferencesGroup::builder().title("Advanced").build();
+        let advanced_group = adw::PreferencesGroup::builder()
+            .title(tr("Advanced"))
+            .build();
         let allow_exec_row = adw::SwitchRow::builder()
-            .title("Allow shell commands")
-            .subtitle("Exec mappings run as your user with a 5 s timeout. Off by default.")
+            .title(tr("Allow shell commands"))
+            .subtitle(tr(
+                "Exec mappings run as your user with a 5 s timeout. Off by default.",
+            ))
             .build();
         advanced_group.add(&allow_exec_row);
 
@@ -483,7 +497,7 @@ impl AppWindow {
         prefs.add(&voice_group);
         prefs.add(&test_group);
         prefs.add(&advanced_group);
-        let content_page = adw::NavigationPage::new(&prefs, "Key mapping");
+        let content_page = adw::NavigationPage::new(&prefs, tr("Key mapping"));
 
         let split = adw::NavigationSplitView::new();
         split.set_sidebar(Some(&sidebar_page));
@@ -493,10 +507,12 @@ impl AppWindow {
 
         let unavailable = adw::StatusPage::builder()
             .icon_name("network-offline-symbolic")
-            .title("Daemon unavailable")
-            .description("Start the ATVV daemon with “systemctl --user start atvvd”, then retry.")
+            .title(tr("Daemon unavailable"))
+            .description(tr(
+                "Start the ATVV daemon with “systemctl --user start atvvd”, then retry.",
+            ))
             .build();
-        let retry = gtk::Button::with_label("Retry");
+        let retry = gtk::Button::with_label(tr("Retry"));
         retry.add_css_class("suggested-action");
         retry.set_halign(gtk::Align::Center);
         unavailable.set_child(Some(&retry));
@@ -520,7 +536,7 @@ impl AppWindow {
         toast_overlay.set_child(Some(&toolbar));
 
         let mut builder = adw::ApplicationWindow::builder()
-            .title("ATVV Remote")
+            .title(tr("ATVV Remote"))
             .default_width(1040)
             .default_height(760)
             .width_request(360)
@@ -687,14 +703,14 @@ impl AppWindow {
                 return;
             }
             let dialog = adw::AlertDialog::builder()
-                .heading("Allow shell commands?")
-                .body(
+                .heading(tr("Allow shell commands?"))
+                .body(tr(
                     "Exec mappings run shell commands as your user with a 5 s timeout. \
                      Only enable this for commands you trust.",
-                )
+                ))
                 .build();
-            dialog.add_response("cancel", "Cancel");
-            dialog.add_response("enable", "Enable");
+            dialog.add_response("cancel", tr("Cancel"));
+            dialog.add_response("enable", tr("Enable"));
             dialog.set_response_appearance("enable", adw::ResponseAppearance::Destructive);
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
@@ -786,10 +802,13 @@ impl AppWindow {
             },
             Event::LoadFailed(error) => {
                 if self.model.borrow().is_some() {
-                    self.show_error(&format!("Cannot read the configuration: {error}"));
+                    self.show_error(&tr_args(
+                        "Cannot read the configuration: {error}",
+                        &[("error", &error)],
+                    ));
                 } else {
                     self.stack.set_visible_child_name("unavailable");
-                    self.title.set_subtitle("Daemon unavailable");
+                    self.title.set_subtitle(tr("Daemon unavailable"));
                 }
             }
             Event::Status(Ok(status)) => {
@@ -799,19 +818,25 @@ impl AppWindow {
             }
             Event::Status(Err(error)) => {
                 if self.model.borrow().is_some() {
-                    self.show_error(&format!("atvvd is not reachable: {error}"));
+                    self.show_error(&tr_args(
+                        "atvvd is not reachable: {error}",
+                        &[("error", &error)],
+                    ));
                 }
             }
             Event::Saved(Ok(())) => {
                 if let Some(model) = self.model.borrow_mut().as_mut() {
                     model.mark_saved();
                 }
-                self.toast("Configuration applied");
+                self.toast(tr("Configuration applied"));
                 self.backend.load();
                 self.refresh_all();
             }
             Event::Saved(Err(error)) => {
-                self.show_error(&format!("Cannot apply the configuration: {error}"));
+                self.show_error(&tr_args(
+                    "Cannot apply the configuration: {error}",
+                    &[("error", &error)],
+                ));
                 self.refresh_all();
             }
             Event::CaptureStarted(Ok(())) => {
@@ -819,11 +844,16 @@ impl AppWindow {
             }
             Event::CaptureStarted(Err(error)) => {
                 self.force_capture_off();
-                self.show_error(&format!("Cannot start capture mode: {error}"));
+                self.show_error(&tr_args(
+                    "Cannot start capture mode: {error}",
+                    &[("error", &error)],
+                ));
             }
             Event::CaptureEnded(_) => self.force_capture_off(),
-            Event::ActionRun(Ok(())) => self.toast("Action sent"),
-            Event::ActionRun(Err(error)) => self.show_error(&format!("Action failed: {error}")),
+            Event::ActionRun(Ok(())) => self.toast(tr("Action sent")),
+            Event::ActionRun(Err(error)) => {
+                self.show_error(&tr_args("Action failed: {error}", &[("error", &error)]))
+            }
             Event::Button(event) => self.on_button_event(event),
             Event::SignalStreamEnded => {}
         }
@@ -850,10 +880,13 @@ impl AppWindow {
                     }
                     self.force_capture_off();
                     self.split.set_show_content(true);
-                    self.toast(&format!(
-                        "Selected {} · {}",
-                        button_label(button),
-                        event.trigger
+                    let trigger = match trigger_from_name(&event.trigger) {
+                        Some(trigger) => trigger_label(trigger),
+                        None => event.trigger.as_str(),
+                    };
+                    self.toast(&tr_args(
+                        "Selected {button} · {trigger}",
+                        &[("button", button_label(button)), ("trigger", trigger)],
                     ));
                     self.refresh_all();
                 }
@@ -870,15 +903,23 @@ impl AppWindow {
                             .and_then(|model| model.action_for_event(button, &event.trigger))
                     };
                     let shown = if button == RemoteButton::Voice {
-                        "Microphone key (not remappable)".to_string()
+                        tr("Microphone key (not remappable)").to_string()
                     } else {
-                        action.clone().unwrap_or_else(|| "No action".to_string())
+                        action
+                            .clone()
+                            .unwrap_or_else(|| tr("No action").to_string())
                     };
-                    self.test_result_row.set_subtitle(&format!(
-                        "{} · {} → {}",
-                        button_label(button),
-                        event.trigger,
-                        shown
+                    let trigger = match trigger_from_name(&event.trigger) {
+                        Some(trigger) => trigger_label(trigger),
+                        None => event.trigger.as_str(),
+                    };
+                    self.test_result_row.set_subtitle(&tr_args(
+                        "{button} · {trigger} → {action}",
+                        &[
+                            ("button", button_label(button)),
+                            ("trigger", trigger),
+                            ("action", &shown),
+                        ],
                     ));
                     let runnable = button != RemoteButton::Voice
                         && action.as_deref().is_some_and(|value| value != "none");
@@ -903,14 +944,14 @@ impl AppWindow {
         self.capture_mode.set(mode);
         self.backend.begin_capture();
         self.capture_banner.set_title(match mode {
-            CaptureMode::Test => "Press a remote key to test it",
-            CaptureMode::Learn => "Press a remote key to select it",
+            CaptureMode::Test => tr("Press a remote key to test it"),
+            CaptureMode::Learn => tr("Press a remote key to select it"),
             CaptureMode::Off => "",
         });
         self.capture_banner.set_revealed(true);
         if mode == CaptureMode::Test {
             self.test_result_row
-                .set_subtitle("Waiting for a remote key…");
+                .set_subtitle(tr("Waiting for a remote key…"));
             *self.last_action.borrow_mut() = None;
             self.run_once_button.set_sensitive(false);
         }
@@ -975,12 +1016,12 @@ impl AppWindow {
             .model
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "no configuration loaded".to_string())
+            .ok_or_else(|| tr("no configuration loaded").to_string())
             .and_then(|model| model.set_slot_raw(Some(raw)));
         match result {
             Ok(_) => {
                 self.show_action_error("");
-                self.toast("Mapping updated");
+                self.toast(tr("Mapping updated"));
                 self.refresh_all();
             }
             Err(error) => self.show_action_error(&error),
@@ -992,12 +1033,12 @@ impl AppWindow {
             .model
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "no configuration loaded".to_string())
+            .ok_or_else(|| tr("no configuration loaded").to_string())
             .and_then(|model| model.set_slot_raw(None));
         match result {
             Ok(_) => {
                 self.show_action_error("");
-                self.toast("Profile default restored");
+                self.toast(tr("Profile default restored"));
                 self.refresh_all();
             }
             Err(error) => self.show_action_error(&error),
@@ -1010,12 +1051,12 @@ impl AppWindow {
             .model
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "no configuration loaded".to_string())
+            .ok_or_else(|| tr("no configuration loaded").to_string())
             .and_then(|model| model.set_trigger_key(Some(raw)));
         match result {
             Ok(_) => {
                 self.show_voice_error("");
-                self.toast("Recording output key updated");
+                self.toast(tr("Recording output key updated"));
                 self.refresh_all();
             }
             Err(error) => self.show_voice_error(&error),
@@ -1027,14 +1068,14 @@ impl AppWindow {
             .model
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "no configuration loaded".to_string())
+            .ok_or_else(|| tr("no configuration loaded").to_string())
             .and_then(|model| {
                 model.set_trigger_key(Some(atvv_config::DEFAULT_TRIGGER_KEY.to_string()))
             });
         match result {
             Ok(_) => {
                 self.show_voice_error("");
-                self.toast("Recording output key reset");
+                self.toast(tr("Recording output key reset"));
                 self.refresh_all();
             }
             Err(error) => self.show_voice_error(&error),
@@ -1098,7 +1139,7 @@ impl AppWindow {
 
     fn learn_key_for(self: &Rc<Self>, voice: bool) {
         let dialog = gtk::Window::builder()
-            .title("Learn key")
+            .title(tr("Learn key"))
             .transient_for(&self.window)
             .modal(true)
             .resizable(false)
@@ -1109,11 +1150,11 @@ impl AppWindow {
         content.set_margin_bottom(24);
         content.set_margin_start(24);
         content.set_margin_end(24);
-        let heading = gtk::Label::new(Some("Press a key or chord"));
+        let heading = gtk::Label::new(Some(tr("Press a key or chord")));
         heading.add_css_class("title-2");
-        let hint = gtk::Label::new(Some(
+        let hint = gtk::Label::new(Some(tr(
             "Escape cancels. Held modifiers become part of the chord.",
-        ));
+        )));
         hint.add_css_class("dim-label");
         hint.set_wrap(true);
         content.append(&heading);
@@ -1160,7 +1201,7 @@ impl AppWindow {
                 }
                 None => {
                     if let Some(hint) = hint_weak.upgrade() {
-                        hint.set_text("That key is not supported; try another.");
+                        hint.set_text(tr("That key is not supported; try another."));
                     }
                 }
             }
@@ -1189,13 +1230,14 @@ impl AppWindow {
         }
         if let Some(command) = action.strip_prefix("exec:") {
             let dialog = adw::AlertDialog::builder()
-                .heading("Run shell command?")
-                .body(format!(
-                    "This runs “{command}” as your user with a 5 s timeout."
+                .heading(tr("Run shell command?"))
+                .body(tr_args(
+                    "This runs “{command}” as your user with a 5 s timeout.",
+                    &[("command", command)],
                 ))
                 .build();
-            dialog.add_response("cancel", "Cancel");
-            dialog.add_response("run", "Run command");
+            dialog.add_response("cancel", tr("Cancel"));
+            dialog.add_response("run", tr("Run command"));
             dialog.set_response_appearance("run", adw::ResponseAppearance::Destructive);
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
@@ -1216,9 +1258,9 @@ impl AppWindow {
         self.value_row.set_visible(key_value);
         self.learn_key_button.set_visible(key_value);
         self.value_row.set_title(if kind == ActionKind::Combo {
-            "Chord"
+            tr("Chord")
         } else {
-            "Key"
+            tr("Key")
         });
         self.exec_row.set_visible(kind == ActionKind::Exec);
         self.exec_warning.set_visible(kind == ActionKind::Exec);
@@ -1226,9 +1268,9 @@ impl AppWindow {
         self.dictation_row
             .set_visible(kind == ActionKind::Dictation);
         self.exec_warning.set_text(if allow_exec {
-            "The command runs as your user with a 5 s timeout and closed stdio."
+            tr("The command runs as your user with a 5 s timeout and closed stdio.")
         } else {
-            "Shell commands are disabled. Turn on “Allow shell commands” below first."
+            tr("Shell commands are disabled. Turn on “Allow shell commands” below first.")
         });
         self.apply_action
             .set_sensitive(kind != ActionKind::Exec || allow_exec);
@@ -1252,18 +1294,21 @@ impl AppWindow {
         self.dirty_banner.set_revealed(model.dirty);
         self.test_button.set_sensitive(true);
         let default_hint = if model.selected_raw().is_none() {
-            " · profile default"
+            tr(" · profile default")
         } else {
             ""
         };
         if self.voice_selected.get() {
             self.selected_row
-                .set_subtitle("Voice key · output configurable");
+                .set_subtitle(tr("Voice key · output configurable"));
         } else {
-            self.selected_row.set_subtitle(&format!(
-                "{} · {}{default_hint}",
-                button_label(model.selected),
-                trigger_label(model.trigger)
+            self.selected_row.set_subtitle(&tr_args(
+                "{button} · {trigger}{default_hint}",
+                &[
+                    ("button", button_label(model.selected)),
+                    ("trigger", trigger_label(model.trigger)),
+                    ("default_hint", default_hint),
+                ],
             ));
         }
         self.refresh_editor(model);
@@ -1272,7 +1317,7 @@ impl AppWindow {
     fn refresh_title(&self) {
         let status = self.status.borrow();
         let subtitle = match status.as_ref() {
-            None => "Connecting…".to_string(),
+            None => tr("Connecting…").to_string(),
             Some(status) if status.connected => {
                 let device = if status.device.name.is_empty() {
                     status.device.address.clone()
@@ -1280,14 +1325,17 @@ impl AppWindow {
                     status.device.name.clone()
                 };
                 if status.streaming {
-                    format!("{device} · recording")
+                    tr_args("{device} · recording", &[("device", &device)])
                 } else if device.is_empty() {
                     status.state.clone()
                 } else {
-                    format!("{device} · {}", status.state)
+                    tr_args(
+                        "{device} · {state}",
+                        &[("device", &device), ("state", &status.state)],
+                    )
                 }
             }
-            Some(status) => format!("Disconnected · {}", status.state),
+            Some(status) => tr_args("Disconnected · {state}", &[("state", &status.state)]),
         };
         self.title.set_subtitle(&subtitle);
     }
@@ -1299,8 +1347,14 @@ impl AppWindow {
         let percent = hardware.and_then(|hardware| hardware.battery_percent);
         let (subtitle, icon) = match percent {
             Some(percent) if connected => (format!("{percent} %"), battery_icon(percent)),
-            Some(percent) => (format!("{percent} % · last known"), battery_icon(percent)),
-            None => ("Unknown".to_string(), "battery-empty-symbolic"),
+            Some(percent) => {
+                let text = percent.to_string();
+                (
+                    tr_args("{percent} % · last known", &[("percent", &text)]),
+                    battery_icon(percent),
+                )
+            }
+            None => (tr("Unknown").to_string(), "battery-empty-symbolic"),
         };
         self.battery_row.set_subtitle(&subtitle);
         self.battery_icon.set_icon_name(Some(icon));
@@ -1375,11 +1429,13 @@ impl AppWindow {
 
     fn about_dialog(&self) -> adw::AboutDialog {
         adw::AboutDialog::builder()
-            .application_name("ATVV Remote")
+            .application_name(tr("ATVV Remote"))
             .application_icon(APP_ID)
             .developer_name("Yangtse Su")
             .version(env!("CARGO_PKG_VERSION"))
-            .comments("Configure ATVV remote button mappings and test them from the desktop.")
+            .comments(tr(
+                "Configure ATVV remote button mappings and test them from the desktop.",
+            ))
             .website("https://github.com/YangtseSu/atvv-linux")
             .license_type(gtk::License::Gpl30)
             .build()
@@ -1411,10 +1467,10 @@ impl AppWindow {
 
     #[doc(hidden)]
     #[must_use]
-    pub fn hardware_text(&self, title: &str) -> Option<String> {
+    pub fn hardware_text(&self, field: HardwareField) -> Option<String> {
         self.hardware_rows
             .iter()
-            .find(|(field, _)| field.label() == title)
+            .find(|(candidate, _)| *candidate == field)
             .and_then(|(_, row)| row.subtitle().map(|subtitle| subtitle.to_string()))
     }
 
@@ -1552,9 +1608,20 @@ fn connect_timers(ui: &Rc<AppWindow>) {
 #[must_use]
 fn trigger_label(trigger: Trigger) -> &'static str {
     match trigger {
-        Trigger::Single => "Single",
-        Trigger::Double => "Double",
-        Trigger::Long => "Long",
+        Trigger::Single => tr("Single"),
+        Trigger::Double => tr("Double"),
+        Trigger::Long => tr("Long"),
+    }
+}
+
+/// Parse the protocol name used by `ButtonEvent`.
+#[must_use]
+fn trigger_from_name(name: &str) -> Option<Trigger> {
+    match name {
+        "single" => Some(Trigger::Single),
+        "double" => Some(Trigger::Double),
+        "long" => Some(Trigger::Long),
+        _ => None,
     }
 }
 

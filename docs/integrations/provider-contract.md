@@ -1,5 +1,7 @@
 # Provider contract
 
+English | [简体中文](provider-contract.zh-CN.md)
+
 Status: source metadata and generic contract output implemented
 2026-10-31; this is the current guidance.
 

@@ -75,6 +75,20 @@ Target consumers include fcitx5-vinput, browser AI chat pages, coding agents
 See [`docs/integrations/provider-contract.md`](docs/integrations/provider-contract.md)
 and [ADR 0007](docs/decisions/0007-integration-direction.md).
 
+## Language and documentation
+
+- Source code, comments, commit messages, CLI output, man pages, plans,
+  research, decisions, acceptance records, and the handoff are English.
+- The GUI ships English and Simplified Chinese only. It follows the desktop
+  locale; English is the source language and the fallback. Keep every
+  app-owned label in the `atvv-gui` catalog and leave protocol values, key
+  names, addresses, and daemon diagnostics untranslated.
+- User-facing documents (`README.md`, `docs/configuration.md`, `docs/gui.md`,
+  `docs/device-support.md`, `docs/integrations/*.md`, and package READMEs)
+  have a `.zh-CN.md` sibling. English stays authoritative; each pair links to
+  the other at the top. Do not translate development records.
+- Device data and quoted output may stay in the device's language.
+
 ## Plan workflow
 
 `docs/plans/README.md` is the canonical index. There is no hidden second plan.

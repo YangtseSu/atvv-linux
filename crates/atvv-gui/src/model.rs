@@ -11,6 +11,8 @@ use atvv_config::{ConfigDocument, parse_checked_action};
 use atvv_input::{ActionMap, Trigger};
 use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
 
+use crate::i18n::tr;
+
 /// Resolve a profile id from the daemon document.
 #[must_use]
 pub fn profile_by_id(id: &str) -> Option<DeviceProfile> {
@@ -19,21 +21,21 @@ pub fn profile_by_id(id: &str) -> Option<DeviceProfile> {
 
 /// Human label for a hotspot and the selected-key row.
 #[must_use]
-pub const fn button_label(button: RemoteButton) -> &'static str {
+pub fn button_label(button: RemoteButton) -> &'static str {
     match button {
-        RemoteButton::Power => "Power",
-        RemoteButton::Ok => "OK",
-        RemoteButton::Back => "Back",
-        RemoteButton::Up => "Up",
-        RemoteButton::Down => "Down",
-        RemoteButton::Left => "Left",
-        RemoteButton::Right => "Right",
-        RemoteButton::Home => "Home",
-        RemoteButton::Menu => "Menu",
-        RemoteButton::Tv => "TV",
-        RemoteButton::VolumeUp => "Volume up",
-        RemoteButton::VolumeDown => "Volume down",
-        RemoteButton::Voice => "Voice",
+        RemoteButton::Power => tr("Power"),
+        RemoteButton::Ok => tr("OK"),
+        RemoteButton::Back => tr("Back"),
+        RemoteButton::Up => tr("Up"),
+        RemoteButton::Down => tr("Down"),
+        RemoteButton::Left => tr("Left"),
+        RemoteButton::Right => tr("Right"),
+        RemoteButton::Home => tr("Home"),
+        RemoteButton::Menu => tr("Menu"),
+        RemoteButton::Tv => tr("TV"),
+        RemoteButton::VolumeUp => tr("Volume up"),
+        RemoteButton::VolumeDown => tr("Volume down"),
+        RemoteButton::Voice => tr("Voice"),
     }
 }
 

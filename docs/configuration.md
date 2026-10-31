@@ -1,5 +1,7 @@
 # Configuration
 
+English | [简体中文](configuration.zh-CN.md)
+
 `daemon.toml` is the single configuration file for `atvvd`. It is parsed and
 validated by the `atvv-config` crate; the daemon, `atvvctl`, and the GUI never
 grow a second parser. The GUI (`atvv-config`, see [gui.md](gui.md)) edits the

@@ -12,6 +12,7 @@ use atvv_protocol::profile::RemoteButton;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
+use crate::i18n::{tr, tr_args};
 use crate::model::button_label;
 
 const VIEWBOX_WIDTH: f64 = 320.0;
@@ -185,7 +186,7 @@ impl RemoteDiagram {
                 picture.upcast()
             }
             None => {
-                let label = gtk::Label::new(Some("Remote diagram unavailable"));
+                let label = gtk::Label::new(Some(tr("Remote diagram unavailable")));
                 label.add_css_class("dim-label");
                 label.set_can_target(false);
                 label.upcast()
@@ -198,9 +199,9 @@ impl RemoteDiagram {
         for (index, hotspot) in HOTSPOTS.iter().enumerate() {
             let label = button_label(hotspot.button);
             let tooltip = if hotspot.button == RemoteButton::Voice {
-                "Voice key: drives the ATVV microphone and is not remappable".to_string()
+                tr("Voice key: drives the ATVV microphone and is not remappable").to_string()
             } else {
-                format!("{label}: click to edit")
+                tr_args("{label}: click to edit", &[("label", label)])
             };
             let button = gtk::Button::builder()
                 .has_frame(false)
@@ -210,7 +211,10 @@ impl RemoteDiagram {
             button.add_css_class("remote-hotspot");
             button.add_css_class(HOTSPOT_CSS[index]);
             button.set_widget_name(&format!("hotspot-{}", hotspot.button.name()));
-            button.update_property(&[gtk::accessible::Property::Label(&format!("{label} key"))]);
+            button.update_property(&[gtk::accessible::Property::Label(&tr_args(
+                "{label} key{suffix}",
+                &[("label", label), ("suffix", "")],
+            ))]);
             fixed.put(&button, 0.0, 0.0);
             buttons.insert(hotspot.button, button);
         }
@@ -312,16 +316,16 @@ impl RemoteDiagram {
             if pressed == Some(*button) {
                 widget.add_css_class("pressed");
             }
-            widget.update_property(&[gtk::accessible::Property::Label(&format!(
-                "{} key{}",
-                button_label(*button),
-                if !editable {
-                    ", not remappable"
-                } else if conflicts.contains(button) {
-                    ", conflicting action"
-                } else {
-                    ""
-                }
+            let suffix = if !editable {
+                tr(", not remappable")
+            } else if conflicts.contains(button) {
+                tr(", conflicting action")
+            } else {
+                ""
+            };
+            widget.update_property(&[gtk::accessible::Property::Label(&tr_args(
+                "{label} key{suffix}",
+                &[("label", button_label(*button)), ("suffix", suffix)],
             ))]);
         }
     }

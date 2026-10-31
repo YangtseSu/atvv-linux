@@ -7,7 +7,7 @@
 //! one test. Run under `xvfb-run`.
 
 use atvv_config::{Config, ConfigDocument};
-use atvv_gui::app::AppWindow;
+use atvv_gui::app::{AppWindow, HardwareField};
 use atvv_gui::client::{Backend, DaemonStatus, DeviceInfo, HardwareInfo};
 use atvv_gui::model::GuiModel;
 use atvv_protocol::RC003;
@@ -36,6 +36,7 @@ fn window_smoke() {
     }
     let _ = libadwaita::init();
     atvv_gui::app::install_css();
+    atvv_gui::i18n::Language::set(atvv_gui::i18n::Language::English);
 
     let window = window();
     window.set_status(DaemonStatus {
@@ -58,9 +59,12 @@ fn window_smoke() {
         },
     });
     assert_eq!(window.battery_text(), "62 %");
-    assert_eq!(window.hardware_text("Firmware").as_deref(), Some("2671"));
     assert_eq!(
-        window.hardware_text("Serial number").as_deref(),
+        window.hardware_text(HardwareField::Firmware).as_deref(),
+        Some("2671")
+    );
+    assert_eq!(
+        window.hardware_text(HardwareField::Serial).as_deref(),
         Some("250519")
     );
 

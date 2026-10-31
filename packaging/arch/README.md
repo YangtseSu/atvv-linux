@@ -1,5 +1,7 @@
 # Arch package
 
+English | [简体中文](README.zh-CN.md)
+
 `PKGBUILD` builds a split VCS package: `atvv-linux-git` contains the daemon,
 CLI, and MCP binaries, the user unit, udev rule, modules-load file, man pages,
 and completions; `atvv-linux-gui-git` contains the optional `atvv-config` app

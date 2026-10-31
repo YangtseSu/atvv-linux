@@ -1,5 +1,7 @@
 # atvv-linux
 
+**English** | [简体中文](README.zh-CN.md)
+
 ATVV v1.0 userspace stack for Linux: BLE voice remotes as a PipeWire
 microphone, with evdev/uinput button mapping and a D-Bus control surface.
 
@@ -9,15 +11,15 @@ graph; evdev/uinput owns input remapping.
 
 ## Status
 
-**Steps 01–09 and 11–14 are complete.** The installed package is
-`atvv-linux 0.1.0-7`, the user unit runs, and `atvvctl doctor` reports green
-on a real RC003. The current tree builds as the split `-git` packages
-(`atvv-linux-git`, `atvv-linux-gui-git`); install them to get `atvv-config` and
-the step-13 `atvvctl config`, `capture`, and `map` commands. Step 10 (vinput
-zero-config) depends on an upstream consumer change.
+ATVV v1.0 capture, input remapping, the daemon and D-Bus API, the CLI, the MCP
+server, and the optional GTK configuration app are implemented. The RC003
+audio path and the fcitx5-vinput source path have been verified on real devices
+and system services; evidence is linked below.
 
-The RC003 path and the fcitx5-vinput source path have both run on real system
-services.
+Automatic fcitx5-vinput setup depends on an upstream consumer change. Until it
+lands, select the ATVV source by name and add the declared trigger key
+manually; see the
+[fcitx5-vinput guide](docs/integrations/fcitx5-vinput.md).
 
 Implemented:
 
@@ -51,7 +53,8 @@ Implemented:
 - `atvv-gui` / `atvv-config`: GTK4 + libadwaita configuration app with a
   clickable remote diagram, per-slot action editor, keyboard and remote key
   learning, recording-key output selection, test mode, and a script policy.
-  It is a D-Bus client only; see [`docs/gui.md`](docs/gui.md).
+  The interface follows the desktop locale: English, or Simplified Chinese
+  for `zh*` locales. It is a D-Bus client only; see [`docs/gui.md`](docs/gui.md).
 
 The first profile is the Xiaomi Bluetooth Remote 2 Pro (`miremote-rc003`,
 ATVV v1.0, 16 kHz ADPCM, 120-byte frames). The 2026-10-30 run
@@ -114,7 +117,7 @@ installed: the daemon uses the session bus.
 | Source missing | `pw-cli info atvv-miremote-rc003`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
 | Remote not connected or CAPS missing | `bluetoothctl info <MAC>`; `atvvctl doctor`; `atvvctl monitor` |
-| Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "DICTATE"`. Keep the user's `[TriggerKey]` entries and add `2=Dictate`; stop fcitx5 before editing and restart it after. A commented `[TriggerKey]` section disables the trigger. `F24` is the fallback key. |
+| Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "DICTATE"`. Keep the user's `[TriggerKey]` entries and add `1=Dictate`; stop fcitx5 before editing and restart it after. A commented `[TriggerKey]` section disables the trigger. `F24` is the fallback key. |
 | F5 reaches the focused application | The RC003 node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
 | No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
 | Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |

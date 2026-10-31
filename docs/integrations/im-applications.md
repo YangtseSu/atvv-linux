@@ -1,5 +1,7 @@
 # IM applications
 
+English | [简体中文](im-applications.zh-CN.md)
+
 Status: generic guidance. Messaging clients consume the ATVV source through
 their own microphone settings. There is no ATVV-specific integration,
 per-client shortcut, or per-application diagnostic.

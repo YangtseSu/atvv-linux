@@ -1,5 +1,7 @@
 # Coding agents
 
+English | [简体中文](coding-agents.zh-CN.md)
+
 The ATVV stack gives a coding agent two things and withholds one:
 
 - **Control**: `atvv-mcp` exposes the daemon's status and voice commands over

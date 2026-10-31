@@ -1,5 +1,7 @@
 # Configuration GUI
 
+English | [简体中文](gui.zh-CN.md)
+
 `atvv-config` is the GTK4/libadwaita configuration client for `atvvd`
 ([ADR 0008](decisions/0008-gui-toolkit.md)). It edits the button map through
 the daemon's `GetConfig`/`SetConfig` API and uses `BeginCapture`/`RunAction`
@@ -26,6 +28,12 @@ The local `-git` packages replace the release packages `atvv-linux` and
 Without a running daemon the window opens a read-only *Daemon unavailable*
 page with a Retry button. The daemon stays headless; `atvvctl` remains the
 scriptable surface.
+
+## Language
+
+The app follows the desktop locale. English is the default and the fallback;
+any `zh*` locale selects Simplified Chinese. There is no in-app language
+switch. Restart `atvv-config` after changing the desktop language.
 
 ## Window
 

@@ -68,7 +68,10 @@ package_atvv-linux-git() {
     >"$pkgdir/usr/share/fish/vendor_completions.d/atvvctl.fish"
 
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 README.zh-CN.md "$pkgdir/usr/share/doc/$pkgname/README.zh-CN.md"
   install -Dm644 docs/device-support.md "$pkgdir/usr/share/doc/$pkgname/device-support.md"
+  install -Dm644 docs/device-support.zh-CN.md \
+    "$pkgdir/usr/share/doc/$pkgname/device-support.zh-CN.md"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 THIRD-PARTY-NOTICES.md \
     "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.md"
@@ -91,6 +94,7 @@ package_atvv-linux-gui-git() {
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.atvv.Config.svg"
 
   install -Dm644 docs/gui.md "$pkgdir/usr/share/doc/$pkgname/gui.md"
+  install -Dm644 docs/gui.zh-CN.md "$pkgdir/usr/share/doc/$pkgname/gui.zh-CN.md"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 THIRD-PARTY-NOTICES.md \
     "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.md"

@@ -1,5 +1,7 @@
 # Device support
 
+English | [简体中文](device-support.zh-CN.md)
+
 Support means: a compiled `DeviceProfile`, a real-device run recorded in this
 repository, and a package that installs the profile. Synthetic tests and mock
 transports prove the code path, not the device.
@@ -14,9 +16,7 @@ transports prove the code path, not the device.
 | ATVV v0.4 remotes | unknown | none | v0.4 | — | Out of scope | — |
 | `test-fake-remote` | `1209:0002` (uinput) | test only | simulated | simulated | Test-only, never in `PROFILES` | [`05-input-uinput.md`](plans/05-input-uinput.md) |
 
-Package acceptance: [`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-2026-10-30.md)
-(partial: package install, post-reboot run, and end-to-end fcitx text commit
-are pending operator actions).
+Package acceptance: [`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-2026-10-30.md).
 
 ## What the RC003 profile fixes
 

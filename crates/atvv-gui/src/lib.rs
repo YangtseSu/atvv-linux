@@ -12,5 +12,6 @@ pub mod actions;
 pub mod app;
 pub mod client;
 pub mod diagram;
+pub mod i18n;
 pub mod keylearn;
 pub mod model;

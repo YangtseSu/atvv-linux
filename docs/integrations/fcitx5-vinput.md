@@ -1,5 +1,7 @@
 # fcitx5-vinput
 
+English | [简体中文](fcitx5-vinput.zh-CN.md)
+
 Tested against fcitx5-vinput `2.4.2` (upstream snapshot
 `xifan2333/fcitx5-vinput@d9a409d`). Integration is over the PipeWire source and
 the synthetic voice key; D-Bus is an optional fallback. No vinput code is

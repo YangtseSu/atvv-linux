@@ -2,7 +2,9 @@
 <component type="desktop-application">
   <id>org.atvv.Config</id>
   <name>ATVV Remote</name>
+  <name xml:lang="zh-Hans-CN">ATVV 遥控器</name>
   <summary>Configure ATVV Bluetooth remote key mappings</summary>
+  <summary xml:lang="zh-Hans-CN">配置 ATVV 蓝牙遥控器按键映射</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <description>
@@ -15,6 +17,12 @@
     <p>
       The app is a D-Bus client for atvvd. It does not grab input devices,
       touch Bluetooth or PipeWire directly, or edit the configuration file.
+    </p>
+    <p xml:lang="zh-Hans-CN">
+      ATVV 遥控器用于配置 ATVV v1.0 蓝牙语音遥控器的按键映射。在示意图中点击按键，选择手势，然后绑定按键、组合键、听写操作或命令。测试模式会高亮实体按键，并按需运行一次操作。
+    </p>
+    <p xml:lang="zh-Hans-CN">
+      本应用是 atvvd 的 D-Bus 客户端，不会独占输入设备、直接访问蓝牙或 PipeWire，也不会修改配置文件。
     </p>
   </description>
   <launchable type="desktop-id">org.atvv.Config.desktop</launchable>

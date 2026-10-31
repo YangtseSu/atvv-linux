@@ -45,6 +45,7 @@ fn gui_against_real_daemon() {
     }
     let _ = libadwaita::init();
     atvv_gui::app::install_css();
+    atvv_gui::i18n::Language::set(atvv_gui::i18n::Language::English);
 
     let window = AppWindow::build(None, Backend::start(None));
     window.window().present();

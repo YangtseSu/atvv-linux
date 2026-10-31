@@ -1,5 +1,7 @@
 # Browser AI chat pages
 
+English | [简体中文](browser-ai-chat.zh-CN.md)
+
 Browser pages consume the ATVV source through standard `getUserMedia`. There
 is no ATVV-specific browser API, extension, or cloud endpoint. The page owns
 its record button; the remote owns the microphone gate.
