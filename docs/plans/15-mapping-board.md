@@ -28,8 +28,9 @@ shipped code. Implement it with GTK4/libadwaita widgets and CSS classes rather
 than copying the HTML/CSS.
 
 The second remote in the device popover, its address, battery, and per-device
-mappings preview step 21; they are illustrative, not verified hardware. This
-step renders the chip for the one active device and does not implement
+mappings preview step 21; they are illustrative, not verified hardware. The
+layout chip, popover, and manager preview step 17. This step renders the board
+and the device chip for the one active device; it does not implement layout
 switching or per-device layouts.
 
 ## Window shape
@@ -104,6 +105,8 @@ visible. The action editor is an `AdwDialog`, not a permanent pane.
 - Copying SayAll/Open Voice Bridge SwiftUI layout, photos, or assets.
 - Per-application mapping layers or shortcut discovery.
 - A new toolkit or a web/TUI front end.
+- Layout selection and management (step 17); the HTML reference previews the
+  chip, popover, and manager.
 - Multi-device switching, the known-device popover, or per-device layouts
   (step 21); the HTML reference previews them.
 - Daemon protocol or `RunAction` changes unless the board exposes a missing
@@ -138,8 +141,9 @@ Manual:
 - ⬜ Hotspot and card selection stay in sync and edit the correct slot.
 - ⬜ The action editor is modal, keyboard accessible, and validates inline.
 - ⬜ Test mode highlights the pressed card slot and Run once is explicit.
-- ⬜ The GTK board matches the reference's information architecture and states
-  at 1040×760; HIG-required differences are recorded in `docs/gui.md`.
+- ⬜ The GTK board and device chip match the reference's board portion at
+  1040×760; HIG-required differences are recorded in `docs/gui.md`. The layout
+  chip, popover, and manager belong to step 17.
 - ⬜ Apply/Revert remain atomic; invalid input leaves the old map active.
 - ⬜ No SayAll/Open Voice Bridge code, photo, or screenshot is copied.
 - ⬜ The board is usable at 1040×760 and at a narrow window via scrolling.

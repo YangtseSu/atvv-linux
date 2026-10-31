@@ -117,19 +117,35 @@ single = "key:KEY_UP"
 
 ## GUI
 
-- The layout selector/manager UI is **not decided** yet. The step 15 board is
-  the shell; choose a header chip/popover or a dialog in this step. The
-  previous sidebar selector is obsolete because the board replaced the split
-  view. The step 15 HTML reference does not define this UI; it is the board
-  shell only.
-- Manager: Default (read-only) plus user layouts; New, Duplicate, Rename,
-  Delete, Reset. The active layout is marked.
-- Switching uses `SetLayout` and refreshes the board/editor immediately.
-- Switching is disabled while the document is dirty; the UI says "Apply or
-  revert first" instead of discarding edits silently.
-- The step 15 mapping board always renders the active layout; the device
-  diagram and hotspot geometry do not change per layout.
-- After a switch, the header/status shows the active layout name.
+The layout UI is decided in the layout section of
+[`15-mapping-board.html`](15-mapping-board.html); implement it with GTK4 and
+libadwaita widgets, not the HTML/CSS.
+
+- A **layout chip** sits in the board header next to the device chip and shows
+  the active layout name. It opens a popover with every layout: active check,
+  a `Read-only` tag on Default, and `Manage layouts…`.
+- The popover switches layouts directly. Switching is blocked while the
+  document is dirty and says "Apply or revert before switching layouts."
+- `Manage layouts…` opens an `AdwDialog`:
+  - Layout rows show name, description, active marker, and `Read-only` for
+    Default. The row itself switches; a trailing action opens inline
+    `Duplicate`, `Rename`, `Delete`, `Reset` actions.
+  - `New layout…` and `Rename` show an inline name/description form with
+    Create/Save and Cancel. Names are unique case-insensitively; Default and
+    the preset ids are reserved.
+  - Delete refuses Default and any layout active on a device; Reset clears the
+    layout to profile defaults.
+  - The footer carries `New layout…`; while the document is dirty it also
+    carries `Revert` and `Apply`, because the window header is behind the modal.
+- **Default is read-only.** The board shows a banner "Default is read-only.
+  Duplicate it to edit the board." with a Duplicate action. Slot and hotspot
+  clicks are blocked with a toast while Default is active. Duplicate creates a
+  user layout, activates it, and marks the document dirty.
+- Switching uses `SetLayout` and refreshes the board/editor immediately. Test
+  mode stays active but clears the last pressed result. The active layout is
+  assigned per device (step 21); switching devices updates the chip.
+- The header/status shows the active layout name. The device diagram and
+  hotspot geometry do not change per layout.
 
 ## Tests
 

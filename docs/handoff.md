@@ -32,8 +32,10 @@ per-session copies; `docs/plans/` remains the canonical plan.
   reference for the step 15 mapping board: three-column layout, per-button
   cards, modal action editor, banners, test bar, and header device chip. It is
   a design artifact, not shipped code. The device popover and per-device maps
-  preview step 21; the second remote is illustrative. Step 17's
-  layout-selector UI is still undecided.
+  preview step 21; the second remote is illustrative. It also contains the
+  decided step 17 layout UI: header layout chip, layout popover, manager
+  dialog, read-only Default, and the manager's Apply/Revert footer. Step 17
+  implementation is still pending.
 
 ## Completed
 
@@ -562,8 +564,8 @@ interface reference `docs/plans/15-mapping-board.html` as the visual and
 interaction basis; the second remote and per-device maps there preview step
 21, so step 15 implements the one-device board and its device chip without
 switching. See `docs/plans/15-mapping-board.md`. Step 17's layout-selector UI
-is not decided yet. B01 (recording-key press/release actions) is backlog and
-does not block step 15.
+is decided in the same reference; its implementation remains in step 17. B01
+(recording-key press/release actions) is backlog and does not block step 15.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR

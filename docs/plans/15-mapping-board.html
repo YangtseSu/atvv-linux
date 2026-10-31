@@ -1,8 +1,9 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!--
-  Interface reference for step 15 (mapping board). The second remote, its
-  address, battery, and per-device mappings preview step 21; they are
+  Interface reference for the atvv-gui board: the step 15 mapping board, the
+  step 17 layout chip/popover/manager, and the step 21 device chip/popover.
+  The second remote, its address, battery, and per-device mappings are
   illustrative, not verified hardware. The implementation uses GTK4 and
   libadwaita widgets, not this HTML.
 -->
@@ -275,7 +276,9 @@
   .icon-btn:hover { background: var(--surface-hover); }
   .icon-btn:focus-visible, .btn:focus-visible, .slot:focus-visible, .hotspot:focus-visible,
   .wc:focus-visible, .preview-btn:focus-visible, .seg-btn:focus-visible, .chip:focus-visible,
-  .device-chip:focus-visible, .device-row:focus-visible {
+  .device-chip:focus-visible, .device-row:focus-visible, .layout-chip:focus-visible,
+  .layout-pop-row:focus-visible, .layout-main:focus-visible, .layout-more:focus-visible,
+  .layout-manage:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
@@ -458,6 +461,156 @@
     background: var(--surface);
     border: 1px solid var(--border);
   }
+
+  /* ---------- Layout switcher ---------- */
+  .layout-chip {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 154px;
+  }
+  .layout-chip:hover { background: var(--surface-hover); }
+  .layout-chip[aria-expanded="true"] {
+    background: var(--accent-weak);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .layout-chip-icon { display: flex; color: var(--muted); flex: none; }
+  .layout-chip-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .layout-chip-chev { display: flex; color: var(--faint); flex: none; }
+  .layout-chip.readonly .layout-chip-icon { color: var(--faint); }
+
+  .layout-pop {
+    position: absolute;
+    top: 46px;
+    left: 196px;
+    width: 344px;
+    padding: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    z-index: 40;
+  }
+  #layoutList { max-height: 300px; overflow: auto; }
+  .layout-pop-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    gap: 7px;
+    align-items: center;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .layout-pop-row:hover { background: var(--surface-hover); }
+  .layout-pop-row.active { background: var(--accent-weak); }
+  .layout-check {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-text);
+  }
+  .layout-pop-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .layout-pop-name { font-size: 12px; font-weight: 600; line-height: 1.25; }
+  .layout-pop-desc {
+    font-size: 9.5px;
+    color: var(--muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .layout-tag {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 6px;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+  .layout-tag.active {
+    color: var(--accent-text);
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+    background: var(--accent-weak);
+  }
+  .layout-tag.readonly { color: var(--faint); }
+  .layout-manage {
+    width: 100%;
+    text-align: left;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .layout-manage:hover { background: var(--accent-weak); }
+
+  .banner.readonly { background: var(--surface); }
+
+  .layout-dialog { width: 520px; }
+  #layoutManagerList { max-height: 360px; overflow: auto; }
+  .layout-item { position: relative; }
+  .layout-item + .layout-item { border-top: 1px solid var(--border); }
+  .layout-main {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 10px 36px 10px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .layout-main:hover { background: var(--surface-hover); }
+  .layout-item.active .layout-main { background: var(--accent-weak); }
+  .layout-main .layout-check { padding-top: 1px; }
+  .layout-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .layout-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .layout-desc { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
+  .layout-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-top: 1px; }
+  .layout-more { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; }
+  .layout-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 12px 9px 36px;
+  }
+  .layout-actions .btn { height: 24px; padding: 0 9px; font-size: 11px; }
+  .layout-actions .btn:disabled { opacity: 0.4; }
+  .layout-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
   .window-controls { display: flex; align-items: center; gap: 7px; margin-left: 4px; }
   .wc {
@@ -1007,7 +1160,7 @@
   <div class="preview-tools">
     <span class="hint">Preview state</span>
     <div class="seg" role="group" aria-label="Preview state">
-      <button class="seg-btn active" data-demo="default">Default</button>
+      <button class="seg-btn active" data-demo="default">Baseline</button>
       <button class="seg-btn" data-demo="test">Test press</button>
       <button class="seg-btn" data-demo="conflict">Conflict</button>
     </div>
@@ -1038,6 +1191,15 @@
             <span id="deviceChipBatteryText">62 %</span>
           </span>
           <span class="device-chip-chev" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </button>
+        <button class="layout-chip" id="layoutBtn" aria-haspopup="dialog" aria-expanded="false" title="Switch layout">
+          <span class="layout-chip-icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="4.3" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2.5" y="8.7" width="7.4" height="4.3" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+          </span>
+          <span class="layout-chip-name" id="layoutChipName">Coding</span>
+          <span class="layout-chip-chev" aria-hidden="true">
             <svg width="9" height="9" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </span>
         </button>
@@ -1074,6 +1236,17 @@
         <div id="deviceList"></div>
         <div class="menu-sep"></div>
         <div class="device-pair-hint">Add a remote with <code>atvvctl pair &lt;MAC&gt;</code>.</div>
+      </div>
+
+      <!-- Layout switcher -->
+      <div class="layout-pop" id="layoutPop" role="dialog" aria-label="Layouts" hidden>
+        <div class="pop-head">
+          <span class="pop-title">Layouts</span>
+          <span class="pop-hint" id="layoutPopDevice">Living room</span>
+        </div>
+        <div id="layoutList"></div>
+        <div class="menu-sep"></div>
+        <button class="layout-manage" id="layoutManage">Manage layouts…</button>
       </div>
 
       <!-- Menu popover -->
@@ -1121,6 +1294,13 @@
         </span>
         Press a remote key to test it. Shortcuts, volume, and dictation are suppressed.
         <button class="banner-action" id="bannerCancelTest">Cancel</button>
+      </div>
+      <div class="banner readonly" id="readonlyBanner" hidden>
+        <span class="banner-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+        </span>
+        Default is read-only. Duplicate it to edit the board.
+        <button class="banner-action" id="duplicateDefaultBanner">Duplicate</button>
       </div>
     </div>
 
@@ -1464,12 +1644,53 @@
       </div>
     </div>
 
+    <!-- ================= Layout manager ================= -->
+    <div class="scrim" id="layoutScrim" hidden>
+      <div class="dialog layout-dialog" role="dialog" aria-modal="true" aria-labelledby="layoutTitle" tabindex="-1">
+        <header class="dialog-head">
+          <div>
+            <h2 class="dialog-title" id="layoutTitle">Layouts</h2>
+            <p class="dialog-sub" id="layoutSub">Living room · miremote-rc003</p>
+          </div>
+          <button class="icon-btn" data-close="layout" aria-label="Close">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="dialog-body">
+          <div class="group" id="layoutManagerList"></div>
+          <div class="group" id="layoutFormGroup" hidden>
+            <div class="row">
+              <span class="row-label">Name</span>
+              <input class="input" id="layoutNameInput" spellcheck="false" autocomplete="off" placeholder="Coding">
+            </div>
+            <div class="row">
+              <span class="row-label">Description</span>
+              <input class="input" id="layoutDescInput" spellcheck="false" autocomplete="off" placeholder="Optional">
+            </div>
+          </div>
+          <p class="field-error" id="layoutFormError" hidden></p>
+          <p class="dialog-hint" id="layoutManagerHint">The active layout drives the board and the input runtime. The Default layout is read-only.</p>
+          <div class="layout-form-actions" id="layoutFormActions" hidden>
+            <button class="btn flat" id="layoutFormCancel">Cancel</button>
+            <button class="btn suggested" id="layoutFormSubmit">Create</button>
+          </div>
+        </div>
+        <footer class="dialog-foot">
+          <button class="btn flat" id="layoutNew">New layout…</button>
+          <span class="foot-spacer"></span>
+          <button class="btn flat" id="layoutRevert" hidden>Revert</button>
+          <button class="btn suggested" id="layoutApply" hidden>Apply</button>
+          <button class="btn flat" data-close="layout">Close</button>
+        </footer>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <div class="page-note">
   <span><strong>Board</strong> 12 × 3 slots · <strong>Editor</strong> modal + inline validation · <strong>States</strong> accent selected, amber conflict · <strong>Test</strong> pressed slot + explicit Run once.</span>
-  <span><strong>Devices</strong> the header chip switches the active remote and its mappings. <strong>Preview</strong> controls above the window are not app UI.</span>
+  <span><strong>Layouts</strong> the header chip switches the active layout; the manager edits it. <strong>Devices</strong> the device chip switches the remote. <strong>Preview</strong> controls above the window are not app UI.</span>
 </div>
 
 <script>
@@ -1530,6 +1751,7 @@
     KEY_ESC: "Escape",
     KEY_SPACE: "Space",
     KEY_TAB: "Tab",
+    KEY_PLAYPAUSE: "Play/Pause",
   };
 
   const PENCIL = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3.1 11.6 3.7 9 10.9 1.8a1.15 1.15 0 0 1 1.6 0l1.7 1.7a1.15 1.15 0 0 1 0 1.6l-7.2 7.2-2.6.6a.72.72 0 0 1-.8-.8Z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>';
@@ -1543,7 +1765,48 @@
   const slotKey = (button, trigger) => `${button}:${trigger}`;
   const defaultFor = (button, trigger) => buttonById(button)?.defaults[trigger] ?? null;
 
-  /* ---------- Devices and state ---------- */
+  /* ---------- Layouts, devices, and state ---------- */
+  const LAYOUTS = [
+    {
+      id: "default",
+      name: "Default",
+      description: "Profile defaults",
+      readonly: true,
+      map: {},
+    },
+    {
+      id: "coding",
+      name: "Coding",
+      description: "Enter/Escape navigation plus editor and browser shortcuts",
+      readonly: false,
+      map: {
+        "up:single": "combo:ctrl+alt+v",
+        "ok:single": "dictation:toggle",
+        "tv:single": "key:KEY_F11",
+      },
+    },
+    {
+      id: "media",
+      name: "Media",
+      description: "Playback and volume shortcuts",
+      readonly: false,
+      map: {
+        "up:single": "combo:ctrl+alt+v",
+        "ok:single": "key:KEY_PLAYPAUSE",
+        "tv:single": "key:KEY_F11",
+      },
+    },
+  ];
+  const INITIAL_LAYOUTS = LAYOUTS.map((layout) => ({
+    id: layout.id,
+    name: layout.name,
+    description: layout.description,
+    readonly: layout.readonly,
+    map: { ...layout.map },
+  }));
+  let savedLayouts = INITIAL_LAYOUTS.map((layout) => ({ ...layout, map: { ...layout.map } }));
+  const layoutById = (id) => LAYOUTS.find((layout) => layout.id === id) ?? LAYOUTS[0];
+
   const DEVICES = [
     {
       address: "C0:5D:39:F8:2D:4C",
@@ -1554,7 +1817,7 @@
       battery: 62,
       connected: true,
       lastSeen: "now",
-      overrides: {},
+      activeLayout: "coding",
     },
     {
       address: "D4:8A:FC:11:07:2E",
@@ -1565,19 +1828,12 @@
       battery: 40,
       connected: false,
       lastSeen: "2 days ago",
-      overrides: {
-        "up:single": "combo:ctrl+alt+v",
-        "ok:single": "dictation:toggle",
-        "tv:single": "key:KEY_F11",
-      },
+      activeLayout: "media",
     },
   ];
-  const INITIAL_DEVICE_MAPS = DEVICES.map((device) => ({ ...device.overrides }));
-  const deviceMaps = new Map(
-    DEVICES.map((device) => [device.address, { ...device.overrides }]),
-  );
   let activeDevice = 0;
-  let overrides = deviceMaps.get(DEVICES[activeDevice].address);
+  const currentLayout = () => layoutById(DEVICES[activeDevice].activeLayout);
+  let overrides = currentLayout().map;
   let selected = { button: "ok", trigger: "single" };
   let dirty = false;
   let testOn = false;
@@ -1591,6 +1847,10 @@
   let toastTimer = 0;
   let menuOpen = false;
   let devicePopOpen = false;
+  let layoutPopOpen = false;
+  let layoutFormMode = null;
+  let layoutFormTarget = null;
+  let openLayoutActions = null;
 
   const effective = (button, trigger) =>
     Object.prototype.hasOwnProperty.call(overrides, slotKey(button, trigger))
@@ -1816,6 +2076,127 @@
     });
   }
 
+  function renderLayoutChrome() {
+    const layout = currentLayout();
+    $("#layoutChipName").textContent = layout.name;
+    $("#layoutBtn").classList.toggle("readonly", layout.readonly);
+    $("#layoutBtn").title = `Switch layout · ${layout.name}`;
+    $("#layoutPopDevice").textContent = DEVICES[activeDevice].label || DEVICES[activeDevice].short;
+    $("#layoutSub").textContent =
+      `${DEVICES[activeDevice].label || DEVICES[activeDevice].name} · ${DEVICES[activeDevice].profile}`;
+    $("#readonlyBanner").hidden = !layout.readonly;
+    const managerOpen = activeScrim?.id === "layoutScrim";
+    const showManagerActions = managerOpen && dirty && !layoutFormMode;
+    $("#layoutApply").hidden = !showManagerActions;
+    $("#layoutRevert").hidden = !showManagerActions;
+  }
+
+  function renderLayoutList() {
+    const host = $("#layoutList");
+    host.textContent = "";
+    LAYOUTS.forEach((layout) => {
+      const active = layout.id === currentLayout().id;
+      const row = document.createElement("button");
+      row.className = `layout-pop-row${active ? " active" : ""}`;
+      row.dataset.layout = layout.id;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", active ? "true" : "false");
+
+      const check = document.createElement("span");
+      check.className = "layout-check";
+      check.innerHTML = active ? CHECK : "";
+
+      const copy = document.createElement("span");
+      copy.className = "layout-pop-copy";
+      const name = document.createElement("span");
+      name.className = "layout-pop-name";
+      name.textContent = layout.name;
+      const desc = document.createElement("span");
+      desc.className = "layout-pop-desc";
+      desc.textContent = layout.description;
+      copy.append(name, desc);
+
+      const tag = document.createElement("span");
+      tag.className = `layout-tag${layout.readonly ? " readonly" : ""}`;
+      tag.textContent = layout.readonly ? "Read-only" : "";
+
+      row.append(check, copy, tag);
+      host.append(row);
+    });
+  }
+
+  function renderLayoutManager() {
+    const host = $("#layoutManagerList");
+    host.textContent = "";
+    LAYOUTS.forEach((layout) => {
+      const active = layout.id === currentLayout().id;
+      const item = document.createElement("div");
+      item.className = `layout-item${active ? " active" : ""}`;
+      item.dataset.layout = layout.id;
+
+      const main = document.createElement("button");
+      main.className = "layout-main";
+      main.dataset.layout = layout.id;
+      main.setAttribute("aria-label", `${layout.name}${active ? ", active" : ""}`);
+      const check = document.createElement("span");
+      check.className = "layout-check";
+      check.innerHTML = active ? CHECK : "";
+      const copy = document.createElement("span");
+      copy.className = "layout-copy";
+      const name = document.createElement("span");
+      name.className = "layout-name";
+      name.textContent = layout.name;
+      const desc = document.createElement("span");
+      desc.className = "layout-desc";
+      desc.textContent = layout.description;
+      copy.append(name, desc);
+      const tags = document.createElement("span");
+      tags.className = "layout-tags";
+      if (active) {
+        const tag = document.createElement("span");
+        tag.className = "layout-tag active";
+        tag.textContent = "Active";
+        tags.append(tag);
+      }
+      if (layout.readonly) {
+        const tag = document.createElement("span");
+        tag.className = "layout-tag readonly";
+        tag.textContent = "Read-only";
+        tags.append(tag);
+      }
+      main.append(check, copy, tags);
+
+      const more = document.createElement("button");
+      more.className = "icon-btn layout-more";
+      more.dataset.more = layout.id;
+      more.setAttribute("aria-label", `Actions for ${layout.name}`);
+      more.textContent = "⋯";
+
+      const actions = document.createElement("div");
+      actions.className = "layout-actions";
+      actions.dataset.actions = layout.id;
+      actions.hidden = openLayoutActions !== layout.id;
+      for (const [action, label] of [
+        ["duplicate", "Duplicate"],
+        ["rename", "Rename"],
+        ["delete", "Delete"],
+        ["reset", "Reset"],
+      ]) {
+        const button = document.createElement("button");
+        button.className = "btn flat";
+        button.dataset.action = action;
+        button.dataset.layout = layout.id;
+        button.textContent = label;
+        if (layout.readonly && action !== "duplicate") button.disabled = true;
+        if (action === "delete" && active) button.disabled = true;
+        actions.append(button);
+      }
+
+      item.append(main, more, actions);
+      host.append(item);
+    });
+  }
+
   function renderChrome() {
     $("#dirtyBanner").hidden = !dirty;
     $("#testBanner").hidden = !testOn;
@@ -1865,6 +2246,9 @@
     renderChrome();
     renderDeviceChrome();
     renderDeviceList();
+    renderLayoutChrome();
+    renderLayoutList();
+    renderLayoutManager();
     renderTestBar();
   }
 
@@ -1876,7 +2260,7 @@
     toastTimer = window.setTimeout(() => el.classList.remove("show"), 2200);
   }
 
-  /* ---------- Menu and device switcher ---------- */
+  /* ---------- Menu, device, and layout switchers ---------- */
   function setMenu(open) {
     menuOpen = open;
     $("#menuPop").hidden = !open;
@@ -1885,6 +2269,9 @@
       devicePopOpen = false;
       $("#devicePop").hidden = true;
       $("#deviceBtn").setAttribute("aria-expanded", "false");
+      layoutPopOpen = false;
+      $("#layoutPop").hidden = true;
+      $("#layoutBtn").setAttribute("aria-expanded", "false");
     }
   }
 
@@ -1896,6 +2283,23 @@
       menuOpen = false;
       $("#menuPop").hidden = true;
       $("#menuBtn").setAttribute("aria-expanded", "false");
+      layoutPopOpen = false;
+      $("#layoutPop").hidden = true;
+      $("#layoutBtn").setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function setLayoutPop(open) {
+    layoutPopOpen = open;
+    $("#layoutPop").hidden = !open;
+    $("#layoutBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      menuOpen = false;
+      $("#menuPop").hidden = true;
+      $("#menuBtn").setAttribute("aria-expanded", "false");
+      devicePopOpen = false;
+      $("#devicePop").hidden = true;
+      $("#deviceBtn").setAttribute("aria-expanded", "false");
     }
   }
 
@@ -1909,26 +2313,53 @@
     setDevicePop(!devicePopOpen);
   });
 
+  $("#layoutBtn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setLayoutPop(!layoutPopOpen);
+  });
+
   $("#deviceList").addEventListener("click", (event) => {
     const row = event.target.closest(".device-row");
     if (row) switchDevice(Number(row.dataset.index));
   });
 
+  $("#layoutList").addEventListener("click", (event) => {
+    const row = event.target.closest(".layout-pop-row");
+    if (row) switchLayout(row.dataset.layout);
+  });
+
+  $("#layoutManage").addEventListener("click", () => {
+    setLayoutPop(false);
+    openLayoutManager();
+  });
+
   document.addEventListener("click", (event) => {
     if (menuOpen && !event.target.closest("#menuPop") && !event.target.closest("#menuBtn")) setMenu(false);
     if (devicePopOpen && !event.target.closest("#devicePop") && !event.target.closest("#deviceBtn")) setDevicePop(false);
+    if (layoutPopOpen && !event.target.closest("#layoutPop") && !event.target.closest("#layoutBtn")) setLayoutPop(false);
   });
 
   document.addEventListener("click", (event) => {
     const slot = event.target.closest(".slot");
     if (slot) {
+      if (currentLayout().readonly) {
+        toast("Default is read-only. Duplicate it to edit.");
+        return;
+      }
       openEditor(slot.dataset.button, slot.dataset.trigger);
       return;
     }
     const hotspot = event.target.closest(".hotspot");
     if (hotspot) {
-      if (hotspot.dataset.voice) openVoice();
-      else openEditor(hotspot.dataset.button, "single");
+      if (hotspot.dataset.voice) {
+        openVoice();
+        return;
+      }
+      if (currentLayout().readonly) {
+        toast("Default is read-only. Duplicate it to edit.");
+        return;
+      }
+      openEditor(hotspot.dataset.button, "single");
     }
   });
 
@@ -2174,8 +2605,16 @@
     }
 
     if (event.key === "Escape") {
+      if (activeScrim && activeScrim.id === "layoutScrim" && layoutFormMode) {
+        hideLayoutForm();
+        return;
+      }
       if (activeScrim) {
         closeDialog();
+        return;
+      }
+      if (layoutPopOpen) {
+        setLayoutPop(false);
         return;
       }
       if (devicePopOpen) {
@@ -2196,10 +2635,14 @@
     editor: "editorScrim",
     voice: "voiceScrim",
     device: "deviceScrim",
+    layout: "layoutScrim",
   };
 
   function openDialog(name) {
     setMenu(false);
+    setDevicePop(false);
+    setLayoutPop(false);
+    $("#toast").classList.remove("show");
     const scrim = document.getElementById(SCRIMS[name]);
     if (!scrim) return;
     lastFocused = document.activeElement;
@@ -2294,6 +2737,237 @@
     toast("Recording output key updated");
   });
 
+  /* ---------- Layout switching and manager ---------- */
+  function slugifyLayout(name) {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "layout";
+  }
+
+  function uniqueLayoutId(base) {
+    let id = base;
+    let suffix = 2;
+    while (LAYOUTS.some((layout) => layout.id === id)) {
+      id = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return id;
+  }
+
+  function layoutNameTaken(name, excludeId = null) {
+    const lower = name.trim().toLowerCase();
+    if (!lower || lower === "default") return true;
+    return LAYOUTS.some(
+      (layout) => layout.id !== excludeId && layout.name.toLowerCase() === lower,
+    );
+  }
+
+  function switchLayout(id) {
+    if (id === currentLayout().id) {
+      setLayoutPop(false);
+      return;
+    }
+    if (dirty) {
+      toast("Apply or revert before switching layouts.");
+      return;
+    }
+    const layout = layoutById(id);
+    DEVICES[activeDevice].activeLayout = layout.id;
+    overrides = layout.map;
+    dirty = false;
+    pressed = null;
+    selected = { button: "ok", trigger: "single" };
+    setLayoutPop(false);
+    refresh();
+    if (!activeScrim) toast(`Switched to ${layout.name}`);
+  }
+
+  function hideLayoutForm() {
+    layoutFormMode = null;
+    layoutFormTarget = null;
+    openLayoutActions = null;
+    $("#layoutManagerList").hidden = false;
+    $("#layoutFormGroup").hidden = true;
+    $("#layoutFormActions").hidden = true;
+    $("#layoutFormError").hidden = true;
+    $("#layoutManagerHint").hidden = false;
+    $("#layoutNew").hidden = false;
+    $("#layoutTitle").textContent = "Layouts";
+    $("#layoutSub").textContent =
+      `${DEVICES[activeDevice].label || DEVICES[activeDevice].name} · ${DEVICES[activeDevice].profile}`;
+    renderLayoutManager();
+    renderLayoutChrome();
+  }
+
+  function showLayoutForm(mode, target = null) {
+    const layout = mode === "rename" ? layoutById(target) : null;
+    layoutFormMode = mode;
+    layoutFormTarget = target;
+    $("#layoutManagerList").hidden = true;
+    $("#layoutFormGroup").hidden = false;
+    $("#layoutFormActions").hidden = false;
+    $("#layoutManagerHint").hidden = true;
+    $("#layoutNew").hidden = true;
+    $("#layoutFormError").hidden = true;
+    $("#layoutNameInput").value = layout ? layout.name : "";
+    $("#layoutDescInput").value = layout ? layout.description : "";
+    $("#layoutFormSubmit").textContent = mode === "rename" ? "Save" : "Create";
+    $("#layoutTitle").textContent = mode === "rename" ? "Rename layout" : "New layout";
+    renderLayoutChrome();
+    window.setTimeout(() => $("#layoutNameInput").focus(), 0);
+  }
+
+  function submitLayoutForm() {
+    const name = $("#layoutNameInput").value.trim();
+    const description = $("#layoutDescInput").value.trim();
+    const error = $("#layoutFormError");
+    const fail = (message) => {
+      error.textContent = message;
+      error.hidden = false;
+    };
+    if (!name) return fail("Enter a layout name.");
+    if (name.length > 40) return fail("Use 40 characters or fewer.");
+    if (description.length > 120) return fail("Use 120 characters or fewer.");
+    if (layoutNameTaken(name, layoutFormMode === "rename" ? layoutFormTarget : null)) {
+      return fail("That name is reserved or already used.");
+    }
+    if (layoutFormMode === "rename") {
+      const layout = layoutById(layoutFormTarget);
+      layout.name = name;
+      layout.description = description;
+      dirty = true;
+      hideLayoutForm();
+      refresh();
+      if (!activeScrim) toast("Layout renamed");
+      return;
+    }
+    const id = uniqueLayoutId(slugifyLayout(name));
+    LAYOUTS.push({ id, name, description, readonly: false, map: {} });
+    dirty = true;
+    hideLayoutForm();
+    refresh();
+    if (!activeScrim) toast("Layout created");
+  }
+
+  function duplicateLayout(source, activate = false) {
+    let name = `${source.name} copy`;
+    let suffix = 2;
+    while (LAYOUTS.some((layout) => layout.name.toLowerCase() === name.toLowerCase())) {
+      name = `${source.name} copy ${suffix}`;
+      suffix += 1;
+    }
+    const id = uniqueLayoutId(slugifyLayout(name));
+    const layout = {
+      id,
+      name,
+      description: source.description,
+      readonly: false,
+      map: { ...source.map },
+    };
+    LAYOUTS.push(layout);
+    dirty = true;
+    if (activate) {
+      DEVICES[activeDevice].activeLayout = id;
+      overrides = layout.map;
+      pressed = null;
+      selected = { button: "ok", trigger: "single" };
+    }
+    hideLayoutForm();
+    refresh();
+    if (!activeScrim) toast("Layout duplicated");
+  }
+
+  function handleLayoutAction(action, id) {
+    const layout = layoutById(id);
+    if (!layout) return;
+    if (action === "duplicate") {
+      duplicateLayout(layout, false);
+      return;
+    }
+    if (action === "rename") {
+      showLayoutForm("rename", id);
+      return;
+    }
+    if (action === "delete") {
+      if (layout.readonly) {
+        toast("Default is read-only.");
+        return;
+      }
+      if (DEVICES.some((device) => device.activeLayout === id)) {
+        toast("Cannot delete a layout that is active on a device.");
+        return;
+      }
+      LAYOUTS.splice(LAYOUTS.indexOf(layout), 1);
+      dirty = true;
+      openLayoutActions = null;
+      refresh();
+      if (!activeScrim) toast("Layout deleted");
+      return;
+    }
+    if (action === "reset") {
+      if (layout.readonly) {
+        toast("Default is read-only.");
+        return;
+      }
+      layout.map = {};
+      if (currentLayout().id === id) overrides = layout.map;
+      dirty = true;
+      openLayoutActions = null;
+      refresh();
+      if (!activeScrim) toast("Layout reset");
+    }
+  }
+
+  function openLayoutManager() {
+    setMenu(false);
+    setDevicePop(false);
+    setLayoutPop(false);
+    hideLayoutForm();
+    openDialog("layout");
+    refresh();
+    window.setTimeout(() => {
+      const active = $("#layoutManagerList .layout-item.active .layout-main");
+      if (active) active.focus();
+    }, 0);
+  }
+
+  $("#layoutManagerList").addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]");
+    if (action) {
+      handleLayoutAction(action.dataset.action, action.dataset.layout);
+      return;
+    }
+    const more = event.target.closest(".layout-more");
+    if (more) {
+      openLayoutActions = openLayoutActions === more.dataset.more ? null : more.dataset.more;
+      for (const strip of $$(".layout-actions", $("#layoutManagerList"))) {
+        strip.hidden = strip.dataset.actions !== openLayoutActions;
+      }
+      return;
+    }
+    const main = event.target.closest(".layout-main");
+    if (main) switchLayout(main.dataset.layout);
+  });
+
+  $("#layoutNew").addEventListener("click", () => showLayoutForm("new"));
+  $("#layoutFormCancel").addEventListener("click", hideLayoutForm);
+  $("#layoutFormSubmit").addEventListener("click", submitLayoutForm);
+  $("#layoutNameInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitLayoutForm();
+    } else if (event.key === "Escape") {
+      event.stopPropagation();
+      hideLayoutForm();
+    }
+  });
+  $("#duplicateDefaultBanner").addEventListener("click", () => {
+    duplicateLayout(currentLayout(), true);
+  });
+
   /* ---------- Device switching / revert / apply / test ---------- */
   function switchDevice(index) {
     if (index === activeDevice) {
@@ -2305,7 +2979,6 @@
       return;
     }
     const previous = DEVICES[activeDevice];
-    deviceMaps.set(previous.address, overrides);
     previous.connected = false;
     previous.lastSeen = "just now";
 
@@ -2313,12 +2986,13 @@
     const next = DEVICES[index];
     next.connected = true;
     next.lastSeen = "now";
-    overrides = deviceMaps.get(next.address) ?? Object.create(null);
+    overrides = currentLayout().map;
     dirty = false;
     testOn = false;
     pressed = null;
     selected = { button: "ok", trigger: "single" };
     setDevicePop(false);
+    setLayoutPop(false);
     setMenu(false);
     refresh();
     toast(`Switched to ${next.label || next.short} · ${next.address}`);
@@ -2326,21 +3000,33 @@
 
   function revert() {
     if (!dirty) return;
-    overrides = Object.create(null);
-    deviceMaps.set(DEVICES[activeDevice].address, overrides);
+    LAYOUTS.length = 0;
+    savedLayouts.forEach((layout) => LAYOUTS.push({ ...layout, map: { ...layout.map } }));
+    for (const device of DEVICES) {
+      if (!LAYOUTS.some((layout) => layout.id === device.activeLayout)) {
+        device.activeLayout = "default";
+      }
+    }
+    overrides = currentLayout().map;
+    dirty = false;
+    openLayoutActions = null;
+    refresh();
+    if (!activeScrim) toast("Changes reverted");
+  }
+
+  function applyConfig() {
+    if (!dirty) return;
+    savedLayouts = LAYOUTS.map((layout) => ({ ...layout, map: { ...layout.map } }));
     dirty = false;
     refresh();
-    toast("Changes reverted");
+    if (!activeScrim) toast("Configuration applied");
   }
 
   $("#revertBtn").addEventListener("click", revert);
   $("#bannerRevert").addEventListener("click", revert);
-  $("#applyBtn").addEventListener("click", () => {
-    if (!dirty) return;
-    dirty = false;
-    refresh();
-    toast("Configuration applied");
-  });
+  $("#applyBtn").addEventListener("click", applyConfig);
+  $("#layoutApply").addEventListener("click", applyConfig);
+  $("#layoutRevert").addEventListener("click", revert);
 
   function setTest(on) {
     testOn = on;
@@ -2367,13 +3053,21 @@
     closeDialog();
     setMenu(false);
     setDevicePop(false);
+    setLayoutPop(false);
+    layoutFormMode = null;
+    layoutFormTarget = null;
+    openLayoutActions = null;
+    LAYOUTS.length = 0;
+    INITIAL_LAYOUTS.forEach((layout) => LAYOUTS.push({ ...layout, map: { ...layout.map } }));
+    savedLayouts = INITIAL_LAYOUTS.map((layout) => ({ ...layout, map: { ...layout.map } }));
+    DEVICES[0].activeLayout = "coding";
+    DEVICES[1].activeLayout = "media";
     activeDevice = 0;
     for (let i = 0; i < DEVICES.length; i += 1) {
-      deviceMaps.set(DEVICES[i].address, { ...INITIAL_DEVICE_MAPS[i] });
       DEVICES[i].connected = i === 0;
       DEVICES[i].lastSeen = i === 0 ? "now" : "2 days ago";
     }
-    overrides = deviceMaps.get(DEVICES[0].address);
+    overrides = currentLayout().map;
     dirty = false;
     testOn = false;
     pressed = null;
@@ -2385,8 +3079,8 @@
       pressed = { button: "ok", trigger: "single" };
       selected = { button: "ok", trigger: "single" };
     } else if (name === "conflict") {
-      overrides["tv:single"] = "combo:ctrl+alt+v";
-      overrides["volume-up:single"] = "combo:ctrl+alt+v";
+      overrides["tv:single"] = "combo:ctrl+alt+shift+v";
+      overrides["volume-up:single"] = "combo:ctrl+alt+shift+v";
       dirty = true;
       selected = { button: "up", trigger: "single" };
     }
