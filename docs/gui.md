@@ -104,10 +104,18 @@ offers the output key, not gesture/action slots.
 - **Output key** is the synthetic key emitted while the recording key is held.
   The default is `DICTATE`; use **Learn Key** to capture another key or chord
   (for example `F23`), or enter `none` to disable the synthetic key.
+- **Declared key…** lists the recording keys advertised by the running
+  daemon's contract (`DICTATE`, `VOICECOMMAND`, `ASSISTANT`) plus
+  **None (disable synthetic key)**. The list comes from
+  `StatusView.contract.recording_keys`, not a GUI copy. Choosing an entry fills
+  the output field; the normal **Update** and **Apply** path still validates
+  and saves it.
+- The page shows the consumer name mapping (`Dictate`, `VoiceCommand`,
+  `Assistant` for fcitx5-vinput) and warns when `vinput` is `dbus` or `off`,
+  because those modes do not emit the synthetic key. Consumers must bind the
+  same key; the provider contract's `active_key` reports the current value.
 - **Update** changes the document; **Apply** in the header persists it through
   `SetConfig`. The physical F5 and the ATVV microphone path are unchanged.
-- Consumers such as fcitx5-vinput must bind the same output key; the provider
-  contract's `active_key` reports the current value.
 
 ## Test mode
 

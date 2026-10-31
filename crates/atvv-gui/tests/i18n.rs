@@ -8,7 +8,7 @@
 
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
-use atvv_gui::client::{Backend, DaemonStatus, DeviceInfo, HardwareInfo};
+use atvv_gui::client::{Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo};
 use atvv_gui::i18n::{self, Language};
 use atvv_gui::model::GuiModel;
 use atvv_protocol::RC003;
@@ -53,6 +53,16 @@ fn chinese_window() {
             firmware_revision: Some("2671".to_string()),
             software_revision: Some("A.7.0.6".to_string()),
         },
+        vinput: VinputInfo {
+            mode: "trigger".to_string(),
+        },
+        contract: ContractInfo {
+            recording_keys: vec![
+                "DICTATE".to_string(),
+                "VOICECOMMAND".to_string(),
+                "ASSISTANT".to_string(),
+            ],
+        },
     });
     window.window().present();
     gtk::test_widget_wait_for_draw(window.window());
@@ -84,6 +94,11 @@ fn chinese_window() {
     assert_eq!(combo_text(window.trigger_row(), 2).as_deref(), Some("长按"));
     assert_eq!(combo_text(window.type_row(), 0).as_deref(), Some("无操作"));
     assert_eq!(combo_text(window.type_row(), 4).as_deref(), Some("听写"));
+    assert_eq!(
+        window.voice_declared_button().label().as_deref(),
+        Some("声明键…")
+    );
+    assert!(window.voice_hint_text().contains("消费者必须绑定"));
 
     window.set_status(DaemonStatus {
         state: "disconnected".to_string(),
@@ -95,6 +110,7 @@ fn chinese_window() {
             battery_percent: Some(61),
             ..HardwareInfo::default()
         },
+        ..DaemonStatus::default()
     });
     assert_eq!(window.battery_text(), "61 % · 上次值");
 

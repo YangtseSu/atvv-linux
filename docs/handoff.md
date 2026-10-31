@@ -1,13 +1,13 @@
 # Handoff
 
-Updated: 2026-10-31
+Updated: 2026-11-01
 
 ## Project
 
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 171 passed, 5 ignored tests (two
+- Tests: `cargo test --workspace` → 174 passed, 5 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, the real-device
   GUI test, and a locale-detection test; the first three pass with
   `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
@@ -153,6 +153,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   unchanged. Home/Menu now use `KEY_HOME`/`KEY_COMPOSE` from the HID
   descriptor; capture suppresses mapped keys, exec, dictation, and voice
   session control. See `docs/gui.md` and `docs/plans/14-config-gui.md`.
+- **Recording-key declared chooser (2026-11-01)**: the recording-key page
+  offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
+  `ASSISTANT`) plus `None (disable synthetic key)` through **Declared key…**.
+  The menu is rebuilt from `StatusView.contract.recording_keys` only when the
+  list changes; selecting fills the free-form output field without saving.
+  The page shows the fcitx5 name mapping and warns when `vinput` is `dbus` or
+  `off`. GUI status now parses `contract` and `vinput`; UI/i18n tests cover
+  declared selection, `none`, custom `F23`, and the Chinese hint.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -361,6 +369,12 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 
 ## Verified
 
+- 2026-11-01 recording-key chooser: `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets -- -D warnings` clean;
+  `cargo test --workspace` → 174 passed, 5 ignored;
+  `xvfb-run -a cargo test -p atvv-gui --test ui` → 1 passed;
+  `xvfb-run -a cargo test -p atvv-gui --test i18n` → 1 passed, 1 ignored;
+  `cargo test -p atvv-gui --lib` → 21 passed.
 - 2026-10-31 step 20: the tag-triggered release workflow YAML parses; it
   builds x86_64 and aarch64 binaries on GitHub runners;
   `v0.1.0` is tagged; the AUR PKGBUILD pins the source archive checksum.

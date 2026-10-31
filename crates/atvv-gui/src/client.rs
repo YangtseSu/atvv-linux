@@ -31,6 +31,8 @@ pub struct DaemonStatus {
     pub last_error: Option<String>,
     pub device: DeviceInfo,
     pub hardware: HardwareInfo,
+    pub vinput: VinputInfo,
+    pub contract: ContractInfo,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -51,6 +53,20 @@ pub struct HardwareInfo {
     pub hardware_revision: Option<String>,
     pub firmware_revision: Option<String>,
     pub software_revision: Option<String>,
+}
+
+/// vinput integration mode shown on the recording-key page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct VinputInfo {
+    pub mode: String,
+}
+
+/// Provider contract fields the recording-key page needs.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct ContractInfo {
+    pub recording_keys: Vec<String>,
 }
 
 /// One logical button event forwarded by the daemon during capture.
@@ -365,4 +381,34 @@ fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
                 let _ = events.send(Event::SignalStreamEnded);
             });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_parses_contract_and_vinput_mode() {
+        let json = r#"{
+            "contract": {
+                "recording_keys": ["DICTATE", "VOICECOMMAND", "ASSISTANT"],
+                "active_key": "VOICECOMMAND"
+            },
+            "vinput": {"mode": "trigger", "trigger": "VOICECOMMAND"}
+        }"#;
+        let status: DaemonStatus = serde_json::from_str(json).expect("status JSON");
+        assert_eq!(
+            status.contract.recording_keys,
+            vec!["DICTATE", "VOICECOMMAND", "ASSISTANT"]
+        );
+        assert_eq!(status.vinput.mode, "trigger");
+    }
+
+    #[test]
+    fn missing_contract_defaults_to_empty() {
+        let status: DaemonStatus =
+            serde_json::from_str(r#"{"state":"ready"}"#).expect("status JSON");
+        assert!(status.contract.recording_keys.is_empty());
+        assert!(status.vinput.mode.is_empty());
+    }
 }

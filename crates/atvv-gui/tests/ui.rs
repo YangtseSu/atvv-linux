@@ -8,10 +8,11 @@
 
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
-use atvv_gui::client::{Backend, DaemonStatus, DeviceInfo, HardwareInfo};
+use atvv_gui::client::{Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo};
 use atvv_gui::model::GuiModel;
 use atvv_protocol::RC003;
 use atvv_protocol::profile::RemoteButton;
+use gtk::glib::variant::ToVariant;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
 
@@ -57,6 +58,16 @@ fn window_smoke() {
             firmware_revision: Some("2671".to_string()),
             software_revision: Some("A.7.0.6".to_string()),
         },
+        vinput: VinputInfo {
+            mode: "trigger".to_string(),
+        },
+        contract: ContractInfo {
+            recording_keys: vec![
+                "DICTATE".to_string(),
+                "VOICECOMMAND".to_string(),
+                "ASSISTANT".to_string(),
+            ],
+        },
     });
     assert_eq!(window.battery_text(), "62 %");
     assert_eq!(
@@ -77,6 +88,16 @@ fn window_smoke() {
         hardware: HardwareInfo {
             battery_percent: Some(61),
             ..HardwareInfo::default()
+        },
+        vinput: VinputInfo {
+            mode: "trigger".to_string(),
+        },
+        contract: ContractInfo {
+            recording_keys: vec![
+                "DICTATE".to_string(),
+                "VOICECOMMAND".to_string(),
+                "ASSISTANT".to_string(),
+            ],
         },
     });
     assert_eq!(window.battery_text(), "61 % · last known");
@@ -117,6 +138,33 @@ fn window_smoke() {
     assert!(window.voice_selected());
     assert_eq!(window.voice_value_row().text(), "DICTATE");
     assert!(!window.apply_button().is_sensitive());
+    assert!(window.voice_declared_button().is_visible());
+    assert!(window.voice_hint_text().contains("Consumers must bind"));
+    assert!(window.voice_hint_text().contains("Dictate"));
+
+    gtk::prelude::WidgetExt::activate_action(
+        window.window(),
+        "win.voice-key",
+        Some(&"VOICECOMMAND".to_variant()),
+    )
+    .expect("activate the declared-key action");
+    assert_eq!(window.voice_value_row().text(), "VOICECOMMAND");
+    window.voice_update_button().emit_clicked();
+    assert_eq!(
+        window.document().expect("document").trigger_key.as_deref(),
+        Some("VOICECOMMAND")
+    );
+    assert!(window.apply_button().is_sensitive());
+
+    gtk::prelude::WidgetExt::activate_action(
+        window.window(),
+        "win.voice-key",
+        Some(&"none".to_variant()),
+    )
+    .expect("activate the none choice");
+    assert_eq!(window.voice_value_row().text(), "none");
+    window.voice_update_button().emit_clicked();
+    assert_eq!(window.document().expect("document").trigger_key, None);
 
     window.voice_value_row().set_text("F23");
     window.voice_update_button().emit_clicked();

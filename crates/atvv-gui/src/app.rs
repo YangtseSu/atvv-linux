@@ -9,6 +9,7 @@ use std::time::Duration;
 use atvv_config::ConfigDocument;
 use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
+use gtk::glib::variant::ToVariant;
 use gtk::{gio, glib};
 use libadwaita as adw;
 
@@ -234,9 +235,12 @@ pub struct AppWindow {
     apply_action: gtk::Button,
     reset_action: gtk::Button,
     voice_value_row: adw::EntryRow,
+    voice_key_button: gtk::MenuButton,
+    voice_keys: RefCell<Vec<String>>,
     voice_learn_button: gtk::Button,
     voice_apply_button: gtk::Button,
     voice_reset_button: gtk::Button,
+    voice_hint: gtk::Label,
     voice_error: gtk::Label,
     allow_exec_row: adw::SwitchRow,
     test_result_row: adw::ActionRow,
@@ -436,9 +440,17 @@ impl AppWindow {
             ))
             .build();
         let voice_value_row = adw::EntryRow::builder().title(tr("Output key")).build();
+        let voice_key_button = gtk::MenuButton::builder()
+            .label(tr("Declared key…"))
+            .always_show_arrow(true)
+            .tooltip_text(tr("Choose a declared recording key"))
+            .build();
+        voice_key_button.add_css_class("flat");
+        voice_key_button.set_visible(false);
         let voice_learn_button = gtk::Button::with_label(tr("Learn Key"));
         voice_learn_button.add_css_class("flat");
         voice_learn_button.set_tooltip_text(Some(tr("Capture a key or chord for the output")));
+        voice_value_row.add_suffix(&voice_key_button);
         voice_value_row.add_suffix(&voice_learn_button);
         let voice_apply_row = adw::ActionRow::builder()
             .title(tr("Output key"))
@@ -451,6 +463,14 @@ impl AppWindow {
         voice_apply_button.add_css_class("suggested-action");
         voice_apply_row.add_suffix(&voice_reset_button);
         voice_apply_row.add_suffix(&voice_apply_button);
+        let voice_hint = gtk::Label::new(None);
+        voice_hint.add_css_class("caption");
+        voice_hint.add_css_class("dim-label");
+        voice_hint.set_wrap(true);
+        voice_hint.set_xalign(0.0);
+        voice_hint.set_margin_start(12);
+        voice_hint.set_margin_end(12);
+        voice_hint.set_margin_bottom(6);
         let voice_error = gtk::Label::new(None);
         voice_error.add_css_class("error");
         voice_error.add_css_class("caption");
@@ -463,6 +483,7 @@ impl AppWindow {
         voice_group.add(&voice_info);
         voice_group.add(&voice_value_row);
         voice_group.add(&voice_apply_row);
+        voice_group.add(&voice_hint);
         voice_group.add(&voice_error);
         voice_group.set_visible(false);
 
@@ -584,9 +605,12 @@ impl AppWindow {
             apply_action,
             reset_action,
             voice_value_row,
+            voice_key_button,
+            voice_keys: RefCell::new(Vec::new()),
             voice_learn_button,
             voice_apply_button,
             voice_reset_button,
+            voice_hint,
             voice_error,
             allow_exec_row,
             test_result_row,
@@ -765,6 +789,15 @@ impl AppWindow {
         ui.window.add_action(&revert);
 
         let this = Rc::clone(ui);
+        let voice_key = gio::SimpleAction::new("voice-key", Some(glib::VariantTy::STRING));
+        voice_key.connect_activate(move |_, parameter| {
+            if let Some(key) = parameter.and_then(|value| value.str()) {
+                this.choose_voice_key(key);
+            }
+        });
+        ui.window.add_action(&voice_key);
+
+        let this = Rc::clone(ui);
         let about = gio::SimpleAction::new("about", None);
         about.connect_activate(move |_, _| {
             let dialog = this.about_dialog();
@@ -815,6 +848,7 @@ impl AppWindow {
                 *self.status.borrow_mut() = Some(status);
                 self.refresh_title();
                 self.refresh_hardware();
+                self.refresh_voice_controls();
             }
             Event::Status(Err(error)) => {
                 if self.model.borrow().is_some() {
@@ -1043,6 +1077,11 @@ impl AppWindow {
             }
             Err(error) => self.show_action_error(&error),
         }
+    }
+
+    fn choose_voice_key(&self, key: &str) {
+        self.voice_value_row.set_text(key);
+        self.show_voice_error("");
     }
 
     fn apply_voice_key(&self) {
@@ -1279,6 +1318,7 @@ impl AppWindow {
     fn refresh_all(&self) {
         self.refresh_title();
         self.refresh_hardware();
+        self.refresh_voice_controls();
         let model = self.model.borrow();
         let Some(model) = model.as_ref() else {
             self.apply_button.set_sensitive(false);
@@ -1370,6 +1410,34 @@ impl AppWindow {
         self.hardware_group.set_visible(any);
     }
 
+    fn refresh_voice_controls(&self) {
+        let status = self.status.borrow();
+        let keys = status
+            .as_ref()
+            .map(|status| status.contract.recording_keys.as_slice())
+            .unwrap_or_default();
+        let mode = status
+            .as_ref()
+            .map(|status| status.vinput.mode.as_str())
+            .unwrap_or_default();
+
+        if self.voice_keys.borrow().as_slice() != keys {
+            self.voice_keys.borrow_mut().clear();
+            self.voice_keys.borrow_mut().extend_from_slice(keys);
+            if keys.is_empty() {
+                self.voice_key_button.set_visible(false);
+            } else {
+                let menu = declared_key_menu(keys);
+                self.voice_key_button.set_menu_model(Some(&menu));
+                self.voice_key_button.set_visible(true);
+            }
+        }
+        let hint = voice_controls_hint(mode);
+        if self.voice_hint.text().as_str() != hint {
+            self.voice_hint.set_text(&hint);
+        }
+    }
+
     fn refresh_editor(&self, model: &GuiModel) {
         if self.voice_selected.get() {
             self.key_group.set_visible(false);
@@ -1454,6 +1522,7 @@ impl AppWindow {
         *self.status.borrow_mut() = Some(status);
         self.refresh_title();
         self.refresh_hardware();
+        self.refresh_voice_controls();
     }
 
     #[doc(hidden)]
@@ -1558,6 +1627,18 @@ impl AppWindow {
 
     #[doc(hidden)]
     #[must_use]
+    pub fn voice_declared_button(&self) -> &gtk::MenuButton {
+        &self.voice_key_button
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_hint_text(&self) -> String {
+        self.voice_hint.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
     pub fn voice_update_button(&self) -> &gtk::Button {
         &self.voice_apply_button
     }
@@ -1605,6 +1686,58 @@ fn connect_timers(ui: &Rc<AppWindow>) {
     });
 }
 
+/// Menu model for the declared recording keys.
+///
+/// The key names come from the daemon contract; `win.voice-key` fills the
+/// output entry without saving, so the normal Update/Apply path still owns
+/// validation and persistence.
+fn declared_key_menu(keys: &[String]) -> gio::Menu {
+    let menu = gio::Menu::new();
+    let declared = gio::Menu::new();
+    for (index, key) in keys.iter().enumerate() {
+        let label = if index == 0 {
+            format!("{key} ({})", tr("Default"))
+        } else {
+            key.clone()
+        };
+        let item = gio::MenuItem::new(Some(&label), Some("win.voice-key"));
+        item.set_attribute_value("target", Some(&key.to_variant()));
+        declared.append_item(&item);
+    }
+    menu.append_section(None, &declared);
+
+    let extra = gio::Menu::new();
+    let none = gio::MenuItem::new(
+        Some(tr("None (disable synthetic key)")),
+        Some("win.voice-key"),
+    );
+    none.set_attribute_value("target", Some(&"none".to_variant()));
+    extra.append_item(&none);
+    menu.append_section(None, &extra);
+    menu
+}
+
+/// Consumer-side hint for the recording-key page.
+fn voice_controls_hint(mode: &str) -> String {
+    let bind = tr(
+        "Consumers must bind the same key. fcitx5-vinput uses Dictate, \
+         VoiceCommand, Assistant.",
+    );
+    match mode {
+        "dbus" => format!(
+            "{}\n{}",
+            tr("vinput is in D-Bus mode; the output key is not emitted."),
+            bind
+        ),
+        "off" => format!(
+            "{}\n{}",
+            tr("vinput integration is off; the output key is not emitted."),
+            bind
+        ),
+        _ => bind.to_string(),
+    }
+}
+
 #[must_use]
 fn trigger_label(trigger: Trigger) -> &'static str {
     match trigger {
@@ -1629,4 +1762,24 @@ fn trigger_from_name(name: &str) -> Option<Trigger> {
 #[must_use]
 pub fn build_window(application: Option<&adw::Application>, backend: Backend) -> Rc<AppWindow> {
     AppWindow::build(application, backend)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn voice_hint_warns_when_vinput_cannot_emit() {
+        let trigger = voice_controls_hint("trigger");
+        assert!(trigger.contains("Consumers must bind"));
+        assert!(!trigger.contains("not emitted"));
+
+        let dbus = voice_controls_hint("dbus");
+        assert!(dbus.contains("D-Bus"));
+        assert!(dbus.contains("not emitted"));
+
+        let off = voice_controls_hint("off");
+        assert!(off.contains("integration is off"));
+        assert!(off.contains("not emitted"));
+    }
 }

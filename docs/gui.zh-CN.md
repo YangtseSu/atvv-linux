@@ -89,10 +89,15 @@ atvv-config
 
 - **输出按键**是按住录音键时发出的合成按键。默认是 `DICTATE`；使用**学习按键**
   捕获另一个按键或组合键（例如 `F23`），或输入 `none` 禁用合成按键。
+- **声明键…**列出运行中守护进程契约声明的录音键（`DICTATE`、
+  `VOICECOMMAND`、`ASSISTANT`）以及**无（禁用合成按键）**。列表来自
+  `StatusView.contract.recording_keys`，不是 GUI 自己维护的副本。选择后只填入
+  输出字段；仍通过**更新**和**应用**校验并保存。
+- 页面显示消费者的名称映射（fcitx5-vinput 使用 `Dictate`、`VoiceCommand`、
+  `Assistant`），并在 `vinput` 为 `dbus` 或 `off` 时提示：这些模式不会发出
+  合成按键。消费者必须绑定相同的按键；提供方契约的 `active_key` 报告当前值。
 - **更新**会修改文档；顶部的**应用**通过 `SetConfig` 持久化。实体 F5 和 ATVV
   麦克风路径不变。
-- fcitx5-vinput 等消费者必须绑定相同的输出按键；提供方契约的 `active_key` 报告
-  当前值。
 
 ## 测试模式
 

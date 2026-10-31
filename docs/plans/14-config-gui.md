@@ -238,3 +238,11 @@ Manual:
   a hotspot that opens the recording-key page and a fixed-physical-key note.
   The recording-key page edits only the output `trigger_key`; action slots are
   not shown.
+- 2026-11-01 — recording-key page now offers the contract-declared keys:
+  `Declared key…` reads `StatusView.contract.recording_keys`
+  (`DICTATE`/`VOICECOMMAND`/`ASSISTANT`) plus `None (disable synthetic key)`
+  and fills the existing output field without saving. The page keeps the
+  free-form `F23`/chord/`none` path, shows the fcitx5 name mapping, and warns
+  when `vinput` is `dbus` or `off`. The GUI status model parses `contract` and
+  `vinput`; UI/i18n tests cover declared-key selection, `None`, and custom
+  `F23`.

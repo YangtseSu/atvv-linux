@@ -164,6 +164,21 @@ fn zh(text: &str) -> Option<&'static str> {
         "Capture a key or chord for the output" => "捕获用于输出的按键或组合键",
         "Emitted while the recording key is held; Apply saves." => "按住录音键时发出；应用后保存。",
         "Restore DICTATE" => "恢复为 DICTATE",
+        "Declared key…" => "声明键…",
+        "Choose a declared recording key" => "选择契约声明的录音键",
+        "Default" => "默认",
+        "None (disable synthetic key)" => "无（禁用合成按键）",
+        "Consumers must bind the same key. fcitx5-vinput uses Dictate, \
+         VoiceCommand, Assistant." => {
+            "消费者必须绑定相同的按键。fcitx5-vinput 使用 Dictate、\
+             VoiceCommand、Assistant。"
+        }
+        "vinput is in D-Bus mode; the output key is not emitted." => {
+            "vinput 处于 D-Bus 模式；不会发出输出按键。"
+        }
+        "vinput integration is off; the output key is not emitted." => {
+            "vinput 集成已关闭；不会发出输出按键。"
+        }
 
         // Test mode and advanced policy.
         "Test mode" => "测试模式",
