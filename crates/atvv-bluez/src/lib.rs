@@ -13,11 +13,13 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod hardware;
 mod link;
 mod pair;
 mod probe;
 
 pub use error::{BluezError, Result};
+pub use hardware::HardwareInfo;
 pub use link::{
     BluezConfig, BluezEvent, BluezLink, DEFAULT_CONNECT_TIMEOUT, DEFAULT_SERVICES_TIMEOUT,
     DEFAULT_WRITE_TIMEOUT, NotificationMode,

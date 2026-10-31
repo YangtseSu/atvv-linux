@@ -8,7 +8,7 @@
 
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::AppWindow;
-use atvv_gui::client::Backend;
+use atvv_gui::client::{Backend, DaemonStatus, DeviceInfo, HardwareInfo};
 use atvv_gui::model::GuiModel;
 use atvv_protocol::RC003;
 use atvv_protocol::profile::RemoteButton;
@@ -38,6 +38,45 @@ fn window_smoke() {
     atvv_gui::app::install_css();
 
     let window = window();
+    window.set_status(DaemonStatus {
+        state: "ready".to_string(),
+        connected: true,
+        streaming: false,
+        last_error: None,
+        device: DeviceInfo {
+            name: "Xiaomi Bluetooth Remote 2 Pro (RC003)".to_string(),
+            address: "C0:5D:39:F8:2D:4C".to_string(),
+        },
+        hardware: HardwareInfo {
+            battery_percent: Some(62),
+            manufacturer: Some("MIOM".to_string()),
+            model: Some("RC003".to_string()),
+            serial_number: Some("250519".to_string()),
+            hardware_revision: Some("V2.0".to_string()),
+            firmware_revision: Some("2671".to_string()),
+            software_revision: Some("A.7.0.6".to_string()),
+        },
+    });
+    assert_eq!(window.battery_text(), "62 %");
+    assert_eq!(window.hardware_text("Firmware").as_deref(), Some("2671"));
+    assert_eq!(
+        window.hardware_text("Serial number").as_deref(),
+        Some("250519")
+    );
+
+    window.set_status(DaemonStatus {
+        state: "disconnected".to_string(),
+        connected: false,
+        streaming: false,
+        last_error: None,
+        device: DeviceInfo::default(),
+        hardware: HardwareInfo {
+            battery_percent: Some(61),
+            ..HardwareInfo::default()
+        },
+    });
+    assert_eq!(window.battery_text(), "61 % · last known");
+
     assert!(window.window().get_visible());
     assert!(
         window.diagram().fixed().width() > 0,

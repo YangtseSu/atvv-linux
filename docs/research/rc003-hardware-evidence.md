@@ -394,3 +394,55 @@ and restarted afterwards.
   path. Release edges are forwarded so the GUI clears the pressed highlight.
 - The first run with the old profile showed Up/Right/Left/Down/OK/Volume/Back/
   TV/Power/Voice but no Home/Menu; the profile correction is the fix.
+
+## Battery and Device Information (2026-10-31)
+
+Same RC003 (`C0:5D:39:F8:2D:4C`, `hci0`), BlueZ 5.87, workspace `atvvd` on a
+private session bus. The installed user unit was stopped for the run and
+restarted afterwards.
+
+`org.bluez.Battery1` is present on the device object while the remote is
+connected; BlueZ caches the GATT Battery Service and exposes `Percentage` and
+`Source`:
+
+```text
+busctl --system get-property org.bluez \
+  /org/bluez/hci0/dev_C0_5D_39_F8_2D_4C org.bluez.Battery1 Percentage
+# y 62
+```
+
+The GATT Device Information Service (`0x180A`) is readable while connected:
+
+| Characteristic | Value |
+|---|---|
+| `0x2A29` Manufacturer Name | `MIOM` |
+| `0x2A24` Model Number | `RC003` |
+| `0x2A25` Serial Number | `250519` |
+| `0x2A27` Hardware Revision | `V2.0` |
+| `0x2A26` Firmware Revision | `2671` |
+| `0x2A28` Software Revision | `A.7.0.6` |
+
+The workspace daemon read the same values through `bluer` during `connect`
+and exposed them in `StatusView.hardware`. `atvvctl status` returned:
+
+```json
+"hardware": {
+  "battery_percent": 62,
+  "firmware_revision": "2671",
+  "hardware_revision": "V2.0",
+  "manufacturer": "MIOM",
+  "model": "RC003",
+  "serial_number": "250519",
+  "software_revision": "A.7.0.6"
+}
+```
+
+`atvvctl doctor` printed:
+
+```text
+hardware   ok   battery 62% · firmware 2671 · hw V2.0 · sw A.7.0.6 · serial 250519
+```
+
+The battery is a cached BlueZ property, not a per-poll GATT read. DIS
+characteristics are read once per connection. Both are passive: the daemon
+never writes to these services.

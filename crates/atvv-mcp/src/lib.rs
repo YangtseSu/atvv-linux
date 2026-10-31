@@ -195,8 +195,9 @@ fn tools() -> Value {
     json!([
         tool(
             "status",
-            "Daemon status as JSON: session state, device, caps, audio counters, \
-             input, vinput mode, contract, config, and the last error."
+            "Daemon status as JSON: session state, device, battery and hardware \
+             facts, caps, audio counters, input, vinput mode, contract, config, \
+             and the last error."
         ),
         tool(
             "contract",

@@ -23,11 +23,14 @@ use crate::audio::PcmSink;
 use crate::capture::{self, CaptureCell};
 use crate::exec::ExecEngine;
 use crate::status::{
-    AudioView, CapsView, ConfigCell, ConfigView, DeviceView, InputView, StatusCell, StatusView,
-    VinputView,
+    AudioView, CapsView, ConfigCell, ConfigView, DeviceView, HardwareView, InputView, StatusCell,
+    StatusView, VinputView,
 };
 use crate::transport::{Transport, TransportEvent};
 use crate::vinput::VinputControl;
+
+/// How often the daemon refreshes the cached battery while connected.
+const HARDWARE_REFRESH: Duration = Duration::from_secs(60);
 
 /// Request from D-Bus or the CLI.
 #[derive(Debug, Clone)]
@@ -190,6 +193,8 @@ pub struct Daemon {
     input_retry_at: Option<Instant>,
 
     connected: bool,
+    hardware: HardwareView,
+    next_hardware_at: Option<Instant>,
     last_status_at: Instant,
     last_error: Option<String>,
 
@@ -263,6 +268,7 @@ impl Daemon {
                 address: config.address.clone(),
                 transport: transport.kind().to_string(),
             },
+            hardware: HardwareView::default(),
             caps: None,
             audio: AudioView {
                 source: audio.name().to_string(),
@@ -324,6 +330,8 @@ impl Daemon {
             config_loaded: config.config_loaded,
             input_retry_at: None,
             connected: false,
+            hardware: HardwareView::default(),
+            next_hardware_at: None,
             last_status_at: Instant::now(),
             last_error: None,
             caps_deadline: None,
@@ -470,6 +478,7 @@ impl Daemon {
         // The HID-over-GATT event node appears at or shortly after the link;
         // try now and retry from `on_timers` if discovery is not ready yet.
         self.attach_input(Instant::now());
+        self.refresh_hardware(Instant::now());
         self.trace(format!("connected to {name} ({address})"));
         let get_caps = commands::get_caps();
         self.write(&get_caps);
@@ -487,6 +496,7 @@ impl Daemon {
         self.last_audio = None;
         self.next_keepalive = None;
         self.discard_until = None;
+        self.next_hardware_at = None;
         self.reconnect_at = Some(Instant::now() + self.reconnect_delay);
         self.trace(format!("disconnected: {reason}"));
         let actions = self.session.disconnect();
@@ -1063,6 +1073,14 @@ impl Daemon {
     fn on_timers(&mut self, now: Instant) {
         let mut changed = false;
 
+        if self.connected
+            && let Some(deadline) = self.next_hardware_at
+            && now >= deadline
+        {
+            self.refresh_hardware(now);
+            changed = true;
+        }
+
         if let Some(deadline) = self.caps_deadline
             && now >= deadline
         {
@@ -1146,6 +1164,14 @@ impl Daemon {
         }
     }
 
+    fn refresh_hardware(&mut self, now: Instant) {
+        match self.transport.hardware() {
+            Ok(info) => self.hardware = hardware_view(info),
+            Err(error) => self.trace(format!("hardware: {error}")),
+        }
+        self.next_hardware_at = Some(now + HARDWARE_REFRESH);
+    }
+
     fn status_view(&self) -> StatusView {
         let caps = self.session.caps().map(|caps| CapsView {
             version: caps.version.to_string(),
@@ -1193,6 +1219,7 @@ impl Daemon {
                 address: self.address.clone(),
                 transport: self.transport.kind().to_string(),
             },
+            hardware: self.hardware.clone(),
             caps,
             audio: AudioView {
                 source: self.audio.name().to_string(),
@@ -1231,6 +1258,18 @@ impl Daemon {
             SessionState::Disconnected => "disconnected",
         }
         .to_string()
+    }
+}
+
+fn hardware_view(info: atvv_bluez::HardwareInfo) -> HardwareView {
+    HardwareView {
+        battery_percent: info.battery_percent,
+        manufacturer: info.manufacturer,
+        model: info.model,
+        serial_number: info.serial_number,
+        hardware_revision: info.hardware_revision,
+        firmware_revision: info.firmware_revision,
+        software_revision: info.software_revision,
     }
 }
 

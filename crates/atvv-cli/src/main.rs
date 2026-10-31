@@ -1108,6 +1108,33 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
                 contract.active_key.as_deref().unwrap_or("none")
             ),
         ));
+
+        let hardware = &status.hardware;
+        let mut facts = vec![hardware.battery_percent.map_or_else(
+            || "battery unknown".to_string(),
+            |percent| format!("battery {percent}%"),
+        )];
+        if let Some(value) = &hardware.firmware_revision {
+            facts.push(format!("firmware {value}"));
+        }
+        if let Some(value) = &hardware.hardware_revision {
+            facts.push(format!("hw {value}"));
+        }
+        if let Some(value) = &hardware.software_revision {
+            facts.push(format!("sw {value}"));
+        }
+        if let Some(value) = &hardware.serial_number {
+            facts.push(format!("serial {value}"));
+        }
+        checks.push(Check::new(
+            "hardware",
+            if status.connected && hardware.battery_percent.is_some() {
+                CheckState::Ok
+            } else {
+                CheckState::Warn
+            },
+            facts.join(" · "),
+        ));
     } else {
         checks.push(Check::new(
             "source",

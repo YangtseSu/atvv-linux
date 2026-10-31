@@ -30,6 +30,7 @@ pub struct DaemonStatus {
     pub streaming: bool,
     pub last_error: Option<String>,
     pub device: DeviceInfo,
+    pub hardware: HardwareInfo,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -37,6 +38,19 @@ pub struct DaemonStatus {
 pub struct DeviceInfo {
     pub name: String,
     pub address: String,
+}
+
+/// Passive hardware facts reported by the daemon.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct HardwareInfo {
+    pub battery_percent: Option<u8>,
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub serial_number: Option<String>,
+    pub hardware_revision: Option<String>,
+    pub firmware_revision: Option<String>,
+    pub software_revision: Option<String>,
 }
 
 /// One logical button event forwarded by the daemon during capture.

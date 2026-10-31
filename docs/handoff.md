@@ -7,7 +7,7 @@ Updated: 2026-10-31
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 167 passed, 4 ignored tests (two
+- Tests: `cargo test --workspace` → 168 passed, 4 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, and the new
   real-device GUI test; the first three pass with `/dev/uinput` access).
 
@@ -170,6 +170,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
   now opens one PR per version update instead of grouped PRs. Rust 1.99
   clippy required let-chain collapses and an `as_chunks` cleanup in
   `atvv-input`, `atvv-bluez`, `atvv-daemon`, and `atvvctl`.
+- **16 hardware info (complete and verified)**: `StatusView.hardware` carries
+  the battery percentage from `org.bluez.Battery1` and the GATT Device
+  Information Service facts (firmware/hardware/software revisions, serial,
+  manufacturer, model). `atvv-bluez` reads them during connect/reconnect and
+  refreshes only the battery; the daemon refreshes every 60 s while connected
+  and keeps the last known values on disconnect. `atvvctl doctor` prints a
+  `hardware` line, `atvvctl status` and `atvv-mcp status` expose the JSON
+  object, and the GUI sidebar home shows a Battery row plus a Hardware group.
+  Real RC003 (2026-10-31): battery 62 %, firmware `2671`, HW `V2.0`, SW
+  `A.7.0.6`, serial `250519`. Evidence:
+  `docs/research/rc003-hardware-evidence.md`.
 
 ## Not implemented
 

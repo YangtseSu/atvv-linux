@@ -64,6 +64,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 | F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board |
+| G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -88,6 +89,7 @@ on approval/upstream; steps 11–13 are complete.
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 | `config get/set`, capture, and live apply are atomic |
 | 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
 | 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one |
+| 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
 
 ## Architecture contract
 
@@ -142,8 +144,10 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 ## Current state — 2026-10-31
 
-Steps 01–09 and 11–14 are implemented; step 14 awaits a recorded physical
-test-mode press. Step 07 ran on a real RC003
+Steps 01–09 and 11–14 are implemented. Step 16 adds passive hardware
+information (battery, firmware/revisions, serial, manufacturer, model) to
+`StatusView`, `atvvctl`, `atvv-mcp`, and the GUI home view. Step 07 ran on a
+real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire

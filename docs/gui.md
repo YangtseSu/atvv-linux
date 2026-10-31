@@ -46,6 +46,23 @@ scriptable surface.
 The layout is an `AdwNavigationSplitView`: at narrow widths the diagram and
 editor become separate pages, and selecting a hotspot opens the editor.
 
+## Device status
+
+The sidebar home view starts with a **Battery** row, followed by the remote
+diagram and a **Hardware** group. Both are read-only:
+
+- **Battery** shows the percentage BlueZ caches for the remote, with a level
+  icon. When the remote is disconnected the last known value is marked
+  `last known`; with no value it reads `Unknown`.
+- **Hardware** lists the Device Information Service facts: firmware, hardware
+  and software revisions, serial number, manufacturer, and model. Rows with no
+  value are hidden.
+
+The values come from `StatusView.hardware` over the daemon D-Bus API; the
+daemon refreshes the battery every 60 s while connected. The GUI itself never
+talks to BlueZ. The same object is available from `atvvctl status` and
+`atvv-mcp status`, and `atvvctl doctor` prints a one-line summary.
+
 ## Edit a mapping
 
 1. Click a key in the diagram.

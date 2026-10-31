@@ -41,6 +41,7 @@ pub struct StatusView {
     pub connected: bool,
     pub streaming: bool,
     pub device: DeviceView,
+    pub hardware: HardwareView,
     pub caps: Option<CapsView>,
     pub audio: AudioView,
     pub input: InputView,
@@ -60,6 +61,22 @@ pub struct DeviceView {
     pub model: String,
     pub address: String,
     pub transport: String,
+}
+
+/// Passive hardware facts from BlueZ.
+///
+/// `battery_percent` comes from `org.bluez.Battery1`; the revisions, serial,
+/// model, and manufacturer come from the GATT Device Information Service.
+/// Missing values stay `None`; consumers must render them as unavailable.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HardwareView {
+    pub battery_percent: Option<u8>,
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub serial_number: Option<String>,
+    pub hardware_revision: Option<String>,
+    pub firmware_revision: Option<String>,
+    pub software_revision: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

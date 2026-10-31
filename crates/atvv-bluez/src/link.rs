@@ -24,6 +24,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
 use crate::error::{BluezError, Result};
+use crate::hardware::{self, HardwareInfo};
 use crate::{atvv_uuid, build_runtime, parse_address};
 
 /// Default time to wait for a connection.
@@ -99,6 +100,7 @@ pub struct BluezLink {
     device: Device,
     address: String,
     device_name: String,
+    hardware: HardwareInfo,
     transmit: Characteristic,
     write_op: WriteOp,
     write_timeout: Duration,
@@ -127,22 +129,24 @@ impl BluezLink {
         // Bound the whole operation, not only the BlueZ `Connect` call: a
         // pending `Connect` can make property reads wait behind it.
         let total = connect_timeout + services_timeout + Duration::from_secs(5);
-        let (session, device, device_name, characteristics) = runtime.block_on(async {
-            bounded(total, "connect", async {
-                let session = BluezSession::new().await?;
-                let adapter = select_adapter(&session, adapter_name.as_deref()).await?;
-                if !adapter.is_powered().await? {
-                    adapter.set_powered(true).await?;
-                }
-                let device = adapter.device(address)?;
-                let device_name = device_name(&device, &address_text).await;
-                wait_connected(&device, connect_timeout).await?;
-                wait_services_resolved(&device, services_timeout).await?;
-                let characteristics = resolve_atvv(&device).await?;
-                Ok::<_, BluezError>((session, device, device_name, characteristics))
-            })
-            .await
-        })?;
+        let (session, device, device_name, characteristics, hardware) =
+            runtime.block_on(async {
+                bounded(total, "connect", async {
+                    let session = BluezSession::new().await?;
+                    let adapter = select_adapter(&session, adapter_name.as_deref()).await?;
+                    if !adapter.is_powered().await? {
+                        adapter.set_powered(true).await?;
+                    }
+                    let device = adapter.device(address)?;
+                    let device_name = device_name(&device, &address_text).await;
+                    wait_connected(&device, connect_timeout).await?;
+                    wait_services_resolved(&device, services_timeout).await?;
+                    let characteristics = resolve_atvv(&device).await?;
+                    let hardware = hardware::read(&device).await;
+                    Ok::<_, BluezError>((session, device, device_name, characteristics, hardware))
+                })
+                .await
+            })?;
 
         let mut link = Self {
             runtime,
@@ -150,6 +154,7 @@ impl BluezLink {
             device,
             address: address_text,
             device_name,
+            hardware,
             transmit: characteristics.transmit.clone(),
             write_op: characteristics.write_op,
             write_timeout: config.write_timeout,
@@ -179,6 +184,24 @@ impl BluezLink {
     #[must_use]
     pub fn device_name(&self) -> &str {
         &self.device_name
+    }
+
+    /// Last known hardware facts. DIS values are read at connect; the battery
+    /// is refreshed by [`Self::refresh_battery`].
+    #[must_use]
+    pub fn hardware(&self) -> &HardwareInfo {
+        &self.hardware
+    }
+
+    /// Update the cached battery from `org.bluez.Battery1`.
+    ///
+    /// BlueZ caches the GATT Battery Service, so this is a property read, not
+    /// a new GATT transaction. Errors and timeouts keep the previous value.
+    pub fn refresh_battery(&mut self) {
+        let device = self.device.clone();
+        if let Some(percent) = self.runtime.block_on(hardware::read_battery(&device)) {
+            self.hardware.battery_percent = Some(percent);
+        }
     }
 
     #[must_use]
@@ -223,18 +246,20 @@ impl BluezLink {
         let services_timeout = self.services_timeout;
         let address_text = self.address.clone();
         let total = connect_timeout + services_timeout + Duration::from_secs(5);
-        let (device_name, characteristics) = self.runtime.block_on(async {
+        let (device_name, characteristics, hardware) = self.runtime.block_on(async {
             bounded(total, "connect", async {
                 wait_connected(&device, connect_timeout).await?;
                 wait_services_resolved(&device, services_timeout).await?;
                 let characteristics = resolve_atvv(&device).await?;
                 let device_name = device_name(&device, &address_text).await;
-                Ok::<_, BluezError>((device_name, characteristics))
+                let hardware = hardware::read(&device).await;
+                Ok::<_, BluezError>((device_name, characteristics, hardware))
             })
             .await
         })?;
 
         self.device_name = device_name;
+        self.hardware = hardware;
         self.transmit = characteristics.transmit.clone();
         self.write_op = characteristics.write_op;
         self.start_notifications(&characteristics)?;

@@ -14,6 +14,8 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
+use atvv_bluez::HardwareInfo;
+
 /// A notification or link event from the device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportEvent {
@@ -56,6 +58,11 @@ pub trait Transport: Send {
     }
     /// Return one event, or `None` when `timeout` expires.
     fn poll(&mut self, timeout: Duration) -> Result<Option<TransportEvent>, TransportError>;
+    /// Current passive hardware facts. The default is an empty set; the mock
+    /// can carry canned values and BlueZ refreshes the battery.
+    fn hardware(&mut self) -> Result<HardwareInfo, TransportError> {
+        Ok(HardwareInfo::default())
+    }
     /// Write to the ATVV command characteristic.
     fn write_command(&mut self, bytes: &[u8]) -> Result<(), TransportError>;
     /// Ask the transport to re-establish the link after a disconnect.
@@ -76,6 +83,8 @@ pub struct MockConfig {
     pub response_delay: Duration,
     pub audio_start_delay: Duration,
     pub echo_delay: Duration,
+    /// Canned hardware facts returned by `Transport::hardware`.
+    pub hardware: HardwareInfo,
 }
 
 impl Default for MockConfig {
@@ -89,6 +98,7 @@ impl Default for MockConfig {
             response_delay: Duration::from_millis(5),
             audio_start_delay: Duration::from_millis(15),
             echo_delay: Duration::from_millis(20),
+            hardware: HardwareInfo::default(),
         }
     }
 }
@@ -338,6 +348,10 @@ impl Transport for MockTransport {
         &self.config.name
     }
 
+    fn hardware(&mut self) -> Result<HardwareInfo, TransportError> {
+        Ok(self.config.hardware.clone())
+    }
+
     fn poll(&mut self, timeout: Duration) -> Result<Option<TransportEvent>, TransportError> {
         let deadline = Instant::now() + timeout;
         loop {
@@ -426,6 +440,7 @@ impl Transport for MockTransport {
 pub struct BluezTransport {
     config: atvv_bluez::BluezConfig,
     link: Option<atvv_bluez::BluezLink>,
+    hardware: HardwareInfo,
     verbose: bool,
 }
 
@@ -435,6 +450,7 @@ impl BluezTransport {
         Self {
             config,
             link: None,
+            hardware: HardwareInfo::default(),
             verbose,
         }
     }
@@ -462,6 +478,7 @@ impl BluezTransport {
                 eprintln!("atvvd: AcquireNotify fallback: {acquire_error}");
             }
         }
+        self.hardware = link.hardware().clone();
         self.link = Some(link);
         Ok(())
     }
@@ -480,6 +497,14 @@ impl Transport for BluezTransport {
         self.link.as_ref().map_or("not connected", |link| {
             atvv_bluez::BluezLink::device_name(link)
         })
+    }
+
+    fn hardware(&mut self) -> Result<HardwareInfo, TransportError> {
+        if let Some(link) = self.link.as_mut() {
+            link.refresh_battery();
+            self.hardware = link.hardware().clone();
+        }
+        Ok(self.hardware.clone())
     }
 
     fn needs_connect(&self) -> bool {

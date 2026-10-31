@@ -167,6 +167,15 @@ fn mock_daemon_dbus_contract() {
 
     let (transport, mock) = MockTransport::new(MockConfig {
         address: ADDRESS.to_string(),
+        hardware: atvv_bluez::HardwareInfo {
+            battery_percent: Some(62),
+            manufacturer: Some("MIOM".to_string()),
+            model: Some("RC003".to_string()),
+            serial_number: Some("250519".to_string()),
+            hardware_revision: Some("V2.0".to_string()),
+            firmware_revision: Some("2671".to_string()),
+            software_revision: Some("A.7.0.6".to_string()),
+        },
         ..MockConfig::default()
     });
     let config_path = temp_config("reload");
@@ -203,6 +212,10 @@ fn mock_daemon_dbus_contract() {
     assert_eq!(status.device.id, RC003.id);
     assert_eq!(status.device.transport, "mock");
     assert_eq!(status.caps.as_ref().map(|caps| caps.frame_size), Some(120));
+    assert_eq!(status.hardware.battery_percent, Some(62));
+    assert_eq!(status.hardware.firmware_revision.as_deref(), Some("2671"));
+    assert_eq!(status.hardware.hardware_revision.as_deref(), Some("V2.0"));
+    assert_eq!(status.hardware.serial_number.as_deref(), Some("250519"));
 
     assert_eq!(client.devices().expect("devices"), vec![address]);
 

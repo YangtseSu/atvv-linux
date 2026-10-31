@@ -15,7 +15,7 @@ use libadwaita as adw;
 use adw::prelude::*;
 
 use crate::actions::{ActionDraft, ActionKind, DictationChoice};
-use crate::client::{Backend, ButtonSignal, DaemonStatus, Event};
+use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
 use crate::diagram::RemoteDiagram;
 use crate::keylearn;
 use crate::model::{GuiModel, button_label};
@@ -141,12 +141,71 @@ enum CaptureMode {
     Learn,
 }
 
+/// One Device Information Service fact shown in the Hardware group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HardwareField {
+    Firmware,
+    Hardware,
+    Software,
+    Serial,
+    Manufacturer,
+    Model,
+}
+
+impl HardwareField {
+    const ALL: [Self; 6] = [
+        Self::Firmware,
+        Self::Hardware,
+        Self::Software,
+        Self::Serial,
+        Self::Manufacturer,
+        Self::Model,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Firmware => "Firmware",
+            Self::Hardware => "Hardware revision",
+            Self::Software => "Software revision",
+            Self::Serial => "Serial number",
+            Self::Manufacturer => "Manufacturer",
+            Self::Model => "Model",
+        }
+    }
+
+    fn value(self, hardware: &HardwareInfo) -> Option<&str> {
+        match self {
+            Self::Firmware => hardware.firmware_revision.as_deref(),
+            Self::Hardware => hardware.hardware_revision.as_deref(),
+            Self::Software => hardware.software_revision.as_deref(),
+            Self::Serial => hardware.serial_number.as_deref(),
+            Self::Manufacturer => hardware.manufacturer.as_deref(),
+            Self::Model => hardware.model.as_deref(),
+        }
+    }
+}
+
+/// Battery icon name for a percentage.
+fn battery_icon(percent: u8) -> &'static str {
+    match percent {
+        80..=100 => "battery-full-symbolic",
+        40..=79 => "battery-good-symbolic",
+        20..=39 => "battery-low-symbolic",
+        1..=19 => "battery-caution-symbolic",
+        _ => "battery-empty-symbolic",
+    }
+}
+
 pub struct AppWindow {
     window: adw::ApplicationWindow,
     backend: Backend,
     model: RefCell<Option<GuiModel>>,
     status: RefCell<Option<DaemonStatus>>,
     title: adw::WindowTitle,
+    battery_row: adw::ActionRow,
+    battery_icon: gtk::Image,
+    hardware_group: adw::PreferencesGroup,
+    hardware_rows: Vec<(HardwareField, adw::ActionRow)>,
     stack: gtk::Stack,
     split: adw::NavigationSplitView,
     diagram: RemoteDiagram,
@@ -250,6 +309,19 @@ impl AppWindow {
         sidebar_content.set_margin_bottom(18);
         sidebar_content.set_margin_start(18);
         sidebar_content.set_margin_end(18);
+
+        let battery_row = adw::ActionRow::builder()
+            .title("Battery")
+            .subtitle("Unknown")
+            .build();
+        let battery_icon = gtk::Image::from_icon_name("battery-empty-symbolic");
+        battery_icon.set_pixel_size(18);
+        battery_icon.set_visible(false);
+        battery_row.add_suffix(&battery_icon);
+        let device_group = adw::PreferencesGroup::builder().title("Remote").build();
+        device_group.add(&battery_row);
+        sidebar_content.append(&device_group);
+
         sidebar_content.append(diagram.root());
         let legend = gtk::Label::new(Some(
             "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
@@ -260,6 +332,17 @@ impl AppWindow {
         legend.set_wrap(true);
         legend.set_justify(gtk::Justification::Center);
         sidebar_content.append(&legend);
+
+        let hardware_group = adw::PreferencesGroup::builder().title("Hardware").build();
+        hardware_group.set_visible(false);
+        let mut hardware_rows = Vec::new();
+        for field in HardwareField::ALL {
+            let row = adw::ActionRow::builder().title(field.label()).build();
+            row.set_visible(false);
+            hardware_group.add(&row);
+            hardware_rows.push((field, row));
+        }
+        sidebar_content.append(&hardware_group);
         sidebar_scroll.set_child(Some(&sidebar_content));
         let sidebar_page = adw::NavigationPage::new(&sidebar_scroll, "Remote");
 
@@ -455,6 +538,10 @@ impl AppWindow {
             model: RefCell::new(None),
             status: RefCell::new(None),
             title,
+            battery_row,
+            battery_icon,
+            hardware_group,
+            hardware_rows,
             stack,
             split,
             diagram,
@@ -708,6 +795,7 @@ impl AppWindow {
             Event::Status(Ok(status)) => {
                 *self.status.borrow_mut() = Some(status);
                 self.refresh_title();
+                self.refresh_hardware();
             }
             Event::Status(Err(error)) => {
                 if self.model.borrow().is_some() {
@@ -1148,6 +1236,7 @@ impl AppWindow {
 
     fn refresh_all(&self) {
         self.refresh_title();
+        self.refresh_hardware();
         let model = self.model.borrow();
         let Some(model) = model.as_ref() else {
             self.apply_button.set_sensitive(false);
@@ -1201,6 +1290,30 @@ impl AppWindow {
             Some(status) => format!("Disconnected · {}", status.state),
         };
         self.title.set_subtitle(&subtitle);
+    }
+
+    fn refresh_hardware(&self) {
+        let status = self.status.borrow();
+        let hardware = status.as_ref().map(|status| &status.hardware);
+        let connected = status.as_ref().is_some_and(|status| status.connected);
+        let percent = hardware.and_then(|hardware| hardware.battery_percent);
+        let (subtitle, icon) = match percent {
+            Some(percent) if connected => (format!("{percent} %"), battery_icon(percent)),
+            Some(percent) => (format!("{percent} % · last known"), battery_icon(percent)),
+            None => ("Unknown".to_string(), "battery-empty-symbolic"),
+        };
+        self.battery_row.set_subtitle(&subtitle);
+        self.battery_icon.set_icon_name(Some(icon));
+        self.battery_icon.set_visible(percent.is_some());
+
+        let mut any = false;
+        for (field, row) in &self.hardware_rows {
+            let value = hardware.and_then(|hardware| field.value(hardware));
+            row.set_subtitle(value.unwrap_or(""));
+            row.set_visible(value.is_some());
+            any |= value.is_some();
+        }
+        self.hardware_group.set_visible(any);
     }
 
     fn refresh_editor(&self, model: &GuiModel) {
@@ -1278,6 +1391,31 @@ impl AppWindow {
     #[must_use]
     pub fn window(&self) -> &adw::ApplicationWindow {
         &self.window
+    }
+
+    #[doc(hidden)]
+    pub fn set_status(&self, status: DaemonStatus) {
+        *self.status.borrow_mut() = Some(status);
+        self.refresh_title();
+        self.refresh_hardware();
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn battery_text(&self) -> String {
+        self.battery_row
+            .subtitle()
+            .map(|subtitle| subtitle.to_string())
+            .unwrap_or_default()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn hardware_text(&self, title: &str) -> Option<String> {
+        self.hardware_rows
+            .iter()
+            .find(|(field, _)| field.label() == title)
+            .and_then(|(_, row)| row.subtitle().map(|subtitle| subtitle.to_string()))
     }
 
     #[doc(hidden)]
