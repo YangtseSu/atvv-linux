@@ -203,6 +203,21 @@ per-session copies; `docs/plans/` remains the canonical plan.
   slots; the action editor becomes a modal dialog. GTK4/libadwaita and the
   original SVG stay; SayAll/Open Voice Bridge assets and code are not copied.
   Depends on step 14; see `docs/plans/15-mapping-board.md`.
+- **17 layout profiles (planned)**: add named user layouts (button slots plus
+  gesture timing) beside the device profile, with a read-only synthesized
+  `default`; schema v2, v1 migration, `SetLayout`/`LayoutChanged`, CLI and GUI
+  switching, and live apply. Depends on 13, 14, and 15; see
+  `docs/plans/17-layout-profiles.md` and
+  `docs/research/layout-profiles-presets.md`.
+- **18 layout presets (planned)**: ship read-only `media`, `coding`, and
+  `slides` templates that create editable user layouts; presets never become
+  live state and never contain `exec:`. Depends on 17; see
+  `docs/plans/18-layout-presets.md`.
+- **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
+  UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
+  UID trigger and only test a rewrite after a verified dump and restore. NFC
+  stays out of the daemon core. Needs an NFC reader; see
+  `docs/plans/B02-nfc-tag.md`.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
 power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07
@@ -216,6 +231,10 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - ATVV v1.0+ only; v0.4 is out of scope.
 - Rust 2024; MSRV 1.99 tracks the stable toolchain (zbus 6 needs 1.89,
   gtk4 0.11 needs 1.92); `atvv-protocol` is I/O-free.
+- `DeviceProfile` is hardware/firmware identity. User keymaps are separate
+  `Layout` objects (schema v2) with a read-only synthesized `default`;
+  presets are read-only templates that create user layouts. No automatic
+  per-app/focus switching.
 - Arch Linux packaging only; Debian/Fedora/Nix/Flatpak are out.
 - PipeWire service restart belongs to systemd (`PartOf=pipewire.service`,
   `Restart=always`), not to `atvv-audio`. Verified with a transient unit using

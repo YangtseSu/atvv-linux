@@ -19,6 +19,10 @@ not a second plan and it does not override `docs/plans/`.
 - [`vinput-upstream-api.md`](vinput-upstream-api.md) — fcitx5-vinput
   `bd7dd4365` D-Bus surface, capture-device ownership, addon-owned trigger
   keys, the external-start focus gap, and the resulting integration direction.
+- [`layout-profiles-presets.md`](layout-profiles-presets.md) — reference
+  models for named layouts and presets (Open Voice Bridge, mi-ao, vimo_remote,
+  sayall-omarchy, remote-mic-app), the two-layer conclusion, and the RC003 NFC
+  facts/unknowns.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -52,6 +56,9 @@ not a second plan and it does not override `docs/plans/`.
 | 10 vinput zero-config | `vinput-upstream-api.md`, `protocol-and-device.md` §8 |
 | 11 input backend | `consumer-keys.md`, `reference-projects.md` §License boundaries |
 | 12 integration contract | `../integrations/provider-contract.md`, `../decisions/0007-integration-direction.md` |
+| 17 layout profiles | `layout-profiles-presets.md` §1–§3, `../configuration.md` §Schema |
+| 18 layout presets | `layout-profiles-presets.md` §2–§3, the step 17 file |
+| B02 NFC | `layout-profiles-presets.md` §4, `rc003-hardware-evidence.md` |
 
 ## Current deltas after the research snapshot
 
@@ -88,6 +95,11 @@ implementation direction:
   (`VoiceCommand`, `Assistant`, `Dictate`) remain distinct. See
   [`consumer-keys.md`](consumer-keys.md) and
   [`../decisions/0006-evdevil-input-backend.md`](../decisions/0006-evdevil-input-backend.md).
+- **Layouts.** `DeviceProfile` remains the hardware/firmware identity. User
+  keymaps will be `Layout` objects in schema v2, with a read-only `default`
+  synthesized from the profile. Presets are read-only templates that create
+  user layouts; they never become the active document. See
+  [`layout-profiles-presets.md`](layout-profiles-presets.md).
 - **vinput upstream API.** A 2026-10-30 source review of fcitx5-vinput
   `bd7dd4365` reduced step 10's upstream scope to the consumer side: ATVV
   provides the PipeWire source and the `Dictate` key; vinput owns source

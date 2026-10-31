@@ -1,6 +1,7 @@
 # Reference projects and sources
 
-Pinned snapshots used for the research snapshot on 2026-10-29. Every project
+Pinned snapshots used for the research snapshots on 2026-10-29 and
+2026-10-31 (layout/preset/NFC research: `layout-profiles-presets.md`). Every project
 is identified by its GitHub URL and pinned commit; no local clone path is part
 of this repository. Code reuse follows the license table below.
 
@@ -10,9 +11,12 @@ of this repository. Code reuse follows the license table below.
 |---|---|---|---|---|
 | ATVVoice | <https://github.com/b0o/ATVVoice> | `v0.2.0-13-g0e8f641` | MIT | ATVV protocol, native PipeWire, D-Bus API |
 | sayall-omarchy | <https://github.com/fan-tastic-z/sayall-omarchy> | `4d10971` | MIT per `Cargo.toml`; no standalone `LICENSE` in snapshot | RC003 field behavior, input/gestures, pairing |
-| remote-mic-app | <https://github.com/HD838A/remote-mic-app> | `v2.0.0-470-gdec29b88` | GPL-3.0-only | Feature/behavior reference; macOS |
+| remote-mic-app | <https://github.com/HD838A/remote-mic-app> | `834d6a789e43` | GPL-3.0-only | Per-device layouts, base mapping + profile overrides; macOS |
 | fcitx5-vinput | <https://github.com/xifan2333/fcitx5-vinput> | `v2.4.2-106-gd9a409d` | GPL-3.0 | ASR/TTS surface, D-Bus interface |
-| Open Voice Bridge | <https://github.com/nijez/open-voice-bridge> | research snapshot | GPL-3.0 | Profile schema and layer architecture prior art |
+| Open Voice Bridge | <https://github.com/nijez/open-voice-bridge> | `1796b149f752` | GPL-3.0 | Hardware profiles, hotspot layout, per-device mapping |
+| mi-ao | <https://github.com/fanxeon/mi-ao> | `d6019bcede80` | MIT | Hardware calibration vs button-preset model |
+| vimo_remote | <https://github.com/zyxkv/vimo_remote> | `56963df494bf` | MIT | Cursor vs 3D-teleop mode switch |
+| remote-mic-app-windows | <https://github.com/GetSayAll/remote-mic-app-windows> | `6dcc34b663b0` | GPL-3.0-only | Public button-profile host; private preset implementation |
 
 `sayall-omarchy` has no top-level license file in the snapshot; its
 `Cargo.toml` declares `license = "MIT"`. If code is ever reused, preserve the
@@ -37,7 +41,10 @@ copyright and license notice and verify the upstream repository at that commit.
 |---|---|---|
 | ATVVoice | MIT | Yes, with copyright/license notice |
 | sayall-omarchy | MIT | Yes, with copyright/license notice; verify snapshot |
+| mi-ao | MIT | Yes, with copyright/license notice |
+| vimo_remote | MIT | Yes, with copyright/license notice |
 | remote-mic-app | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
+| remote-mic-app-windows | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
 | Open Voice Bridge | GPL-3.0 | **No** unless the whole combined work becomes GPL-3.0-only |
 | fcitx5-vinput | GPL-3.0 | Integrate over D-Bus; do not static-link or copy into a differently licensed work |
 | BlueZ / PipeWire / kernel | their licenses | Use public APIs only; do not patch or vendor |

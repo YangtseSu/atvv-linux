@@ -45,6 +45,7 @@ it can be picked up without re-deriving the design.
 | # | Step | Status | Depends on | Exit, in one line |
 |---|------|--------|------------|-------------------|
 | B01 | [Recording-key press and release actions](B01-recording-key-press-release-actions.md) | ⏸ backlog | 14 | one press and one release action run per edge while the mic, trigger key, and provider contract stay unchanged |
+| B02 | [NFC tag investigation and optional trigger](B02-nfc-tag.md) | ⏸ backlog | — (needs an NFC reader) | the RC003 tag's IC, UID, NDEF, and lock state are recorded, and a read-only trigger is demonstrated or the rewrite path is restored exactly |
 
 ## Scope
 
@@ -65,6 +66,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 | F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board |
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
+| H — Layout profiles | 17–18 | **planned**: named user layouts with a read-only default, plus built-in presets |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -90,6 +92,8 @@ on approval/upstream; steps 11–13 are complete.
 | 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
 | 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one |
 | 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
+| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a read-only default; the active layout is explicit and switches live |
+| 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 
 ## Architecture contract
 
@@ -146,8 +150,9 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 Steps 01–09 and 11–14 are implemented. Step 16 adds passive hardware
 information (battery, firmware/revisions, serial, manufacturer, model) to
-`StatusView`, `atvvctl`, `atvv-mcp`, and the GUI home view. Step 07 ran on a
-real RC003
+`StatusView`, `atvvctl`, `atvv-mcp`, and the GUI home view. Steps 17–18 are
+planned: named user layouts, then built-in presets. B02 is the NFC
+investigation backlog (it needs an NFC reader). Step 07 ran on a real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
 reconnect without a daemon restart. The run also fixed the resident PipeWire
@@ -239,9 +244,9 @@ replace the release package names. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
 sayall-style mapping board (central remote + per-button cards with all three
 slots) that keeps the same GTK4/libadwaita model, D-Bus API, and original SVG;
-no SayAll/Open Voice Bridge code or screenshots are copied. B01 is the first
-backlog entry: configurable press/release actions for the recording key. Step
-10 remains blocked on upstream review.
+no SayAll/Open Voice Bridge code or screenshots are copied. B01 and B02 are
+backlog entries: configurable press/release actions for the recording key, and
+the NFC tag investigation. Step 10 remains blocked on upstream review.
 
 ## Backlog after 14
 
@@ -249,5 +254,4 @@ backlog entry: configurable press/release actions for the recording key. Step
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Second ATVV v1.0 device to validate the profile abstraction.
-- Optional manual layers/profiles; no automatic per-app focus detection.
-- Optional import/export and config migration UI.
+- Layout import/export and a config migration UI.
