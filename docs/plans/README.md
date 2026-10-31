@@ -154,8 +154,12 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
 Step 19 completed the localization pass: the GTK app follows the desktop locale
 with an English/Simplified Chinese catalog, and the user-facing documents have
-linked `.zh-CN.md` siblings. Development records remain English. Steps 15 and
-17–18 remain planned; step 10 remains blocked on upstream review.
+linked `.zh-CN.md` siblings. Step 20 prepared the first release: the tag
+`v0.1.0`, the tag-triggered release workflow, and one split AUR pkgbase
+`atvv` (`atvv`, `atvv-gui`) plus one split VCS pkgbase `atvv-git` outside the
+repository. Both declare `x86_64` and `aarch64`; the release push is pending
+approval. Steps 15 and 17–18 remain planned; step 10 remains blocked on
+upstream review.
 
 Steps 01–09, 11–14, 16, and 19 are implemented. Step 16 adds passive hardware
 information (battery, firmware/revisions, serial, manufacturer, model) to
@@ -259,7 +263,6 @@ the NFC tag investigation. Step 10 remains blocked on upstream review.
 
 ## Backlog after 14
 
-- AUR/release packaging for the GUI; AppStream and screenshots.
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Second ATVV v1.0 device to validate the profile abstraction.

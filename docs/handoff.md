@@ -193,6 +193,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   have linked `.zh-CN.md` siblings (README, configuration, GUI, device
   support, all integration guides, Arch package README); development records
   stay English. See `docs/plans/19-i18n-and-bilingual-docs.md`.
+- **20 first release and external packaging (prepared, push pending)**:
+  `.github/workflows/release.yml` publishes the tag archive and checksum;
+  `v0.1.0` is tagged locally. Arch recipes are outside the repository: one
+  split AUR pkgbase `atvv` (`atvv`, `atvv-gui`) under `~/aur/atvv`, and one
+  split VCS pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`) in the personal
+  `arch-pkgs` repository. Both declare `x86_64` and `aarch64`; aarch64 was not
+  built here. The split Cargo build compiles the shared graph once. See
+  `docs/plans/20-release-and-external-packaging.md`.
 
 ## Not implemented
 
@@ -296,15 +304,16 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - The RC003 mic is gated by the physical voice key; host `MIC_OPEN` alone
   yields `AUDIO_START` and then a frame timeout. Voice-key edges drive both
   `MIC_OPEN`/`MIC_CLOSE` and the synthetic trigger.
-- Package facts: `atvv-linux-git` (version
-  `0.1.0.r<commit-count>.g<short-hash>`) and `atvv-linux-gui-git`; binaries
-  `atvvd`, `atvvctl`, `atvv-mcp`, `atvv-config`; user unit at
+- Package facts: AUR split pkgbase `atvv` (`atvv`, `atvv-gui`) and external
+  VCS pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`); binaries `atvvd`,
+  `atvvctl`, `atvv-mcp`, `atvv-config`; user unit at
   `/usr/lib/systemd/user/atvvd.service`; udev rule
   `/usr/lib/udev/rules.d/70-atvv-linux.rules`; modules-load
   `/usr/lib/modules-load.d/atvv-linux.conf`; no system D-Bus policy.
-- The Arch package is a split VCS package (`atvv-linux-git`,
-  `atvv-linux-gui-git`) built from the local HEAD; `makepkg` compiles release
-  binaries once, keeps `src/atvv-linux-git/target/`, and leaves tests to CI.
+- The Arch recipes live outside this repository. The repository carries no
+  PKGBUILD. `atvv`/`atvv-gui` build from the release archive; the VCS pair
+  tracks the GitHub default branch. One Cargo invocation builds both split
+  packages; tests stay in CI.
 - Man pages are generated from clap by `atvvctl manpages`; `atvvctl
   completions <shell>` prints completions. `atvvd` shares its clap definition
   from `atvv-daemon/src/cli.rs`.
@@ -351,6 +360,15 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 
 ## Verified
 
+- 2026-10-31 step 20: the tag-triggered release workflow YAML parses;
+  `v0.1.0` is tagged; `atvv-linux-0.1.0.tar` SHA-256 is
+  `d3aa969a4eda7d06cf4d8cfd4220057aebae439b21edc764966f98f008ef8e86`.
+  The split AUR pkgbase built `atvv` (6.4 MiB / 18.1 MB installed) and
+  `atvv-gui` (1.3 MiB / 3.34 MB installed) in one 86 s run with the existing
+  `$srcdir` (Cargo 1m20s). `namcap PKGBUILD` is clean; package warnings are
+  the expected implicit libraries and runtime-service notes. The AUR split
+  repository and the `arch-pkgs` split `atvv-git` pkgbase are committed.
+  `aarch64` is declared but not built on this host.
 - 2026-10-31 step 19: `cargo fmt --all -- --check` and
   `cargo clippy --workspace --all-targets -- -D warnings` are clean;
   `cargo test --workspace` → 171 passed, 5 ignored;
@@ -486,11 +504,13 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Step 20 (first release and external packaging) is in progress.** The
-repository now carries `.github/workflows/release.yml` and no PKGBUILD. The
-remaining work is the `v0.1.0` tag/release, the AUR package repositories
-`atvv` and `atvv-gui`, and the `atvv-git`/`atvv-gui-git` recipes in the
-personal `arch-pkgs` repository. See
+**Step 20 (first release and external packaging) is prepared; the release push
+is pending approval.** The tag `v0.1.0` points to the release commit. Push
+`main` and the tag to `origin`; the tag workflow then creates the GitHub
+release with `atvv-linux-0.1.0.tar` and its SHA-256. The AUR repository
+`~/aur/atvv` is a split pkgbase containing `atvv` and `atvv-gui`; the personal
+`arch-pkgs` repository contains the split `atvv-git` pkgbase
+(`atvv-git`/`atvv-gui-git`). The repository carries no PKGBUILD. See
 `docs/plans/20-release-and-external-packaging.md`.
 
 **Step 19 (localization) is complete.** The GUI follows the desktop locale
@@ -506,10 +526,10 @@ the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: install the `atvv-linux-git` packages; then start step 15.
-In parallel, wait for upstream review on PR #493; after it merges, rebase PR
-#494 onto `main`, then PR #495, rebuild vinput, and record the real auto-bind
-acceptance.
+Immediate action: push `main` and tag `v0.1.0` to `origin`, then verify the
+release asset checksum; start step 15 after that. In parallel, wait for
+upstream review on PR #493; after it merges, rebase PR #494 onto `main`, then
+PR #495, rebuild vinput, and record the real auto-bind acceptance.
 
 ## Commands
 
