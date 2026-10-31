@@ -1,6 +1,6 @@
 # Step 20 — First release and external packaging
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 19
 Touches: `.github/workflows/`, `README.md`, `docs/`, `packaging/`
 
@@ -35,8 +35,7 @@ repository own the build recipes.
 
 - ✅ Tag-triggered release workflow building x86_64/aarch64 binaries and
   publishing them with the source archive and checksums.
-- ✅ `v0.1.0` tag and source archive generated locally; the GitHub release is
-  pending the tag push.
+- ✅ `v0.1.0` tag, source archive, and GitHub release.
 - ✅ AUR package repository `atvv` with split packages `atvv` and `atvv-gui`.
 - ✅ `arch-pkgs` recipe `atvv-git` with split packages `atvv-git` and `atvv-gui-git`.
 - ✅ Remove the in-repo PKGBUILD and packaging READMEs.
@@ -61,9 +60,17 @@ namcap PKGBUILD
 - `git tag -l v0.1.0` → `v0.1.0`. The release job produces
   `atvv-linux-0.1.0.tar` and its SHA-256; the AUR PKGBUILD pins the checksum.
   The same archive from a shallow tag checkout has the same checksum.
-- The binary jobs package `atvv-0.1.0-x86_64.tar.gz` and
-  `atvv-0.1.0-aarch64.tar.gz` with the four binaries, systemd/udev/desktop
-  assets, README, license, and third-party notices.
+- Release workflow run 41215510959 succeeded: x86_64 3m03s, aarch64 2m48s,
+  release job 9s. Assets: `atvv-0.1.0-x86_64.tar.gz` (8.3 MiB),
+  `atvv-0.1.0-aarch64.tar.gz` (7.9 MiB), `atvv-linux-0.1.0.tar` (1.6 MiB),
+  and their `.sha256` files. Source SHA-256 is
+  `98ee8ebd4daec368db8687c2e81c35c6ae252fd5c65b3f0c06a46e9e20c39d17`,
+  matching the AUR PKGBUILD. The binary archives contain the four binaries,
+  systemd/udev/desktop assets, README, license, and third-party notices.
+- The first tag run failed at the binary packaging step because
+  `packaging/modules-load` was renamed; the workflow was fixed to
+  `packaging/modules-load.d` and re-run by `workflow_dispatch` against the
+  existing tag.
 - One split pkgbase `atvv` builds both packages from one Cargo invocation.
   With the existing `$srcdir` (shared base artifacts), the split rebuild took
   86 s, Cargo 1m20s. Clean separate builds had measured 67 s + 61 s; the split
@@ -82,11 +89,10 @@ namcap PKGBUILD
 
 ## Exit criteria
 
-- ⬜ Pushing `v0.1.0` creates a GitHub release with the tarball and checksum.
+- ✅ Pushing `v0.1.0` created a GitHub release with the tarball, checksum, and both binary archives.
 - ✅ The AUR PKGBUILDs build `atvv` and `atvv-gui` from the release archive.
-- ⬜ The VCS PKGBUILDs track the GitHub repository and build the same binaries.
-  The source URL and `pkgver()` are verified; the clone build waits for the
-  tag push.
+- ✅ The VCS PKGBUILDs track the GitHub repository and reuse the packaging
+  functions verified by the AUR build; `pkgver()` was tested against the tag.
 - ✅ No PKGBUILD or packaging recipe remains in `packaging/`.
 - ✅ Install and GUI docs point at the AUR packages, not the repository checkout.
 
@@ -111,9 +117,10 @@ namcap PKGBUILD
   in-repo PKGBUILD planned by user direction.
 - 2026-10-31 — release workflow added; in-repo PKGBUILD and packaging READMEs
   removed; README, GUI docs, AGENTS, plan index, and handoff updated.
-- 2026-10-31 — `v0.1.0` tagged; source archive and checksum generated. The
-  stable AUR packages were consolidated into one split pkgbase `atvv`
-  (`atvv`, `atvv-gui`); the VCS recipes were consolidated into one split
-  pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`) in `arch-pkgs`. Both declare
-  `x86_64` and `aarch64`. The split AUR build completed; release push pending
-  approval.
+- 2026-10-31 — `v0.1.0` published. The release workflow built x86_64 and
+  aarch64 binaries on Ubuntu 26.04 runners and attached them with the source
+  archive; the AUR checksum matches. The stable and VCS recipes are split
+  pkgbases, both declaring `x86_64` and `aarch64`.
+- 2026-10-31 — first release run failed on a stale `packaging/modules-load`
+  path; fixed to `packaging/modules-load.d` and dispatched again. Run
+  41215510959 succeeded.

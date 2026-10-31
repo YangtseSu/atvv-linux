@@ -505,13 +505,10 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Step 20 (first release and external packaging) is prepared; the release push
-is pending approval.** The tag `v0.1.0` points to the release commit. Push
-`main` and the tag to `origin`; the tag workflow then creates the GitHub
-release with `atvv-linux-0.1.0.tar` and its SHA-256. The AUR repository
-`~/aur/atvv` is a split pkgbase containing `atvv` and `atvv-gui`; the personal
-`arch-pkgs` repository contains the split `atvv-git` pkgbase
-(`atvv-git`/`atvv-gui-git`). The repository carries no PKGBUILD. See
+**Step 20 is complete and published.** The tag `v0.1.0`, the source archive,
+and the x86_64/aarch64 binary archives are on the GitHub release. The AUR
+split pkgbase `atvv` and the personal `arch-pkgs` split pkgbase `atvv-git`
+are ready; the repository carries no PKGBUILD. See
 `docs/plans/20-release-and-external-packaging.md`.
 
 **Step 19 (localization) is complete.** The GUI follows the desktop locale
@@ -527,10 +524,9 @@ the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: push `main` and tag `v0.1.0` to `origin`, then verify the
-release asset checksum; start step 15 after that. In parallel, wait for
-upstream review on PR #493; after it merges, rebase PR #494 onto `main`, then
-PR #495, rebuild vinput, and record the real auto-bind acceptance.
+Immediate action: start step 15. In parallel, wait for upstream review on PR
+#493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
+vinput, and record the real auto-bind acceptance.
 
 ## Commands
 
