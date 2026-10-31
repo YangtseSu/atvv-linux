@@ -72,6 +72,9 @@ single = "key:KEY_UP"
 - Limits: at most 32 layouts; name 1–40 chars; description at most 120 chars.
 - A v2 document must not contain the v1 top-level `[buttons]` or `[gesture]`
   tables.
+- Per-device layout assignment is step 21. Keep layout records separate and
+  reference them by id; step 21 adds the device registry and `active_device`
+  without changing the layout payload.
 
 ### Migration
 
@@ -114,8 +117,11 @@ single = "key:KEY_UP"
 
 ## GUI
 
-- A layout selector in the sidebar home view (near the battery row) shows the
-  active layout and opens a manager.
+- The layout selector/manager UI is **not decided** yet. The step 15 board is
+  the shell; choose a header chip/popover or a dialog in this step. The
+  previous sidebar selector is obsolete because the board replaced the split
+  view. The step 15 HTML reference does not define this UI; it is the board
+  shell only.
 - Manager: Default (read-only) plus user layouts; New, Duplicate, Rename,
   Delete, Reset. The active layout is marked.
 - Switching uses `SetLayout` and refreshes the board/editor immediately.

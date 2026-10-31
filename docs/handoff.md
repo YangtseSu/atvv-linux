@@ -20,9 +20,20 @@ Updated: 2026-11-01
 4. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
 5. `docs/decisions/0008-gui-toolkit.md` — GTK4/libadwaita/GNOME HIG.
 6. The next step file and its research links before editing code.
+7. For step 15, the interface reference
+   [`docs/plans/15-mapping-board.html`](plans/15-mapping-board.html).
 
 This file is updated in place at the end of every step/session. Do not create
 per-session copies; `docs/plans/` remains the canonical plan.
+
+## Design reference
+
+- `docs/plans/15-mapping-board.html` is the committed interactive interface
+  reference for the step 15 mapping board: three-column layout, per-button
+  cards, modal action editor, banners, test bar, and header device chip. It is
+  a design artifact, not shipped code. The device popover and per-device maps
+  preview step 21; the second remote is illustrative. Step 17's
+  layout-selector UI is still undecided.
 
 ## Completed
 
@@ -231,7 +242,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   inspector with a central remote and per-button cards showing all three
   slots; the action editor becomes a modal dialog. GTK4/libadwaita and the
   original SVG stay; SayAll/Open Voice Bridge assets and code are not copied.
-  Depends on step 14; see `docs/plans/15-mapping-board.md`.
+  The interface reference is `docs/plans/15-mapping-board.html`; it previews
+  the step 21 device chip/popover and per-device maps. Depends on step 14; see
+  `docs/plans/15-mapping-board.md`.
 - **17 layout profiles (planned)**: add named user layouts (button slots plus
   gesture timing) beside the device profile, with a read-only synthesized
   `default`; schema v2, v1 migration, `SetLayout`/`LayoutChanged`, CLI and GUI
@@ -242,6 +255,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `slides` templates that create editable user layouts; presets never become
   live state and never contain `exec:`. Depends on 17; see
   `docs/plans/18-layout-presets.md`.
+- **21 multi-device switching (planned)**: one active device at a time, a
+  known-device registry, `SelectDevice`/`GetDevices`/`DeviceChanged`, and
+  per-device layouts. The step 15 reference previews the device chip/popover.
+  Simultaneous devices are out of scope. Depends on 06, 13, 15, and 17; see
+  `docs/plans/21-multi-device.md`.
 - **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
   UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
   UID trigger and only test a rewrite after a verified dump and restore. NFC
@@ -539,9 +557,13 @@ no PKGBUILD. See `docs/plans/20-release-and-external-packaging.md`.
 (English or Simplified Chinese) and the user-facing docs have Chinese
 counterparts. Step 15 remains the next UI step: it replaces the single-key
 inspector with a sayall-style board (central remote + per-key
-single/double/long cards) while staying GTK4/libadwaita. See
-`docs/plans/15-mapping-board.md`. B01 (recording-key press/release actions) is
-backlog and does not block step 15.
+single/double/long cards) while staying GTK4/libadwaita. Use the committed
+interface reference `docs/plans/15-mapping-board.html` as the visual and
+interaction basis; the second remote and per-device maps there preview step
+21, so step 15 implements the one-device board and its device chip without
+switching. See `docs/plans/15-mapping-board.md`. Step 17's layout-selector UI
+is not decided yet. B01 (recording-key press/release actions) is backlog and
+does not block step 15.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR

@@ -64,11 +64,12 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
-| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board |
+| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board, with a committed interface reference |
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
-| H — Layout profiles | 17–18 | **planned**: named user layouts with a read-only default, plus built-in presets |
+| H — Layout profiles | 17–18 | **planned**: named user layouts with a read-only default, plus built-in presets; the layout-selector UI is undecided |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
+| K — Device management | 21 | **planned**: single-active device registry and switching, per-device layouts |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked
@@ -92,12 +93,13 @@ on approval/upstream; steps 11–13 are complete.
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) | contract, status, and the consumer recipe agree and are tested |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 | `config get/set`, capture, and live apply are atomic |
 | 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
-| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one |
+| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one; [interface reference](15-mapping-board.html) |
 | 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
-| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a read-only default; the active layout is explicit and switches live |
+| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a read-only default; the active layout is explicit and switches live; selector UI to be designed |
 | 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
 | 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | ✅ done | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |
+| 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 
 ## Architecture contract
 
@@ -150,7 +152,15 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
   `AUDIO_START` and an ignored stop echo (step 06).
 - No claim of RC003 hardware support is made before step 07.
 
-## Current state — 2026-10-31
+## Current state — 2026-11-01
+
+Step 15 now has a committed interactive interface reference,
+[`15-mapping-board.html`](15-mapping-board.html): the three-column board,
+per-button cards, modal editor, banners, test bar, and header device chip. It
+is the interface implementation basis for step 15 only; step 17's
+layout-selector UI is still undecided. Step 21 is planned for single-active
+multi-device switching with per-device layouts; the reference previews its
+device popover. Simultaneous devices are out of scope for v1.
 
 Step 19 completed the localization pass: the GTK app follows the desktop locale
 with an English/Simplified Chinese catalog, and the user-facing documents have
@@ -158,13 +168,14 @@ linked `.zh-CN.md` siblings. Step 20 published `v0.1.0` with x86_64/aarch64
 binary archives and the source archive, and moved the Arch recipes outside the
 repository: one split AUR pkgbase `atvv` (`atvv`, `atvv-gui`) and one split VCS
 pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`). Both declare `x86_64` and
-`aarch64`. Steps 15 and 17–18 remain planned; step 10 remains blocked on
+`aarch64`. Steps 15, 17–18, and 21 remain planned; step 10 remains blocked on
 upstream review.
 
 Steps 01–09, 11–14, 16, and 19 are implemented. Step 16 adds passive hardware
 information (battery, firmware/revisions, serial, manufacturer, model) to
 `StatusView`, `atvvctl`, `atvv-mcp`, and the GUI home view. Steps 17–18 are
-planned: named user layouts, then built-in presets. B02 is the NFC
+planned: named user layouts, then built-in presets; the layout-selector UI is
+decided in step 17. Step 21 follows for known-device switching. B02 is the NFC
 investigation backlog (it needs an NFC reader). Step 07 ran on a real RC003
 (`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
 frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic

@@ -19,12 +19,25 @@ References for the information architecture only:
   and screenshots are not GPL): <https://sayall.app>
 - Open Voice Bridge (GPL-3.0): <https://github.com/nijez/open-voice-bridge>
 
+## Design reference
+
+[`15-mapping-board.html`](15-mapping-board.html) is the interactive interface
+reference for this step: the three-column board, per-button cards, modal action
+editor, banners, test bar, and header device chip. It is a design artifact, not
+shipped code. Implement it with GTK4/libadwaita widgets and CSS classes rather
+than copying the HTML/CSS.
+
+The second remote in the device popover, its address, battery, and per-device
+mappings preview step 21; they are illustrative, not verified hardware. This
+step renders the chip for the one active device and does not implement
+switching or per-device layouts.
+
 ## Window shape
 
 ```text
 AdwApplicationWindow
   AdwHeaderBar
-    [menu] [device status] [Test] [Revert] [Apply]
+    [menu] [device chip] [Test] [Revert] [Apply]
   banners (error / dirty / capture)
   GtkScrolledWindow
     GtkBox (horizontal, board)
@@ -91,6 +104,8 @@ visible. The action editor is an `AdwDialog`, not a permanent pane.
 - Copying SayAll/Open Voice Bridge SwiftUI layout, photos, or assets.
 - Per-application mapping layers or shortcut discovery.
 - A new toolkit or a web/TUI front end.
+- Multi-device switching, the known-device popover, or per-device layouts
+  (step 21); the HTML reference previews them.
 - Daemon protocol or `RunAction` changes unless the board exposes a missing
   action operation.
 
@@ -123,6 +138,8 @@ Manual:
 - ⬜ Hotspot and card selection stay in sync and edit the correct slot.
 - ⬜ The action editor is modal, keyboard accessible, and validates inline.
 - ⬜ Test mode highlights the pressed card slot and Run once is explicit.
+- ⬜ The GTK board matches the reference's information architecture and states
+  at 1040×760; HIG-required differences are recorded in `docs/gui.md`.
 - ⬜ Apply/Revert remain atomic; invalid input leaves the old map active.
 - ⬜ No SayAll/Open Voice Bridge code, photo, or screenshot is copied.
 - ⬜ The board is usable at 1040×760 and at a narrow window via scrolling.

@@ -1,0 +1,2434 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Interface reference for step 15 (mapping board). The second remote, its
+  address, battery, and per-device mappings preview step 21; they are
+  illustrative, not verified hardware. The implementation uses GTK4 and
+  libadwaita widgets, not this HTML.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 15 · Mapping board — design preview</title>
+<style>
+  /* ---------- Theme ---------- */
+  :root {
+    --accent: #3584e4;
+    --accent-text: #1a5fb4;
+    --accent-solid: #3584e4;
+    --accent-solid-hover: #2f7bd6;
+    --accent-weak: rgba(53, 132, 228, 0.12);
+    --accent-weak-2: rgba(53, 132, 228, 0.2);
+    --amber: #b07300;
+    --amber-bg: rgba(229, 165, 10, 0.16);
+    --amber-border: rgba(176, 115, 0, 0.5);
+    --success: #2ec27e;
+    --window-bg: #fafafa;
+    --card-bg: #ffffff;
+    --header-bg: #ebebed;
+    --surface: #f4f4f6;
+    --surface-hover: #ececef;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --faint: #75757b;
+    --border: #dedee2;
+    --border-strong: #c8c8ce;
+    --shadow-window: 0 30px 70px rgba(20, 24, 32, 0.3), 0 2px 8px rgba(20, 24, 32, 0.14);
+    --shadow-card: 0 1px 2px rgba(20, 24, 32, 0.05);
+    --shadow-dialog: 0 24px 70px rgba(10, 12, 18, 0.4), 0 2px 10px rgba(10, 12, 18, 0.2);
+    --page-fg: #2b2d33;
+    --page-muted: #6c7079;
+    --page-chip: #ffffff;
+    --page-line: rgba(35, 40, 50, 0.14);
+    --page-bg: radial-gradient(1200px 760px at 50% -8%, #f7f8fa 0%, #e9ebef 55%, #dfe2e8 100%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent: #78aeed;
+      --accent-text: #78aeed;
+      --accent-weak: rgba(120, 174, 237, 0.16);
+      --accent-weak-2: rgba(120, 174, 237, 0.26);
+      --amber: #f5c211;
+      --amber-bg: rgba(245, 194, 17, 0.14);
+      --amber-border: rgba(245, 194, 17, 0.45);
+      --success: #57e389;
+      --window-bg: #1e1e20;
+      --card-bg: #26262a;
+      --header-bg: #303034;
+      --surface: #2c2c30;
+      --surface-hover: #35353a;
+      --text: #f2f2f4;
+      --muted: #ababb2;
+      --faint: #9a9aa2;
+      --border: #3a3a40;
+      --border-strong: #4a4a52;
+      --shadow-window: 0 30px 80px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.45);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-dialog: 0 24px 70px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.4);
+      --page-fg: #e9eaee;
+      --page-muted: #9a9ea8;
+      --page-chip: #26262a;
+      --page-line: rgba(255, 255, 255, 0.12);
+      --page-bg: radial-gradient(1200px 760px at 50% -8%, #232327 0%, #18181b 55%, #111113 100%);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --accent: #78aeed;
+    --accent-text: #78aeed;
+    --accent-weak: rgba(120, 174, 237, 0.16);
+    --accent-weak-2: rgba(120, 174, 237, 0.26);
+    --amber: #f5c211;
+    --amber-bg: rgba(245, 194, 17, 0.14);
+    --amber-border: rgba(245, 194, 17, 0.45);
+    --success: #57e389;
+    --window-bg: #1e1e20;
+    --card-bg: #26262a;
+    --header-bg: #303034;
+    --surface: #2c2c30;
+    --surface-hover: #35353a;
+    --text: #f2f2f4;
+    --muted: #ababb2;
+    --faint: #9a9aa2;
+    --border: #3a3a40;
+    --border-strong: #4a4a52;
+    --shadow-window: 0 30px 80px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-dialog: 0 24px 70px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0, 0, 0, 0.4);
+    --page-fg: #e9eaee;
+    --page-muted: #9a9ea8;
+    --page-chip: #26262a;
+    --page-line: rgba(255, 255, 255, 0.12);
+    --page-bg: radial-gradient(1200px 760px at 50% -8%, #232327 0%, #18181b 55%, #111113 100%);
+  }
+
+  /* ---------- Page ---------- */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    padding: 16px 24px 20px;
+    background: var(--page-bg);
+    color: var(--page-fg);
+    font-family: "Adwaita Sans", "Inter", "Cantarell", "Noto Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: auto;
+  }
+  [hidden] { display: none !important; }
+
+  .preview-head {
+    width: min(1040px, calc(100vw - 48px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .preview-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .preview-chip {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--page-line);
+    background: var(--page-chip);
+    color: var(--page-muted);
+  }
+  .preview-tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--page-muted);
+    font-size: 11px;
+  }
+  .preview-tools .hint { margin-right: 2px; }
+  .preview-btn {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 7px;
+    border: 1px solid var(--page-line);
+    background: var(--page-chip);
+    color: var(--page-fg);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .preview-btn:hover { filter: brightness(0.97); }
+  .seg {
+    display: flex;
+    border: 1px solid var(--page-line);
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--page-chip);
+  }
+  .seg-btn {
+    height: 26px;
+    padding: 0 9px;
+    border: 0;
+    border-right: 1px solid var(--page-line);
+    background: transparent;
+    color: var(--page-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .seg-btn:last-child { border-right: 0; }
+  .seg-btn.active { background: var(--accent-weak); color: var(--accent-text); font-weight: 600; }
+
+  .window-wrap { position: relative; flex: none; }
+  .window {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1040px;
+    height: 760px;
+    transform-origin: top left;
+    background: var(--window-bg);
+    color: var(--text);
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 12px;
+    box-shadow: var(--shadow-window);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .page-note {
+    width: min(1040px, calc(100vw - 48px));
+    margin-top: 12px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: var(--page-muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .page-note strong { color: var(--page-fg); font-weight: 600; }
+
+  /* ---------- Header ---------- */
+  .titlebar {
+    position: relative;
+    flex: 0 0 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 6px;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    z-index: 4;
+  }
+  .header-left { display: flex; align-items: center; gap: 2px; }
+  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .title-block {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: 420px;
+  }
+  .app-title { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .app-subtitle {
+    margin-top: 1px;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    line-height: 1.3;
+  }
+  .battery-inline { display: inline-flex; align-items: center; gap: 3px; }
+  .battery-inline svg { opacity: 0.85; }
+
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface-hover); }
+  .icon-btn:focus-visible, .btn:focus-visible, .slot:focus-visible, .hotspot:focus-visible,
+  .wc:focus-visible, .preview-btn:focus-visible, .seg-btn:focus-visible, .chip:focus-visible,
+  .device-chip:focus-visible, .device-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .btn {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: var(--surface-hover); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn.flat { background: transparent; }
+  .btn.suggested {
+    background: var(--accent-solid);
+    color: #ffffff;
+    border-color: var(--accent-solid);
+    font-weight: 600;
+  }
+  .btn.suggested:hover:not(:disabled) { background: var(--accent-solid-hover); }
+  .btn.suggested:disabled {
+    background: color-mix(in srgb, var(--accent-solid) 32%, var(--header-bg));
+    border-color: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    opacity: 1;
+  }
+  .btn.toggle[aria-pressed="true"] {
+    background: var(--accent-weak-2);
+    color: var(--accent-text);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .btn.subtle {
+    height: 28px;
+    background: var(--surface);
+    border-color: var(--border);
+    font-size: 11.5px;
+  }
+  .btn.subtle:hover:not(:disabled) { background: var(--surface-hover); }
+  .btn.outline {
+    height: 28px;
+    border-color: var(--border-strong);
+    font-size: 12px;
+  }
+  .btn.outline:hover:not(:disabled) { background: var(--surface-hover); }
+
+  /* ---------- Device switcher ---------- */
+  .device-chip {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .device-chip:hover { background: var(--surface-hover); }
+  .device-chip[aria-expanded="true"] {
+    background: var(--accent-weak);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .device-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    flex: none;
+  }
+  .device-chip.offline .device-dot { background: var(--faint); }
+  .device-chip-name { font-weight: 600; }
+  .device-chip-battery {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .device-chip-battery svg { opacity: 0.8; }
+  .device-chip-chev { color: var(--faint); display: flex; margin-left: 1px; }
+
+  .device-pop {
+    position: absolute;
+    top: 46px;
+    left: 44px;
+    width: 392px;
+    padding: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    z-index: 40;
+  }
+  .pop-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 6px 7px;
+  }
+  .pop-title { font-size: 12px; font-weight: 700; }
+  .pop-hint { margin-left: auto; font-size: 9.5px; color: var(--faint); }
+  #deviceList { max-height: 300px; overflow: auto; }
+  .device-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    gap: 7px;
+    align-items: center;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .device-row:hover { background: var(--surface-hover); }
+  .device-row.active { background: var(--accent-weak); }
+  .device-check {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-text);
+  }
+  .device-row-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .device-row-name {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .device-row-meta {
+    font-size: 9.5px;
+    color: var(--muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .device-row-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    font-size: 9.5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .device-row-battery { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .device-row.active .device-row-conn { color: var(--accent-text); }
+  .device-pair-hint {
+    padding: 6px 8px 3px;
+    font-size: 9.5px;
+    color: var(--faint);
+    line-height: 1.4;
+  }
+  .device-pair-hint code {
+    font-family: ui-monospace, "Adwaita Mono", "Cascadia Mono", "Noto Sans Mono", monospace;
+    font-size: 9px;
+    padding: 0 3px;
+    border-radius: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .window-controls { display: flex; align-items: center; gap: 7px; margin-left: 4px; }
+  .wc {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    padding: 0;
+    cursor: default;
+  }
+  .wc svg { opacity: 0.8; }
+
+  /* ---------- Banners ---------- */
+  .banners { flex: none; z-index: 3; }
+  .banner {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    background: var(--accent-weak);
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .banner .banner-icon { color: var(--accent-text); display: inline-flex; }
+  .banner-action {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .banner-action:hover { background: var(--accent-weak); }
+
+  /* ---------- Board ---------- */
+  .board-scroll { flex: 1; min-height: 0; overflow: auto; }
+  .board {
+    min-width: 940px;
+    min-height: 100%;
+    display: grid;
+    grid-template-columns: 272px minmax(280px, 1fr) 272px;
+    gap: 18px;
+    align-items: center;
+    padding: 16px 20px;
+  }
+  .cards { display: flex; flex-direction: column; gap: 8px; }
+
+  .card {
+    height: 88px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 8px 7px;
+    box-shadow: var(--shadow-card);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .card.has-selection {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-card);
+  }
+  .card.has-conflict {
+    border-color: var(--amber-border);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 25%, transparent), var(--shadow-card);
+  }
+  .card-head {
+    height: 18px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 5px;
+  }
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.005em;
+  }
+  .card-warn {
+    margin-left: auto;
+    display: none;
+    align-items: center;
+    gap: 3px;
+    color: var(--amber);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .card.has-conflict .card-warn { display: inline-flex; }
+  .card-warn svg { display: block; }
+
+  .slots { display: flex; flex-direction: column; gap: 1px; }
+  .slot {
+    width: 100%;
+    height: 18px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 12px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .slot:hover { background: var(--surface-hover); }
+  .slot-name {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--faint);
+    line-height: 1;
+  }
+  .slot-action {
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .slot.none .slot-action { color: var(--faint); }
+  .slot-edit {
+    color: var(--faint);
+    opacity: 0;
+    display: flex;
+    transition: opacity 100ms ease;
+  }
+  .slot:hover .slot-edit { opacity: 0.7; }
+  .slot.selected {
+    background: var(--accent-weak);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .slot.selected .slot-name { color: var(--accent-text); opacity: 0.9; }
+  .slot.selected .slot-action { color: var(--accent-text); font-weight: 600; }
+  .slot.selected .slot-edit { opacity: 0.9; color: var(--accent-text); }
+  .slot.conflict {
+    background: var(--amber-bg);
+    box-shadow: inset 2px 0 0 var(--amber);
+  }
+  .slot.conflict .slot-name, .slot.conflict .slot-action { color: var(--amber); }
+  .slot.conflict .slot-action { font-weight: 600; }
+  .slot.test {
+    background: var(--accent-solid);
+    box-shadow: none;
+  }
+  .slot.test .slot-name,
+  .slot.test .slot-action,
+  .slot.test .slot-edit {
+    color: #ffffff;
+    opacity: 1;
+  }
+
+  /* ---------- Center ---------- */
+  .remote-col {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .remote-hint {
+    font-size: 10.5px;
+    color: var(--faint);
+    line-height: 1;
+  }
+  .remote-frame {
+    position: relative;
+    height: 472px;
+    aspect-ratio: 320 / 950;
+    flex: none;
+  }
+  .remote-frame > svg { width: 100%; height: 100%; display: block; }
+  .hotspot {
+    position: absolute;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    cursor: pointer;
+    transition: background 100ms ease, box-shadow 100ms ease;
+  }
+  .hotspot:hover {
+    background: var(--accent-weak);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .hotspot.active {
+    background: var(--accent-weak-2);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .hotspot.test {
+    background: var(--accent-weak-2);
+    box-shadow: inset 0 0 0 2px var(--accent-solid);
+  }
+
+  .voice-card {
+    width: 100%;
+    max-width: 296px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+  }
+  .voice-card:hover { border-color: var(--border-strong); background: var(--surface); }
+  .voice-icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--accent-weak);
+    color: var(--accent-text);
+    display: grid;
+    place-items: center;
+  }
+  .voice-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .voice-title { font-size: 12px; font-weight: 600; line-height: 1.2; }
+  .voice-sub { font-size: 10px; color: var(--muted); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .voice-output {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+  .voice-output .key-chip {
+    font-family: ui-monospace, "Adwaita Mono", "Cascadia Mono", "Noto Sans Mono", monospace;
+    font-size: 9.5px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .voice-chev { margin-left: auto; color: var(--faint); flex: none; display: flex; }
+
+  /* ---------- Test bar ---------- */
+  .testbar {
+    flex: 0 0 54px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 18px;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 55%, var(--window-bg));
+    z-index: 3;
+  }
+  .test-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--faint);
+    flex: none;
+    transition: background 120ms ease, box-shadow 120ms ease;
+  }
+  .testbar.on .test-dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-weak);
+  }
+  .test-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .test-title { font-size: 11.5px; font-weight: 600; line-height: 1.25; }
+  .test-sub { font-size: 10.5px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .test-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .last-chip {
+    max-width: 310px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .last-chip .arrow { color: var(--accent-text); font-weight: 700; }
+  .last-chip .action { color: var(--text); font-weight: 600; }
+
+  /* ---------- Menu ---------- */
+  .menu-pop {
+    position: absolute;
+    top: 46px;
+    left: 8px;
+    width: 232px;
+    padding: 6px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    z-index: 40;
+  }
+  .menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-item:hover:not(:disabled) { background: var(--surface-hover); }
+  .menu-item:disabled { opacity: 0.45; cursor: default; }
+  .menu-item .mi-icon { width: 16px; color: var(--muted); display: flex; justify-content: center; }
+  .menu-sep { height: 1px; margin: 5px 6px; background: var(--border); }
+
+  /* ---------- Dialogs ---------- */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    background: rgba(12, 14, 18, 0.38);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .dialog {
+    width: 470px;
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    display: flex;
+    flex-direction: column;
+    background: var(--window-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-dialog);
+    overflow: hidden;
+  }
+  .dialog:focus { outline: none; }
+  .dialog-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 15px 16px 11px;
+  }
+  .dialog-title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  .dialog-sub { margin: 3px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+  .dialog-head .icon-btn { margin-left: auto; flex: none; }
+  .dialog-body { padding: 0 16px 12px; overflow: auto; }
+  .group {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: center;
+    min-height: 40px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+  }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row-label { color: var(--muted); font-size: 12px; line-height: 1.3; }
+  .row .cell-hint {
+    grid-column: 2;
+    margin: 1px 0 0;
+    font-size: 10px;
+    color: var(--faint);
+    line-height: 1.35;
+  }
+  .row .cell-hint.warning-text { color: var(--amber); }
+  .field-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .input {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--window-bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+  }
+  .input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .input.mono { font-family: ui-monospace, "Adwaita Mono", "Cascadia Mono", "Noto Sans Mono", monospace; font-size: 11.5px; }
+  .select-wrap { position: relative; min-width: 0; }
+  .select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 24px;
+    cursor: pointer;
+  }
+  .select-chevron {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .static-value { font-size: 12px; color: var(--text); }
+  .switch-label { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+  .switch-label input { accent-color: var(--accent-solid); width: 15px; height: 15px; }
+  .dialog-hint {
+    margin: 9px 2px 0;
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .dialog-hint code {
+    font-family: ui-monospace, "Adwaita Mono", "Cascadia Mono", "Noto Sans Mono", monospace;
+    font-size: 10px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--surface);
+  }
+  .field-error {
+    margin: 8px 2px 0;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: #c01c28;
+  }
+  :root[data-theme="dark"] .field-error { color: #ff7b72; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .field-error { color: #ff7b72; }
+  }
+  .live-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--muted);
+    min-height: 32px;
+  }
+  .live-preview .preview-label { flex: none; }
+  .live-preview .preview-value {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .live-preview .preview-raw {
+    margin-left: auto;
+    flex: none;
+    max-width: 190px;
+    font-family: ui-monospace, "Adwaita Mono", "Cascadia Mono", "Noto Sans Mono", monospace;
+    font-size: 9.5px;
+    color: var(--faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dialog-foot {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .foot-spacer { margin-left: auto; }
+  .declared-list {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding-top: 5px;
+  }
+  .chip {
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .chip:hover { background: var(--surface-hover); }
+  .chip.current { border-color: var(--accent); color: var(--accent-text); background: var(--accent-weak); }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 68px;
+    transform: translate(-50%, 8px);
+    max-width: 420px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--text);
+    color: var(--window-bg);
+    font-size: 11.5px;
+    line-height: 1.3;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 45;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+
+<header class="preview-head">
+  <div class="preview-title">
+    Step 15 · Mapping board
+    <span class="preview-chip">design preview</span>
+  </div>
+  <div class="preview-tools">
+    <span class="hint">Preview state</span>
+    <div class="seg" role="group" aria-label="Preview state">
+      <button class="seg-btn active" data-demo="default">Default</button>
+      <button class="seg-btn" data-demo="test">Test press</button>
+      <button class="seg-btn" data-demo="conflict">Conflict</button>
+    </div>
+    <button class="preview-btn" id="themeBtn">Theme: Auto</button>
+  </div>
+</header>
+
+<div class="window-wrap" id="windowWrap">
+  <div class="window" id="appWindow">
+
+    <!-- Header bar -->
+    <header class="titlebar">
+      <div class="header-left">
+        <button class="icon-btn" id="menuBtn" aria-label="Main menu" aria-haspopup="menu" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="device-chip" id="deviceBtn" aria-haspopup="dialog" aria-expanded="false" title="Switch remote">
+          <span class="device-dot" aria-hidden="true"></span>
+          <span class="device-chip-name" id="deviceChipName">RC003</span>
+          <span class="device-chip-battery">
+            <svg width="12" height="8" viewBox="0 0 22 12" aria-hidden="true">
+              <rect x="1" y="1" width="18" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <rect x="3.6" y="3.6" width="9" height="4.8" rx="1.4" fill="currentColor"/>
+              <rect x="20" y="4" width="2" height="4" rx="1" fill="currentColor"/>
+            </svg>
+            <span id="deviceChipBatteryText">62 %</span>
+          </span>
+          <span class="device-chip-chev" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </button>
+      </div>
+
+      <div class="title-block">
+        <div class="app-title">ATVV Remote</div>
+        <div class="app-subtitle" id="deviceSubtitle">C0:5D:39:F8:2D:4C · connected</div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn flat toggle" id="testBtn" aria-pressed="false" title="Highlight remote presses and show the mapped action">Test</button>
+        <button class="btn flat" id="revertBtn" disabled title="Discard unsaved edits">Revert</button>
+        <button class="btn suggested" id="applyBtn" disabled>Apply</button>
+        <div class="window-controls">
+          <button class="wc" aria-label="Minimize">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="wc" aria-label="Maximize">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="2.2" y="2.2" width="5.6" height="5.6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+          </button>
+          <button class="wc" aria-label="Close">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.4 2.4l5.2 5.2M7.6 2.4L2.4 7.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Device switcher -->
+      <div class="device-pop" id="devicePop" role="dialog" aria-label="Devices" hidden>
+        <div class="pop-head">
+          <span class="pop-title">Devices</span>
+          <span class="pop-hint">One active at a time</span>
+        </div>
+        <div id="deviceList"></div>
+        <div class="menu-sep"></div>
+        <div class="device-pair-hint">Add a remote with <code>atvvctl pair &lt;MAC&gt;</code>.</div>
+      </div>
+
+      <!-- Menu popover -->
+      <div class="menu-pop" id="menuPop" role="menu" hidden>
+        <button class="menu-item" id="deviceInfoItem" role="menuitem">
+          <span class="mi-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v4M8 4.8v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          Device information…
+        </button>
+        <button class="menu-item" id="menuRevertItem" role="menuitem" disabled>
+          <span class="mi-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.2 3.6v2.9h2.9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          Revert changes
+        </button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" id="aboutItem" role="menuitem">
+          <span class="mi-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.3v3.9M8 4.9v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          About ATVV
+        </button>
+        <button class="menu-item" id="quitItem" role="menuitem">
+          <span class="mi-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.6 3H4.4A1.4 1.4 0 0 0 3 4.4v7.2A1.4 1.4 0 0 0 4.4 13h5.2M10.4 5.2 13 8l-2.6 2.8M13 8H7" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          Quit
+        </button>
+      </div>
+    </header>
+
+    <!-- Banners -->
+    <div class="banners">
+      <div class="banner" id="dirtyBanner" hidden>
+        <span class="banner-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 14.2 13H1.8L8 2.2Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.2v3.2M8 11.4v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        Unsaved changes — Apply saves the whole map.
+        <button class="banner-action" id="bannerRevert">Revert</button>
+      </div>
+      <div class="banner" id="testBanner" hidden>
+        <span class="banner-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 2.6v10.8l7-5.4-7-5.4Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        </span>
+        Press a remote key to test it. Shortcuts, volume, and dictation are suppressed.
+        <button class="banner-action" id="bannerCancelTest">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Board -->
+    <div class="board-scroll">
+      <div class="board">
+        <div class="cards left" role="group" aria-label="Left-hand keys"></div>
+
+        <div class="remote-col">
+          <div class="remote-hint" id="remoteHint">Click a key to edit its single action</div>
+          <div class="remote-frame" id="remoteFrame">
+            <!-- Original RC003 vector illustration, crates/atvv-gui/resources/remote.svg (GPL-3.0-or-later) -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 950" aria-label="Xiaomi Bluetooth Remote 2 Pro">
+              <defs>
+                <linearGradient id="body-metal" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#8b8e92"/>
+                  <stop offset="0.035" stop-color="#c4c6ca"/>
+                  <stop offset="0.10" stop-color="#e6e7ea"/>
+                  <stop offset="0.30" stop-color="#dbdde0"/>
+                  <stop offset="0.66" stop-color="#cfd1d4"/>
+                  <stop offset="0.90" stop-color="#bfc2c6"/>
+                  <stop offset="0.97" stop-color="#a5a8ad"/>
+                  <stop offset="1" stop-color="#7f8286"/>
+                </linearGradient>
+                <linearGradient id="face-metal" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#e2e3e6"/>
+                  <stop offset="0.16" stop-color="#d8dadd"/>
+                  <stop offset="0.72" stop-color="#d0d2d5"/>
+                  <stop offset="1" stop-color="#c6c8cc"/>
+                </linearGradient>
+                <linearGradient id="top-key" x1="0.15" y1="0" x2="0.55" y2="1">
+                  <stop offset="0" stop-color="#e9eaec"/>
+                  <stop offset="0.5" stop-color="#dcdee1"/>
+                  <stop offset="1" stop-color="#ccced2"/>
+                </linearGradient>
+                <linearGradient id="key-face" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#4b4c50"/>
+                  <stop offset="0.16" stop-color="#3e3f43"/>
+                  <stop offset="0.82" stop-color="#313236"/>
+                  <stop offset="1" stop-color="#2a2b2e"/>
+                </linearGradient>
+                <linearGradient id="rocker-face" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#4c4d51"/>
+                  <stop offset="0.40" stop-color="#3b3c40"/>
+                  <stop offset="0.52" stop-color="#333438"/>
+                  <stop offset="0.74" stop-color="#2f3034"/>
+                  <stop offset="1" stop-color="#28292c"/>
+                </linearGradient>
+                <radialGradient id="pad-face" cx="0.44" cy="0.36" r="0.78">
+                  <stop offset="0" stop-color="#404145"/>
+                  <stop offset="0.66" stop-color="#36373b"/>
+                  <stop offset="1" stop-color="#292a2d"/>
+                </radialGradient>
+                <radialGradient id="pad-inner" cx="0.42" cy="0.32" r="0.85">
+                  <stop offset="0" stop-color="#3e3f43"/>
+                  <stop offset="1" stop-color="#303135"/>
+                </radialGradient>
+                <filter id="body-shadow" x="-15%" y="-4%" width="130%" height="110%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.20"/>
+                </filter>
+                <clipPath id="nfc-clip">
+                  <rect x="150.5" y="687" width="19" height="20" rx="2.4"/>
+                </clipPath>
+              </defs>
+
+              <rect x="48" y="8" width="224" height="922" rx="10" fill="url(#body-metal)" stroke="#85888d" stroke-width="1" filter="url(#body-shadow)"/>
+              <rect x="50.5" y="10.5" width="219" height="917" rx="8" fill="url(#face-metal)"/>
+              <rect x="51.5" y="11.5" width="217" height="915" rx="7.2" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="1"/>
+
+              <circle cx="101.3" cy="64.8" r="25.5" fill="url(#top-key)" stroke="#7f8287" stroke-width="1.2"/>
+              <circle cx="101.3" cy="64.8" r="24.1" fill="none" stroke="#ffffff" stroke-opacity="0.40" stroke-width="0.9"/>
+              <g fill="none" stroke="#55575b" stroke-width="1.8" stroke-linecap="round">
+                <path d="M97.2 59.0 A7.2 7.2 0 1 0 105.4 59.0"/>
+                <path d="M101.3 54.6 L101.3 64.0"/>
+              </g>
+
+              <circle cx="218.7" cy="64.8" r="25.5" fill="url(#top-key)" stroke="#7f8287" stroke-width="1.2"/>
+              <circle cx="218.7" cy="64.8" r="24.1" fill="none" stroke="#ffffff" stroke-opacity="0.40" stroke-width="0.9"/>
+              <g fill="none" stroke="#55575b" stroke-linecap="round">
+                <rect x="214.8" y="54.5" width="7.8" height="11.6" rx="3.9" stroke-width="1.8"/>
+                <path d="M212.1 63.0 A6.6 6.6 0 0 0 225.3 63.0" stroke-width="1.7"/>
+                <path d="M218.7 69.6 L218.7 73.2" stroke-width="1.7"/>
+              </g>
+
+              <circle cx="160" cy="201" r="93.5" fill="url(#pad-face)" stroke="#1d1e21" stroke-width="1.6"/>
+              <circle cx="160" cy="201" r="91.6" fill="none" stroke="#4f5055" stroke-width="1" opacity="0.55"/>
+              <circle cx="160" cy="201" r="48.2" fill="none" stroke="#151619" stroke-width="2"/>
+              <circle cx="160" cy="201" r="46.8" fill="url(#pad-inner)"/>
+              <path d="M119.5 185.8 A46 46 0 0 1 200.5 185.8" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.4"/>
+              <g fill="#787a7f" opacity="0.75">
+                <rect x="159.1" y="110.8" width="1.8" height="4.4" rx="0.9"/>
+                <rect x="159.1" y="286.8" width="1.8" height="4.4" rx="0.9"/>
+                <rect x="70.8" y="200.1" width="4.4" height="1.8" rx="0.9"/>
+                <rect x="244.8" y="200.1" width="4.4" height="1.8" rx="0.9"/>
+              </g>
+
+              <circle cx="113.3" cy="340" r="37.4" fill="url(#key-face)" stroke="#16171a" stroke-width="1.5"/>
+              <path d="M119.6 329.7 L106.3 340 L119.6 350.3" fill="none" stroke="#e8e9eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+              <circle cx="113.3" cy="425.2" r="37.4" fill="url(#key-face)" stroke="#16171a" stroke-width="1.5"/>
+              <path d="M104.4 426.0 L113.3 415.8 L122.2 426.0 L122.2 435.8 L104.4 435.8 Z" fill="none" stroke="#e8e9eb" stroke-width="2.2" stroke-linejoin="round"/>
+
+              <circle cx="113.3" cy="511.7" r="37.4" fill="url(#key-face)" stroke="#16171a" stroke-width="1.5"/>
+              <path d="M103.2 504.2 H123.4 M103.2 511.7 H123.4 M103.2 519.2 H123.4" fill="none" stroke="#e8e9eb" stroke-width="2.2" stroke-linecap="round"/>
+
+              <rect x="169.9" y="302.5" width="74.5" height="161.2" rx="37.25" fill="url(#rocker-face)" stroke="#16171a" stroke-width="1.5"/>
+              <path d="M175.8 383.4 Q207.2 381.2 238.5 383.4" fill="none" stroke="#191a1d" stroke-width="1.7" opacity="0.55"/>
+              <path d="M175.8 381.8 Q207.2 379.7 238.5 381.8" fill="none" stroke="#ffffff" stroke-width="0.9" opacity="0.06"/>
+              <path d="M197.2 339.0 H217.2 M207.2 329.0 V349.0" fill="none" stroke="#e8e9eb" stroke-width="2.4" stroke-linecap="round"/>
+              <path d="M197.2 425.1 H217.2" fill="none" stroke="#e8e9eb" stroke-width="2.4" stroke-linecap="round"/>
+
+              <circle cx="206.2" cy="512.3" r="37.4" fill="url(#key-face)" stroke="#16171a" stroke-width="1.5"/>
+              <g fill="none" stroke="#e8e9eb" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="193.5" y="501.7" width="25.4" height="21.0" rx="4.2" stroke-width="2"/>
+                <path d="M198.9 507.2 H204.9 M201.9 507.2 V516.9" stroke-width="1.9"/>
+                <path d="M207.4 507.2 L210.4 516.9 L213.4 507.2" stroke-width="1.9"/>
+              </g>
+
+              <rect x="150.5" y="687" width="19" height="20" rx="2.4" fill="#4a4b4f"/>
+              <g clip-path="url(#nfc-clip)" stroke="#d3d5d8" stroke-width="1.5" stroke-linecap="round">
+                <path d="M152.4 689 L161.5 705"/>
+                <path d="M157.4 689 L166.5 705"/>
+              </g>
+
+              <text x="160" y="861" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="23" font-weight="600" letter-spacing="0.4" fill="#4c4d51">xiaomi</text>
+            </svg>
+            <div id="hotspots"></div>
+          </div>
+
+          <button class="voice-card" id="voiceCard" aria-label="Recording key settings">
+            <span class="voice-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="6" y="1.6" width="4" height="7.6" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M3.6 7.4a4.4 4.4 0 0 0 8.8 0M8 11.8v2.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="voice-copy">
+              <span class="voice-title">Voice key</span>
+              <span class="voice-sub">Fixed KEY_F5 · ATVV microphone</span>
+              <span class="voice-output">Output <span class="key-chip" id="voiceChip">DICTATE</span></span>
+            </span>
+            <span class="voice-chev">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </button>
+        </div>
+
+        <div class="cards right" role="group" aria-label="Right-hand keys"></div>
+      </div>
+    </div>
+
+    <!-- Test bar -->
+    <footer class="testbar" id="testbar">
+      <span class="test-dot" aria-hidden="true"></span>
+      <div class="test-copy" aria-live="polite">
+        <span class="test-title" id="testTitle">Test mode off</span>
+        <span class="test-sub" id="testSub">Turn on Test to see what each key sends.</span>
+      </div>
+      <div class="test-right">
+        <span class="last-chip" id="lastChip" hidden><span class="arrow">→</span><span class="action" id="lastAction">Return</span></span>
+        <button class="btn outline" id="runOnce" disabled>Run once</button>
+      </div>
+    </footer>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- ================= Action editor ================= -->
+    <div class="scrim" id="editorScrim" hidden>
+      <div class="dialog" id="editorDialog" role="dialog" aria-modal="true" aria-labelledby="editorTitle" tabindex="-1">
+        <header class="dialog-head">
+          <div>
+            <h2 class="dialog-title" id="editorTitle">Up · Single</h2>
+            <p class="dialog-sub" id="editorSub">Profile default</p>
+          </div>
+          <button class="icon-btn" data-close="editor" aria-label="Close">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+
+        <div class="dialog-body">
+          <div class="group">
+            <div class="row">
+              <span class="row-label" id="typeLabel">Type</span>
+              <div class="select-wrap">
+                <select class="input select" id="editType" aria-labelledby="typeLabel">
+                  <option value="none">Do nothing</option>
+                  <option value="key">Single key</option>
+                  <option value="combo">Key combination</option>
+                  <option value="exec">Run a command</option>
+                  <option value="dictation">Dictation</option>
+                </select>
+                <span class="select-chevron" aria-hidden="true">▾</span>
+              </div>
+            </div>
+
+            <div class="row" id="rowKey">
+              <span class="row-label">Key</span>
+              <div class="field-row">
+                <input class="input mono" id="editKey" spellcheck="false" autocomplete="off" placeholder="KEY_F13" aria-label="Key name">
+                <button class="btn subtle" id="learnKeyBtn">Learn Key</button>
+              </div>
+              <p class="cell-hint">Example: <code>KEY_F13</code>.</p>
+            </div>
+
+            <div class="row" id="rowChord">
+              <span class="row-label">Chord</span>
+              <div class="field-row">
+                <input class="input mono" id="editChord" spellcheck="false" autocomplete="off" placeholder="ctrl+alt+v" aria-label="Key chord">
+                <button class="btn subtle" id="learnChordBtn">Learn Key</button>
+              </div>
+              <p class="cell-hint">Example: <code>ctrl+alt+v</code>.</p>
+            </div>
+
+            <div class="row" id="rowExec">
+              <span class="row-label">Command</span>
+              <div class="field-row">
+                <input class="input mono" id="editCommand" spellcheck="false" autocomplete="off" placeholder="notify-send Dictation" aria-label="Command">
+              </div>
+              <p class="cell-hint">Runs as your user with a 5 s timeout and closed stdio.</p>
+            </div>
+
+            <div class="row" id="rowAllowExec">
+              <span class="row-label">Policy</span>
+              <label class="switch-label"><input type="checkbox" id="allowExec"> Allow shell commands</label>
+              <p class="cell-hint">Off by default; mappings that run commands stay disabled until this is on.</p>
+            </div>
+
+            <div class="row" id="rowDictation">
+              <span class="row-label">Action</span>
+              <div class="select-wrap">
+                <select class="input select" id="editDictation">
+                  <option value="start">Start recording</option>
+                  <option value="stop">Stop recording</option>
+                  <option value="toggle" selected>Toggle recording</option>
+                </select>
+                <span class="select-chevron" aria-hidden="true">▾</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="dialog-hint" id="editHint">One key, emitted after the gesture.</p>
+          <p class="field-error" id="editError" hidden></p>
+
+          <div class="live-preview">
+            <span class="preview-label">Board label</span>
+            <span class="preview-value" id="editorPreview">Up</span>
+            <span class="preview-raw" id="editorRaw">key:KEY_UP</span>
+          </div>
+        </div>
+
+        <footer class="dialog-foot">
+          <button class="btn flat" id="editorReset">Reset</button>
+          <span class="foot-spacer"></span>
+          <button class="btn flat" data-close="editor">Cancel</button>
+          <button class="btn suggested" id="editorUpdate">Update</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ================= Recording key ================= -->
+    <div class="scrim" id="voiceScrim" hidden>
+      <div class="dialog" id="voiceDialog" role="dialog" aria-modal="true" aria-labelledby="voiceTitle" tabindex="-1">
+        <header class="dialog-head">
+          <div>
+            <h2 class="dialog-title" id="voiceTitle">Recording key</h2>
+            <p class="dialog-sub">The physical key stays KEY_F5; only the synthetic output changes.</p>
+          </div>
+          <button class="icon-btn" data-close="voice" aria-label="Close">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+
+        <div class="dialog-body">
+          <div class="group">
+            <div class="row">
+              <span class="row-label">Physical key</span>
+              <span class="static-value" style="font-family: ui-monospace, 'Noto Sans Mono', monospace;">KEY_F5</span>
+              <p class="cell-hint">Grabbed by atvvd; it controls the ATVV microphone.</p>
+            </div>
+            <div class="row">
+              <span class="row-label">Output key</span>
+              <div class="field-row">
+                <input class="input mono" id="voiceKey" spellcheck="false" autocomplete="off" placeholder="DICTATE" aria-label="Output key">
+                <button class="btn subtle" id="voiceLearnBtn">Learn Key</button>
+                <button class="btn subtle" id="voiceDeclaredBtn" aria-expanded="false">Declared key…</button>
+              </div>
+              <p class="cell-hint">Emitted while the recording key is held. Use <code>none</code> to disable it.</p>
+              <div class="declared-list" id="declaredList" hidden>
+                <button class="chip" data-key="DICTATE">DICTATE</button>
+                <button class="chip" data-key="VOICECOMMAND">VOICECOMMAND</button>
+                <button class="chip" data-key="ASSISTANT">ASSISTANT</button>
+                <button class="chip" data-key="none">None (disable)</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="dialog-hint">
+            Consumers must bind the same key. fcitx5-vinput names them <strong>Dictate</strong>,
+            <strong>VoiceCommand</strong>, and <strong>Assistant</strong>.
+          </p>
+          <p class="field-error" id="voiceError" hidden></p>
+        </div>
+
+        <footer class="dialog-foot">
+          <button class="btn flat" id="voiceReset">Reset to DICTATE</button>
+          <span class="foot-spacer"></span>
+          <button class="btn flat" data-close="voice">Cancel</button>
+          <button class="btn suggested" id="voiceUpdate">Update</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ================= Device information ================= -->
+    <div class="scrim" id="deviceScrim" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="deviceTitle" tabindex="-1">
+        <header class="dialog-head">
+          <div>
+            <h2 class="dialog-title" id="deviceTitle">Device information</h2>
+            <p class="dialog-sub">Passive facts reported by BlueZ and the ATVV GATT session.</p>
+          </div>
+          <button class="icon-btn" data-close="device" aria-label="Close">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="dialog-body">
+          <div class="group">
+            <div class="row"><span class="row-label">Battery</span><span class="static-value">62 %</span></div>
+            <div class="row"><span class="row-label">Firmware</span><span class="static-value">2671</span></div>
+            <div class="row"><span class="row-label">Hardware</span><span class="static-value">V2.0</span></div>
+            <div class="row"><span class="row-label">Software</span><span class="static-value">A.7.0.6</span></div>
+            <div class="row"><span class="row-label">Serial number</span><span class="static-value">250519</span></div>
+            <div class="row"><span class="row-label">Manufacturer</span><span class="static-value">Xiaomi</span></div>
+            <div class="row"><span class="row-label">Model</span><span class="static-value">RC003</span></div>
+          </div>
+        </div>
+        <footer class="dialog-foot">
+          <span class="foot-spacer"></span>
+          <button class="btn flat" data-close="device">Close</button>
+        </footer>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="page-note">
+  <span><strong>Board</strong> 12 × 3 slots · <strong>Editor</strong> modal + inline validation · <strong>States</strong> accent selected, amber conflict · <strong>Test</strong> pressed slot + explicit Run once.</span>
+  <span><strong>Devices</strong> the header chip switches the active remote and its mappings. <strong>Preview</strong> controls above the window are not app UI.</span>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- Data ---------- */
+  const TRIGGERS = ["single", "double", "long"];
+  const TRIGGER_LABEL = { single: "Single", double: "Double", long: "Long" };
+
+  const BUTTONS = [
+    { id: "power", label: "Power", side: "left", phys: "KEY_POWER", defaults: { single: "none" } },
+    { id: "up", label: "Up", side: "left", phys: "KEY_UP", defaults: { single: "key:KEY_UP" } },
+    { id: "left", label: "Left", side: "left", phys: "KEY_LEFT", defaults: { single: "key:KEY_LEFT" } },
+    { id: "back", label: "Back", side: "left", phys: "KEY_BACK", defaults: { single: "key:KEY_BACK" } },
+    { id: "home", label: "Home", side: "left", phys: "KEY_HOMEPAGE", defaults: { single: "key:KEY_HOMEPAGE" } },
+    { id: "menu", label: "Menu", side: "left", phys: "KEY_MENU", defaults: { single: "key:KEY_MENU" } },
+    { id: "right", label: "Right", side: "right", phys: "KEY_RIGHT", defaults: { single: "key:KEY_RIGHT" } },
+    { id: "ok", label: "OK", side: "right", phys: "KEY_ENTER", defaults: { single: "key:KEY_ENTER" } },
+    { id: "down", label: "Down", side: "right", phys: "KEY_DOWN", defaults: { single: "key:KEY_DOWN" } },
+    { id: "volume-up", label: "Volume up", side: "right", phys: "KEY_VOLUMEUP", defaults: { single: "key:KEY_VOLUMEUP" } },
+    { id: "volume-down", label: "Volume down", side: "right", phys: "KEY_VOLUMEDOWN", defaults: { single: "key:KEY_VOLUMEDOWN" } },
+    { id: "tv", label: "TV", side: "right", phys: "KEY_GRAVE", defaults: { single: "key:KEY_GRAVE" } },
+  ];
+
+  const HOTSPOTS = [
+    ["power", .222813, .036632, .1875, .063158],
+    ["voice", .589688, .036632, .1875, .063158],
+    ["up", .353125, .115789, .29375, .048421],
+    ["left", .20625, .162105, .146875, .098947],
+    ["ok", .353125, .162105, .29375, .098947],
+    ["right", .646875, .162105, .146875, .098947],
+    ["down", .353125, .258947, .29375, .048421],
+    ["back", .229063, .315789, .25, .084211],
+    ["home", .229063, .405474, .25, .084211],
+    ["menu", .229063, .496526, .25, .084211],
+    ["volume-up", .51875, .315789, .257813, .087474],
+    ["volume-down", .51875, .402105, .257813, .088105],
+    ["tv", .519375, .497158, .25, .084211],
+  ];
+
+  const FRIENDLY_KEYS = {
+    KEY_ENTER: "Return",
+    KEY_KPENTER: "Return",
+    KEY_BACK: "Back",
+    KEY_UP: "Up",
+    KEY_DOWN: "Down",
+    KEY_LEFT: "Left",
+    KEY_RIGHT: "Right",
+    KEY_HOME: "Home",
+    KEY_HOMEPAGE: "Home",
+    KEY_COMPOSE: "Menu",
+    KEY_MENU: "Menu",
+    KEY_GRAVE: "TV",
+    KEY_VOLUMEUP: "Volume up",
+    KEY_VOLUMEDOWN: "Volume down",
+    KEY_POWER: "Power",
+    KEY_ESC: "Escape",
+    KEY_SPACE: "Space",
+    KEY_TAB: "Tab",
+  };
+
+  const PENCIL = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3.1 11.6 3.7 9 10.9 1.8a1.15 1.15 0 0 1 1.6 0l1.7 1.7a1.15 1.15 0 0 1 0 1.6l-7.2 7.2-2.6.6a.72.72 0 0 1-.8-.8Z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/></svg>';
+  const WARN = '<svg width="10" height="10" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.3 14.2 13H1.8L8 2.3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.2v3.2M8 11.3v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  const CHECK = '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.4 6.4 11.6 12.8 4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const buttonById = (id) => BUTTONS.find((b) => b.id === id);
+
+  const slotKey = (button, trigger) => `${button}:${trigger}`;
+  const defaultFor = (button, trigger) => buttonById(button)?.defaults[trigger] ?? null;
+
+  /* ---------- Devices and state ---------- */
+  const DEVICES = [
+    {
+      address: "C0:5D:39:F8:2D:4C",
+      name: "Xiaomi Remote 2 Pro",
+      label: "Living room",
+      short: "RC003",
+      profile: "miremote-rc003",
+      battery: 62,
+      connected: true,
+      lastSeen: "now",
+      overrides: {},
+    },
+    {
+      address: "D4:8A:FC:11:07:2E",
+      name: "Xiaomi Remote 2 Pro",
+      label: "Office",
+      short: "RC003",
+      profile: "miremote-rc003",
+      battery: 40,
+      connected: false,
+      lastSeen: "2 days ago",
+      overrides: {
+        "up:single": "combo:ctrl+alt+v",
+        "ok:single": "dictation:toggle",
+        "tv:single": "key:KEY_F11",
+      },
+    },
+  ];
+  const INITIAL_DEVICE_MAPS = DEVICES.map((device) => ({ ...device.overrides }));
+  const deviceMaps = new Map(
+    DEVICES.map((device) => [device.address, { ...device.overrides }]),
+  );
+  let activeDevice = 0;
+  let overrides = deviceMaps.get(DEVICES[activeDevice].address);
+  let selected = { button: "ok", trigger: "single" };
+  let dirty = false;
+  let testOn = false;
+  let pressed = null;
+  let triggerKey = "DICTATE";
+  let allowExec = false;
+  let editing = null;
+  let learning = null;
+  let activeScrim = null;
+  let lastFocused = null;
+  let toastTimer = 0;
+  let menuOpen = false;
+  let devicePopOpen = false;
+
+  const effective = (button, trigger) =>
+    Object.prototype.hasOwnProperty.call(overrides, slotKey(button, trigger))
+      ? overrides[slotKey(button, trigger)]
+      : defaultFor(button, trigger);
+
+  /* ---------- Formatting ---------- */
+  function titleCase(value) {
+    return value
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  function friendlyKey(name) {
+    if (FRIENDLY_KEYS[name]) return FRIENDLY_KEYS[name];
+    const bare = name.replace(/^KEY_/, "");
+    if (/^F\d+$/i.test(bare)) return bare.toUpperCase();
+    return titleCase(bare.toLowerCase());
+  }
+
+  function comboToken(token) {
+    const lower = token.toLowerCase();
+    const names = { ctrl: "Ctrl", control: "Ctrl", alt: "Alt", shift: "Shift", super: "Super", meta: "Super" };
+    if (names[lower]) return names[lower];
+    if (/^f\d+$/.test(lower)) return lower.toUpperCase();
+    if (lower.length === 1) return lower.toUpperCase();
+    return titleCase(lower);
+  }
+
+  function compactAction(raw) {
+    if (!raw || raw === "none") return { text: "None", none: true };
+    if (raw.startsWith("key:")) return { text: friendlyKey(raw.slice(4).trim().toUpperCase()) };
+    if (raw.startsWith("combo:")) return { text: raw.slice(6).split("+").map(comboToken).join("+") };
+    if (raw.startsWith("exec:")) return { text: "Command…" };
+    if (raw.startsWith("dictation:")) {
+      const mode = raw.slice(10);
+      return { text: mode === "start" ? "Start dictation" : mode === "stop" ? "Stop dictation" : "Toggle dictation" };
+    }
+    return { text: raw };
+  }
+
+  function normalizeEvdev(value) {
+    const upper = value.trim().toUpperCase();
+    if (!upper) return "";
+    return upper.startsWith("KEY_") ? upper : `KEY_${upper}`;
+  }
+
+  /* ---------- Board construction ---------- */
+  function buildCard(button) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.button = button.id;
+    card.setAttribute("role", "group");
+    card.setAttribute("aria-label", `${button.label} mappings`);
+
+    const head = document.createElement("div");
+    head.className = "card-head";
+    const name = document.createElement("span");
+    name.className = "card-name";
+    name.textContent = button.label;
+    const warn = document.createElement("span");
+    warn.className = "card-warn";
+    warn.innerHTML = `${WARN}<span>conflict</span>`;
+    warn.title = "Another key sends the same action in this gesture slot";
+    head.append(name, warn);
+
+    const slots = document.createElement("div");
+    slots.className = "slots";
+    for (const trigger of TRIGGERS) {
+      const slot = document.createElement("button");
+      slot.className = "slot";
+      slot.dataset.button = button.id;
+      slot.dataset.trigger = trigger;
+      const slotName = document.createElement("span");
+      slotName.className = "slot-name";
+      slotName.textContent = TRIGGER_LABEL[trigger];
+      const action = document.createElement("span");
+      action.className = "slot-action";
+      const edit = document.createElement("span");
+      edit.className = "slot-edit";
+      edit.innerHTML = PENCIL;
+      slot.append(slotName, action, edit);
+      slots.append(slot);
+    }
+
+    card.append(head, slots);
+    return card;
+  }
+
+  for (const side of ["left", "right"]) {
+    const host = $(`.cards.${side}`);
+    for (const button of BUTTONS.filter((b) => b.side === side)) host.append(buildCard(button));
+  }
+
+  /* Hotspots use the same view-box fractions as diagram.rs. */
+  const hotspotsHost = $("#hotspots");
+  for (const [id, x, y, w, h] of HOTSPOTS) {
+    const hotspot = document.createElement("button");
+    hotspot.className = "hotspot";
+    hotspot.dataset.button = id;
+    if (id === "voice") {
+      hotspot.dataset.voice = "1";
+      hotspot.setAttribute("aria-label", "Configure the recording key");
+      hotspot.title = "Voice key · configure output";
+    } else {
+      hotspot.setAttribute("aria-label", `Edit ${buttonById(id).label}`);
+      hotspot.title = `${buttonById(id).label} · click to edit single action`;
+    }
+    hotspot.style.left = `${x * 100}%`;
+    hotspot.style.top = `${y * 100}%`;
+    hotspot.style.width = `${w * 100}%`;
+    hotspot.style.height = `${h * 100}%`;
+    hotspotsHost.append(hotspot);
+  }
+
+  /* ---------- Rendering ---------- */
+  function conflictSet() {
+    const set = new Set();
+    for (const trigger of TRIGGERS) {
+      const groups = new Map();
+      for (const button of BUTTONS) {
+        const raw = effective(button.id, trigger);
+        if (!raw || raw === "none") continue;
+        if (!groups.has(raw)) groups.set(raw, []);
+        groups.get(raw).push(button.id);
+      }
+      for (const ids of groups.values()) {
+        if (ids.length > 1) ids.forEach((id) => set.add(id));
+      }
+    }
+    return set;
+  }
+
+  function renderBoard() {
+    const conflicts = conflictSet();
+    for (const slot of $$(".slot")) {
+      const { button, trigger } = slot.dataset;
+      const raw = effective(button, trigger);
+      const info = compactAction(raw);
+      const actionEl = slot.querySelector(".slot-action");
+      actionEl.textContent = info.text;
+      slot.classList.toggle("none", !!info.none);
+      const isSel = selected.button === button && selected.trigger === trigger;
+      slot.classList.toggle("selected", isSel);
+      const isConflict = conflicts.has(button);
+      slot.classList.toggle("conflict", isConflict && !info.none);
+      slot.classList.toggle("test", !!pressed && pressed.button === button && pressed.trigger === trigger);
+      slot.setAttribute("aria-label", `${buttonById(button).label} ${TRIGGER_LABEL[trigger]}: ${info.text}`);
+      if (isSel) slot.setAttribute("aria-current", "true");
+      else slot.removeAttribute("aria-current");
+      slot.title = `${buttonById(button).label} · ${TRIGGER_LABEL[trigger]} · ${raw || "none"}`;
+    }
+
+    for (const card of $$(".card")) {
+      const button = card.dataset.button;
+      card.classList.toggle("has-selection", selected.button === button);
+      card.classList.toggle("has-conflict", conflicts.has(button));
+    }
+
+    for (const hotspot of $$(".hotspot")) {
+      const id = hotspot.dataset.button;
+      const isVoice = !!hotspot.dataset.voice;
+      hotspot.classList.toggle("active", !isVoice && selected.button === id);
+      hotspot.classList.toggle("test", !!pressed && pressed.button === id);
+    }
+  }
+
+  function renderDeviceChrome() {
+    const device = DEVICES[activeDevice];
+    $("#deviceChipName").textContent = device.label || device.short;
+    $("#deviceChipBatteryText").textContent = `${device.battery} %`;
+    $("#deviceBtn").classList.toggle("offline", !device.connected);
+    $("#deviceBtn").title = `Switch remote · ${device.label || device.name}`;
+    $("#deviceSubtitle").textContent =
+      `${device.address} · ${device.connected ? "connected" : "disconnected"}`;
+  }
+
+  function renderDeviceList() {
+    const host = $("#deviceList");
+    host.textContent = "";
+    DEVICES.forEach((device, index) => {
+      const active = index === activeDevice;
+      const state = active && device.connected
+        ? "connected"
+        : device.lastSeen === "now"
+          ? "last seen just now"
+          : `last seen ${device.lastSeen}`;
+      const row = document.createElement("button");
+      row.className = `device-row${active ? " active" : ""}`;
+      row.dataset.index = String(index);
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", active ? "true" : "false");
+
+      const check = document.createElement("span");
+      check.className = "device-check";
+      check.innerHTML = active ? CHECK : "";
+
+      const copy = document.createElement("span");
+      copy.className = "device-row-copy";
+      const name = document.createElement("span");
+      name.className = "device-row-name";
+      name.textContent = device.label || device.name;
+      const meta = document.createElement("span");
+      meta.className = "device-row-meta";
+      meta.textContent = `${device.name} · ${device.address}`;
+      row.title = `${device.name} · ${device.profile}`;
+      copy.append(name, meta);
+
+      const stateEl = document.createElement("span");
+      stateEl.className = "device-row-state";
+      const battery = document.createElement("span");
+      battery.className = "device-row-battery";
+      battery.textContent = `${device.battery} %`;
+      const conn = document.createElement("span");
+      conn.className = "device-row-conn";
+      conn.textContent = state;
+      stateEl.append(battery, conn);
+
+      row.append(check, copy, stateEl);
+      host.append(row);
+    });
+  }
+
+  function renderChrome() {
+    $("#dirtyBanner").hidden = !dirty;
+    $("#testBanner").hidden = !testOn;
+    $("#applyBtn").disabled = !dirty;
+    $("#revertBtn").disabled = !dirty;
+    $("#menuRevertItem").disabled = !dirty;
+    $("#testBtn").setAttribute("aria-pressed", testOn ? "true" : "false");
+    $("#voiceChip").textContent = triggerKey || "none";
+  }
+
+  function renderTestBar() {
+    const bar = $("#testbar");
+    const title = $("#testTitle");
+    const sub = $("#testSub");
+    const chip = $("#lastChip");
+    const action = $("#lastAction");
+    const run = $("#runOnce");
+    bar.classList.toggle("on", testOn);
+
+    if (!testOn) {
+      title.textContent = "Test mode off";
+      sub.textContent = "Turn on Test to see what each key sends.";
+      chip.hidden = true;
+      run.disabled = true;
+      return;
+    }
+    if (!pressed) {
+      title.textContent = "Test mode on";
+      sub.textContent = "Press a remote key — shortcuts, volume, and dictation are suppressed.";
+      chip.hidden = true;
+      run.disabled = true;
+      return;
+    }
+    const label = buttonById(pressed.button).label;
+    const trigger = TRIGGER_LABEL[pressed.trigger];
+    const raw = effective(pressed.button, pressed.trigger);
+    const info = compactAction(raw);
+    title.textContent = `Test mode on — ${label} · ${trigger}`;
+    sub.textContent = raw ? "Highlighted on the board." : "No action is mapped to this slot.";
+    action.textContent = info.text;
+    chip.hidden = false;
+    run.disabled = !raw || raw === "none";
+  }
+
+  function refresh() {
+    renderBoard();
+    renderChrome();
+    renderDeviceChrome();
+    renderDeviceList();
+    renderTestBar();
+  }
+
+  function toast(message) {
+    const el = $("#toast");
+    el.textContent = message;
+    el.classList.add("show");
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => el.classList.remove("show"), 2200);
+  }
+
+  /* ---------- Menu and device switcher ---------- */
+  function setMenu(open) {
+    menuOpen = open;
+    $("#menuPop").hidden = !open;
+    $("#menuBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      devicePopOpen = false;
+      $("#devicePop").hidden = true;
+      $("#deviceBtn").setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function setDevicePop(open) {
+    devicePopOpen = open;
+    $("#devicePop").hidden = !open;
+    $("#deviceBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      menuOpen = false;
+      $("#menuPop").hidden = true;
+      $("#menuBtn").setAttribute("aria-expanded", "false");
+    }
+  }
+
+  $("#menuBtn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setMenu(!menuOpen);
+  });
+
+  $("#deviceBtn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setDevicePop(!devicePopOpen);
+  });
+
+  $("#deviceList").addEventListener("click", (event) => {
+    const row = event.target.closest(".device-row");
+    if (row) switchDevice(Number(row.dataset.index));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (menuOpen && !event.target.closest("#menuPop") && !event.target.closest("#menuBtn")) setMenu(false);
+    if (devicePopOpen && !event.target.closest("#devicePop") && !event.target.closest("#deviceBtn")) setDevicePop(false);
+  });
+
+  document.addEventListener("click", (event) => {
+    const slot = event.target.closest(".slot");
+    if (slot) {
+      openEditor(slot.dataset.button, slot.dataset.trigger);
+      return;
+    }
+    const hotspot = event.target.closest(".hotspot");
+    if (hotspot) {
+      if (hotspot.dataset.voice) openVoice();
+      else openEditor(hotspot.dataset.button, "single");
+    }
+  });
+
+  $("#menuRevertItem").addEventListener("click", () => { setMenu(false); revert(); });
+  $("#deviceInfoItem").addEventListener("click", () => { setMenu(false); openDialog("device"); });
+  $("#aboutItem").addEventListener("click", () => {
+    setMenu(false);
+    toast("ATVV Remote 0.1.0 · GPL-3.0-or-later");
+  });
+  $("#quitItem").addEventListener("click", () => {
+    setMenu(false);
+    toast("Quit is handled by the window manager");
+  });
+
+  /* ---------- Selection / editor ---------- */
+  function openEditor(button, trigger) {
+    editing = { button, trigger };
+    selected = { button, trigger };
+    const raw = effective(button, trigger);
+    const draft = draftFrom(raw);
+    $("#editorTitle").textContent = `${buttonById(button).label} · ${TRIGGER_LABEL[trigger]}`;
+    const custom = Object.prototype.hasOwnProperty.call(overrides, slotKey(button, trigger));
+    const hasDefault = defaultFor(button, trigger) !== null;
+    $("#editorSub").textContent = custom
+      ? "Custom mapping"
+      : hasDefault
+        ? "Profile default"
+        : "Unbound";
+    $("#editType").value = draft.kind;
+    $("#editKey").value = draft.key;
+    $("#editChord").value = draft.chord;
+    $("#editCommand").value = draft.command;
+    $("#editDictation").value = draft.dictation;
+    $("#editError").hidden = true;
+    $("#editError").dataset.touched = "0";
+    stopLearning(false);
+    updateEditor({ previewOnly: false });
+    openDialog("editor");
+    refresh();
+  }
+
+  function draftFrom(raw) {
+    const draft = { kind: "none", key: "", chord: "", command: "", dictation: "toggle" };
+    if (!raw || raw === "none") return draft;
+    if (raw.startsWith("key:")) return { ...draft, kind: "key", key: raw.slice(4) };
+    if (raw.startsWith("combo:")) return { ...draft, kind: "combo", chord: raw.slice(6) };
+    if (raw.startsWith("exec:")) return { ...draft, kind: "exec", command: raw.slice(5) };
+    if (raw.startsWith("dictation:")) return { ...draft, kind: "dictation", dictation: raw.slice(10) };
+    return { ...draft, kind: "key", key: raw };
+  }
+
+  function composeEditorRaw() {
+    const kind = $("#editType").value;
+    if (kind === "none") return "none";
+    if (kind === "key") return `key:${normalizeEvdev($("#editKey").value)}`;
+    if (kind === "combo") return `combo:${$("#editChord").value.trim().toLowerCase()}`;
+    if (kind === "exec") return `exec:${$("#editCommand").value.trim()}`;
+    return `dictation:${$("#editDictation").value}`;
+  }
+
+  function editorError() {
+    const kind = $("#editType").value;
+    if (kind === "key") {
+      const value = normalizeEvdev($("#editKey").value);
+      if (!value) return "Enter a key name, or use Learn Key.";
+      if (!/^KEY_[A-Z0-9_]+$/.test(value)) return "Use an evdev key name such as KEY_F13.";
+      return "";
+    }
+    if (kind === "combo") {
+      const value = $("#editChord").value.trim().toLowerCase();
+      if (!value) return "Enter a chord, or use Learn Key.";
+      const tokens = value.split("+").map((t) => t.trim()).filter(Boolean);
+      if (tokens.length < 2 || !tokens.every((t) => /^[a-z0-9_]+$/.test(t))) {
+        return "Use a chord such as ctrl+alt+v.";
+      }
+      return "";
+    }
+    if (kind === "exec") {
+      if (!$("#editCommand").value.trim()) return "Enter the command to run.";
+      if (!allowExec) return "Shell commands are disabled. Turn on Allow shell commands first.";
+      return "";
+    }
+    return "";
+  }
+
+  function updateEditor() {
+    const kind = $("#editType").value;
+    $("#rowKey").hidden = kind !== "key";
+    $("#rowChord").hidden = kind !== "combo";
+    $("#rowExec").hidden = kind !== "exec";
+    $("#rowAllowExec").hidden = kind !== "exec";
+    $("#rowDictation").hidden = kind !== "dictation";
+
+    const hints = {
+      none: "The button is swallowed; nothing is emitted.",
+      key: "One key, emitted after the gesture.",
+      combo: "A chord, emitted after the gesture. Modifiers follow ctrl, alt, shift, super.",
+      exec: "The command runs only when this slot is triggered.",
+      dictation: "Controls the ATVV microphone: start, stop, or toggle.",
+    };
+    $("#editHint").textContent = hints[kind] || "";
+
+    const raw = composeEditorRaw();
+    const info = compactAction(raw);
+    $("#editorPreview").textContent = info.text;
+    $("#editorRaw").textContent = raw;
+
+    const error = editorError();
+    if ($("#editError").dataset.touched === "1") {
+      $("#editError").textContent = error;
+      $("#editError").hidden = !error;
+    } else {
+      $("#editError").hidden = true;
+    }
+    return error;
+  }
+
+  $("#editType").addEventListener("change", () => updateEditor());
+  for (const id of ["editKey", "editChord", "editCommand", "editDictation"]) {
+    $(`#${id}`).addEventListener("input", () => {
+      if (id !== "editDictation") $("#editError").dataset.touched = "1";
+      updateEditor();
+    });
+  }
+  $("#allowExec").addEventListener("change", (event) => {
+    allowExec = event.target.checked;
+    updateEditor();
+  });
+
+  $("#editorUpdate").addEventListener("click", () => {
+    $("#editError").dataset.touched = "1";
+    const error = updateEditor();
+    if (error) return;
+    const raw = composeEditorRaw();
+    overrides[slotKey(editing.button, editing.trigger)] = raw;
+    dirty = true;
+    closeDialog();
+    refresh();
+    toast("Mapping updated");
+  });
+
+  $("#editorReset").addEventListener("click", () => {
+    delete overrides[slotKey(editing.button, editing.trigger)];
+    dirty = true;
+    closeDialog();
+    refresh();
+    toast(defaultFor(editing.button, editing.trigger) ? "Profile default restored" : "Slot cleared");
+  });
+
+  /* ---------- Learning ---------- */
+  function startLearning(target, buttonEl) {
+    learning = { target, buttonEl };
+    buttonEl.textContent = "Listening…";
+    buttonEl.classList.add("listening");
+    if (target === "voice") {
+      $("#voiceError").hidden = true;
+    } else {
+      $("#editError").hidden = true;
+      $("#editHint").textContent = "Press a key or chord. Escape cancels.";
+    }
+  }
+
+  function stopLearning(update = true) {
+    if (!learning) return;
+    learning.buttonEl.textContent = "Learn Key";
+    learning.buttonEl.classList.remove("listening");
+    learning = null;
+    if (update) updateEditor();
+  }
+
+  function evdevName(event) {
+    const code = event.code;
+    if (code.startsWith("Key")) return `KEY_${code.slice(3)}`;
+    if (code.startsWith("Digit")) return `KEY_${code.slice(5)}`;
+    if (/^F\d+$/.test(code)) return `KEY_${code}`;
+    const named = {
+      ArrowUp: "KEY_UP", ArrowDown: "KEY_DOWN", ArrowLeft: "KEY_LEFT", ArrowRight: "KEY_RIGHT",
+      Enter: "KEY_ENTER", Space: "KEY_SPACE", Backspace: "KEY_BACKSPACE", Tab: "KEY_TAB",
+      Home: "KEY_HOME", End: "KEY_END", PageUp: "KEY_PAGEUP", PageDown: "KEY_PAGEDOWN",
+      Insert: "KEY_INSERT", Delete: "KEY_DELETE", Minus: "KEY_MINUS", Equal: "KEY_EQUAL",
+      BracketLeft: "KEY_LEFTBRACE", BracketRight: "KEY_RIGHTBRACE", Semicolon: "KEY_SEMICOLON",
+      Quote: "KEY_APOSTROPHE", Backquote: "KEY_GRAVE", Backslash: "KEY_BACKSLASH",
+      Comma: "KEY_COMMA", Period: "KEY_DOT", Slash: "KEY_SLASH",
+    };
+    return named[code] || `KEY_${code.toUpperCase()}`;
+  }
+
+  function chordToken(event) {
+    if (event.code.startsWith("Key")) return event.code.slice(3).toLowerCase();
+    if (event.code.startsWith("Digit")) return event.code.slice(5);
+    if (/^F\d+$/.test(event.code)) return event.code.toLowerCase();
+    const named = {
+      ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+      Enter: "enter", Space: "space", Backspace: "backspace", Tab: "tab",
+      Home: "home", End: "end", PageUp: "pageup", PageDown: "pagedown",
+      Insert: "insert", Delete: "delete", Backquote: "grave", Comma: "comma",
+      Period: "dot", Slash: "slash", Semicolon: "semicolon", Quote: "apostrophe",
+    };
+    return named[event.code] || event.key.toLowerCase();
+  }
+
+  $("#learnKeyBtn").addEventListener("click", (event) => startLearning("key", event.currentTarget));
+  $("#learnChordBtn").addEventListener("click", (event) => startLearning("chord", event.currentTarget));
+  $("#voiceLearnBtn").addEventListener("click", (event) => startLearning("voice", event.currentTarget));
+
+  document.addEventListener("keydown", (event) => {
+    if (learning) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (learning.target === "voice") learning.buttonEl.textContent = "Learn Key";
+        stopLearning(false);
+        updateEditor();
+        return;
+      }
+      if (["Control", "Alt", "Shift", "Meta", "CapsLock"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const mods = [];
+      if (event.ctrlKey) mods.push("ctrl");
+      if (event.altKey) mods.push("alt");
+      if (event.shiftKey) mods.push("shift");
+      if (event.metaKey) mods.push("super");
+
+      if (learning.target === "voice") {
+        $("#voiceKey").value = mods.length
+          ? `${mods.join("+")}+${chordToken(event)}`
+          : evdevName(event).replace(/^KEY_/, "");
+        $("#voiceError").hidden = true;
+        stopLearning(false);
+        return;
+      }
+      if (mods.length) {
+        $("#editType").value = "combo";
+        $("#editChord").value = `${mods.join("+")}+${chordToken(event)}`;
+      } else {
+        $("#editType").value = "key";
+        $("#editKey").value = evdevName(event);
+      }
+      $("#editError").dataset.touched = "1";
+      stopLearning(false);
+      updateEditor();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (activeScrim) {
+        closeDialog();
+        return;
+      }
+      if (devicePopOpen) {
+        setDevicePop(false);
+        return;
+      }
+      if (menuOpen) {
+        setMenu(false);
+        return;
+      }
+    }
+
+    if (event.key === "Tab" && activeScrim) trapFocus(event);
+  });
+
+  /* ---------- Dialogs ---------- */
+  const SCRIMS = {
+    editor: "editorScrim",
+    voice: "voiceScrim",
+    device: "deviceScrim",
+  };
+
+  function openDialog(name) {
+    setMenu(false);
+    const scrim = document.getElementById(SCRIMS[name]);
+    if (!scrim) return;
+    lastFocused = document.activeElement;
+    scrim.hidden = false;
+    activeScrim = scrim;
+    const dialog = scrim.querySelector(".dialog");
+    const preferred = scrim.querySelector("[autofocus]") || scrim.querySelector(".input") || dialog;
+    window.setTimeout(() => preferred.focus(), 0);
+  }
+
+  function closeDialog() {
+    if (!activeScrim) return;
+    if (learning) stopLearning(false);
+    activeScrim.hidden = true;
+    activeScrim = null;
+    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+    refresh();
+  }
+
+  function trapFocus(event) {
+    const focusable = $$(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]',
+      activeScrim,
+    ).filter((el) => el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  for (const scrim of $$(".scrim")) {
+    scrim.addEventListener("mousedown", (event) => {
+      if (event.target === scrim) closeDialog();
+    });
+  }
+  for (const button of $$("[data-close]")) {
+    button.addEventListener("click", () => closeDialog());
+  }
+
+  /* ---------- Voice dialog ---------- */
+  function openVoice() {
+    $("#voiceKey").value = triggerKey || "none";
+    $("#declaredList").hidden = true;
+    $("#voiceDeclaredBtn").setAttribute("aria-expanded", "false");
+    $("#voiceError").hidden = true;
+    for (const chip of $$(".chip", $("#declaredList"))) {
+      chip.classList.toggle("current", chip.dataset.key === (triggerKey || "none"));
+    }
+    openDialog("voice");
+  }
+
+  $("#voiceCard").addEventListener("click", openVoice);
+
+  $("#voiceDeclaredBtn").addEventListener("click", () => {
+    const list = $("#declaredList");
+    list.hidden = !list.hidden;
+    $("#voiceDeclaredBtn").setAttribute("aria-expanded", list.hidden ? "false" : "true");
+  });
+
+  for (const chip of $$(".chip", $("#declaredList"))) {
+    chip.addEventListener("click", () => {
+      $("#voiceKey").value = chip.dataset.key;
+      $("#declaredList").hidden = true;
+      $("#voiceDeclaredBtn").setAttribute("aria-expanded", "false");
+      $("#voiceError").hidden = true;
+      for (const other of $$(".chip", $("#declaredList"))) other.classList.toggle("current", other === chip);
+    });
+  }
+
+  $("#voiceReset").addEventListener("click", () => {
+    $("#voiceKey").value = "DICTATE";
+    $("#voiceError").hidden = true;
+  });
+
+  $("#voiceUpdate").addEventListener("click", () => {
+    const value = $("#voiceKey").value.trim();
+    if (!value) {
+      $("#voiceError").textContent = "Enter a key name or none.";
+      $("#voiceError").hidden = false;
+      return;
+    }
+    triggerKey = value.toLowerCase() === "none" ? "none" : value;
+    dirty = true;
+    closeDialog();
+    refresh();
+    toast("Recording output key updated");
+  });
+
+  /* ---------- Device switching / revert / apply / test ---------- */
+  function switchDevice(index) {
+    if (index === activeDevice) {
+      setDevicePop(false);
+      return;
+    }
+    if (dirty) {
+      toast("Apply or revert before switching devices.");
+      return;
+    }
+    const previous = DEVICES[activeDevice];
+    deviceMaps.set(previous.address, overrides);
+    previous.connected = false;
+    previous.lastSeen = "just now";
+
+    activeDevice = index;
+    const next = DEVICES[index];
+    next.connected = true;
+    next.lastSeen = "now";
+    overrides = deviceMaps.get(next.address) ?? Object.create(null);
+    dirty = false;
+    testOn = false;
+    pressed = null;
+    selected = { button: "ok", trigger: "single" };
+    setDevicePop(false);
+    setMenu(false);
+    refresh();
+    toast(`Switched to ${next.label || next.short} · ${next.address}`);
+  }
+
+  function revert() {
+    if (!dirty) return;
+    overrides = Object.create(null);
+    deviceMaps.set(DEVICES[activeDevice].address, overrides);
+    dirty = false;
+    refresh();
+    toast("Changes reverted");
+  }
+
+  $("#revertBtn").addEventListener("click", revert);
+  $("#bannerRevert").addEventListener("click", revert);
+  $("#applyBtn").addEventListener("click", () => {
+    if (!dirty) return;
+    dirty = false;
+    refresh();
+    toast("Configuration applied");
+  });
+
+  function setTest(on) {
+    testOn = on;
+    if (!on) pressed = null;
+    refresh();
+  }
+
+  $("#testBtn").addEventListener("click", () => setTest(!testOn));
+  $("#bannerCancelTest").addEventListener("click", () => setTest(false));
+
+  $("#runOnce").addEventListener("click", () => {
+    if (!pressed) return;
+    const raw = effective(pressed.button, pressed.trigger);
+    if (!raw || raw === "none") return;
+    if (raw.startsWith("exec:")) {
+      toast("Run shell command? Confirmation stays required");
+      return;
+    }
+    toast("Action sent");
+  });
+
+  /* ---------- Preview-only states ---------- */
+  function setDemo(name) {
+    closeDialog();
+    setMenu(false);
+    setDevicePop(false);
+    activeDevice = 0;
+    for (let i = 0; i < DEVICES.length; i += 1) {
+      deviceMaps.set(DEVICES[i].address, { ...INITIAL_DEVICE_MAPS[i] });
+      DEVICES[i].connected = i === 0;
+      DEVICES[i].lastSeen = i === 0 ? "now" : "2 days ago";
+    }
+    overrides = deviceMaps.get(DEVICES[0].address);
+    dirty = false;
+    testOn = false;
+    pressed = null;
+    selected = { button: "ok", trigger: "single" };
+    triggerKey = "DICTATE";
+    allowExec = false;
+    if (name === "test") {
+      testOn = true;
+      pressed = { button: "ok", trigger: "single" };
+      selected = { button: "ok", trigger: "single" };
+    } else if (name === "conflict") {
+      overrides["tv:single"] = "combo:ctrl+alt+v";
+      overrides["volume-up:single"] = "combo:ctrl+alt+v";
+      dirty = true;
+      selected = { button: "up", trigger: "single" };
+    }
+    for (const button of $$(".seg-btn")) button.classList.toggle("active", button.dataset.demo === name);
+    refresh();
+  }
+
+  for (const button of $$(".seg-btn")) {
+    button.addEventListener("click", () => setDemo(button.dataset.demo));
+  }
+
+  /* ---------- Theme ---------- */
+  const THEMES = ["auto", "light", "dark"];
+  let theme = "auto";
+  const themeBtn = $("#themeBtn");
+  function applyTheme() {
+    if (theme === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    themeBtn.textContent = `Theme: ${theme.charAt(0).toUpperCase()}${theme.slice(1)}`;
+  }
+  themeBtn.addEventListener("click", () => {
+    theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+    applyTheme();
+  });
+  applyTheme();
+
+  /* ---------- Fit the fixed window into the viewport ---------- */
+  function fitWindow() {
+    const wrap = $("#windowWrap");
+    const windowEl = $("#appWindow");
+    const available = Math.min(document.documentElement.clientWidth - 48, 1180);
+    const scale = Math.max(0.45, Math.min(1, available / 1040));
+    wrap.style.width = `${1040 * scale}px`;
+    wrap.style.height = `${760 * scale}px`;
+    windowEl.style.transform = `scale(${scale})`;
+  }
+  window.addEventListener("resize", fitWindow);
+  fitWindow();
+
+  /* ---------- Initial render ---------- */
+  refresh();
+})();
+</script>
+</body>
+</html>
