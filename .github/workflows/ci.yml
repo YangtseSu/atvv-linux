@@ -6,9 +6,39 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+
+# A newer push to the same ref makes the older run obsolete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-26.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # paths-filter compares against the previous commit on push.
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/**'
+
   test:
+    needs: changes
+    # Documentation-only changes skip the compile/test job; compliance still
+    # runs so new files are checked by REUSE and cargo-deny.
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7

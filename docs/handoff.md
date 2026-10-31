@@ -296,7 +296,9 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - Man pages are generated from clap by `atvvctl manpages`; `atvvctl
   completions <shell>` prints completions. `atvvd` shares its clap definition
   from `atvv-daemon/src/cli.rs`.
-- CI runs fmt, clippy, workspace tests, cargo-deny, and REUSE. Dependabot
+- CI runs fmt, clippy, workspace tests, cargo-deny, and REUSE. A paths-filter
+  skips the compile/test job for docs-only changes; the compliance job still
+  runs. A newer push to the same ref cancels the older run. Dependabot
   checks Cargo and GitHub Actions daily and opens one PR per version update
   (no groups); it does not auto-merge. The runner is pinned to `ubuntu-26.04`
   with `actions/checkout@v7` and `fsfe/reuse-action@v6` (Node 24); the
