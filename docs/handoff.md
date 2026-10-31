@@ -194,8 +194,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   support, all integration guides, Arch package README); development records
   stay English. See `docs/plans/19-i18n-and-bilingual-docs.md`.
 - **20 first release and external packaging (prepared, push pending)**:
-  `.github/workflows/release.yml` publishes the tag archive and checksum;
-  `v0.1.0` is tagged locally. Arch recipes are outside the repository: one
+  `.github/workflows/release.yml` builds x86_64/aarch64 binaries, packages
+  them with the runtime assets and docs, and publishes them with the source
+  archive and checksums; `v0.1.0` is tagged locally. Arch recipes are outside the repository: one
   split AUR pkgbase `atvv` (`atvv`, `atvv-gui`) under `~/aur/atvv`, and one
   split VCS pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`) in the personal
   `arch-pkgs` repository. Both declare `x86_64` and `aarch64`; aarch64 was not
@@ -360,9 +361,9 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 
 ## Verified
 
-- 2026-10-31 step 20: the tag-triggered release workflow YAML parses;
-  `v0.1.0` is tagged; `atvv-linux-0.1.0.tar` SHA-256 is
-  `d3aa969a4eda7d06cf4d8cfd4220057aebae439b21edc764966f98f008ef8e86`.
+- 2026-10-31 step 20: the tag-triggered release workflow YAML parses; it
+  builds x86_64 and aarch64 binaries on GitHub runners;
+  `v0.1.0` is tagged; the AUR PKGBUILD pins the source archive checksum.
   The split AUR pkgbase built `atvv` (6.4 MiB / 18.1 MB installed) and
   `atvv-gui` (1.3 MiB / 3.34 MB installed) in one 86 s run with the existing
   `$srcdir` (Cargo 1m20s). `namcap PKGBUILD` is clean; package warnings are

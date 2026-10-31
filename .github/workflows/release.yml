@@ -8,7 +8,51 @@ permissions:
   contents: write
 
 jobs:
+  binaries:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-26.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpipewire-0.3-dev libspa-0.2-dev libclang-dev dbus libdbus-1-dev \
+            pkg-config libgtk-4-dev libadwaita-1-dev librsvg2-dev
+      - name: Build
+        run: cargo build --release --locked --workspace --bins
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          dir="atvv-$version"
+          mkdir "$dir"
+          cp target/release/atvvd target/release/atvvctl \
+            target/release/atvv-mcp target/release/atvv-config "$dir/"
+          cp -r packaging/systemd packaging/udev packaging/modules-load \
+            packaging/gui "$dir/"
+          cp README.md README.zh-CN.md LICENSE THIRD-PARTY-NOTICES.md "$dir/"
+          archive="atvv-$version-${{ matrix.arch }}.tar.gz"
+          tar -czf "$archive" "$dir"
+          sha256sum "$archive" > "$archive.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atvv-${{ matrix.arch }}
+          path: |
+            atvv-*.tar.gz
+            atvv-*.tar.gz.sha256
+
   release:
+    needs: binaries
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
@@ -18,15 +62,16 @@ jobs:
           archive="atvv-linux-$version.tar"
           git archive --format=tar --prefix="atvv-linux-$version/" HEAD > "$archive"
           sha256sum "$archive" > "$archive.sha256"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          assets=("atvv-linux-$version.tar" "atvv-linux-$version.tar.sha256")
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-              --title "atvv-linux $version" --generate-notes
-          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "atvv-linux-$version.tar" "atvv-linux-$version.tar.sha256" \
+            artifacts/atvv-*.tar.gz artifacts/atvv-*.tar.gz.sha256 \
+            --title "atvv-linux $version" --generate-notes

@@ -15,10 +15,11 @@ repository own the build recipes.
 
 - First public version is `v0.1.0`, matching the workspace version and the
   existing release package series. The tag is the release source of truth.
-- `.github/workflows/release.yml` runs only on `v*` tags. It builds one
-  uncompressed `git archive` tarball (`atvv-linux-<version>.tar`), writes its
-  SHA-256, and creates the GitHub release with generated notes. No build matrix,
-  cache, or third-party action is added; CI already owns tests.
+- `.github/workflows/release.yml` runs only on `v*` tags. It builds the four
+  binaries on `x86_64` and `aarch64`, packages each as
+  `atvv-<version>-<arch>.tar.gz` with the systemd/udev/desktop assets and
+  docs, and publishes the source archive plus checksums. CI still owns tests;
+  the release job does not run them.
 - The stable AUR packages are one split pkgbase `atvv` with
   `pkgname=('atvv' 'atvv-gui')`, built from the release tarball. One Cargo
   invocation compiles the shared graph once; `atvv-gui` depends on `atvv`.
@@ -32,7 +33,8 @@ repository own the build recipes.
 
 ## Deliverables
 
-- ✅ Tag-triggered release workflow publishing the source archive and checksum.
+- ✅ Tag-triggered release workflow building x86_64/aarch64 binaries and
+  publishing them with the source archive and checksums.
 - ✅ `v0.1.0` tag and source archive generated locally; the GitHub release is
   pending the tag push.
 - ✅ AUR package repository `atvv` with split packages `atvv` and `atvv-gui`.
@@ -56,10 +58,12 @@ namcap PKGBUILD
 
 ## Results
 
-- `git tag -l v0.1.0` → `v0.1.0`. `git archive` produced
-  `atvv-linux-0.1.0.tar` (1.6 MiB), SHA-256
-  `d3aa969a4eda7d06cf4d8cfd4220057aebae439b21edc764966f98f008ef8e86`;
-  the same archive from a shallow tag checkout has the same checksum.
+- `git tag -l v0.1.0` → `v0.1.0`. The release job produces
+  `atvv-linux-0.1.0.tar` and its SHA-256; the AUR PKGBUILD pins the checksum.
+  The same archive from a shallow tag checkout has the same checksum.
+- The binary jobs package `atvv-0.1.0-x86_64.tar.gz` and
+  `atvv-0.1.0-aarch64.tar.gz` with the four binaries, systemd/udev/desktop
+  assets, README, license, and third-party notices.
 - One split pkgbase `atvv` builds both packages from one Cargo invocation.
   With the existing `$srcdir` (shared base artifacts), the split rebuild took
   86 s, Cargo 1m20s. Clean separate builds had measured 67 s + 61 s; the split
@@ -88,8 +92,11 @@ namcap PKGBUILD
 
 ## Risks
 
-- The release archive is uncompressed so the checksum does not depend on the
+- The source archive is uncompressed so the checksum does not depend on the
   runner's gzip/zstd version. It is larger but deterministic.
+- The release binaries are built on Ubuntu runners and link the runner's
+  glibc/GTK/PipeWire; they are not a distro package. CI and the release job
+  use the same dependency set.
 - The split build compiles the GUI even when only `atvv` is installed. This
   keeps the shared dependency graph at one compile, at the cost of GTK build
   dependencies for a base-only build.

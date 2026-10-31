@@ -21,7 +21,7 @@ Remote 2 Pro / RC003. Read this file, `docs/plans/README.md`,
 - Do not add a PKGBUILD to this repository. Arch packaging lives outside it:
   AUR packages `atvv` and `atvv-gui`, plus the VCS recipes in the personal
   packaging repository. Release tags are `v<version>`; the tag workflow
-  publishes the source archive and release notes.
+  publishes x86_64/aarch64 binaries, the source archive, and release notes.
 - No root daemon. Use a systemd user service, udev `uaccess`, and the session
   D-Bus for control.
 - PipeWire service restart belongs to systemd, not `atvv-audio`. Keep
