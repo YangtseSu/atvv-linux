@@ -156,8 +156,12 @@ libadwaita widgets, not the HTML/CSS.
 - D-Bus `SetLayout`: success, unknown id, `default`, persistence across
   restart, `LayoutChanged`.
 - CLI: list/show/use/new/rename/delete/reset against an isolated bus.
-- GUI: selector lists layouts; switching sends `SetLayout`; dirty switching
-  is blocked; editor edits the active layout.
+- GUI: the layout chip/popover lists layouts; switching sends `SetLayout`;
+  dirty switching is blocked; editor edits the active layout.
+- GUI manager: Default is read-only and its banner duplicates and activates a
+  user layout; New/Rename validate unique names; Duplicate, Delete, and Reset
+  update the list; the manager footer shows Revert/Apply while dirty; the chip
+  updates after a device switch (step 21).
 - Real RC003: two layouts with different actions for one button; switch and
   press the remote; the emitted key changes without a daemon restart; the
   active layout survives a restart.
