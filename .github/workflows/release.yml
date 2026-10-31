@@ -3,12 +3,20 @@ name: release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   binaries:
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     strategy:
       matrix:
         include:
@@ -19,6 +27,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -33,12 +43,12 @@ jobs:
         run: cargo build --release --locked --workspace --bins
       - name: Package
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           dir="atvv-$version"
           mkdir "$dir"
           cp target/release/atvvd target/release/atvvctl \
             target/release/atvv-mcp target/release/atvv-config "$dir/"
-          cp -r packaging/systemd packaging/udev packaging/modules-load \
+          cp -r packaging/systemd packaging/udev packaging/modules-load.d \
             packaging/gui "$dir/"
           cp README.md README.zh-CN.md LICENSE THIRD-PARTY-NOTICES.md "$dir/"
           archive="atvv-$version-${{ matrix.arch }}.tar.gz"
@@ -54,11 +64,15 @@ jobs:
   release:
     needs: binaries
     runs-on: ubuntu-26.04
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
       - name: Build source archive
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           archive="atvv-linux-$version.tar"
           git archive --format=tar --prefix="atvv-linux-$version/" HEAD > "$archive"
           sha256sum "$archive" > "$archive.sha256"
@@ -70,8 +84,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
+          version="${TAG#v}"
+          gh release create "$TAG" \
             "atvv-linux-$version.tar" "atvv-linux-$version.tar.sha256" \
             artifacts/atvv-*.tar.gz artifacts/atvv-*.tar.gz.sha256 \
             --title "atvv-linux $version" --generate-notes
