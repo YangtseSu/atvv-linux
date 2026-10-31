@@ -245,6 +245,5 @@ backlog entry: configurable press/release actions for the recording key. Step
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Second ATVV v1.0 device to validate the profile abstraction.
-- zbus 6 migration and removal of ignored zbus 5 advisories.
 - Optional manual layers/profiles; no automatic per-app focus detection.
 - Optional import/export and config migration UI.

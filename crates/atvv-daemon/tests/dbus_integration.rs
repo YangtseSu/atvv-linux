@@ -15,9 +15,9 @@ use atvv_daemon::dbus::{self, Client, DaemonInterface, DbusSink};
 use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport, Transport};
 use atvv_protocol::profile::RC003;
+use futures_util::StreamExt;
+use zbus::Connection;
 use zbus::MatchRule;
-use zbus::blocking::connection::Builder;
-use zbus::blocking::{Connection, MessageIterator};
 
 const ADDRESS: &str = "02:00:00:00:00:01";
 
@@ -99,38 +99,45 @@ fn wait_status(client: &Client, predicate: impl Fn(&StatusView) -> bool) -> Stat
 fn collect_signals(connection: Connection) -> Receiver<(String, Option<String>)> {
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
-        let Ok(interface) = zbus::names::InterfaceName::try_from(dbus::INTERFACE) else {
-            return;
-        };
-        let rule = MatchRule::builder()
-            .msg_type(zbus::message::Type::Signal)
-            .interface(interface)
-            .expect("match rule")
-            .build();
-        let Ok(mut signals) = MessageIterator::for_match_rule(rule, &connection, Some(32)) else {
-            return;
-        };
-        if sender.send(("__ready__".to_string(), None)).is_err() {
-            return;
-        }
-        for message in signals.by_ref() {
-            let Ok(message) = message else {
-                break;
+        zbus::block_on(async {
+            let Ok(interface) = zbus::names::InterfaceName::try_from(dbus::INTERFACE) else {
+                return;
             };
-            let name = message
-                .header()
-                .member()
-                .map(ToString::to_string)
-                .unwrap_or_default();
-            let state = message
-                .body()
-                .deserialize::<(String,)>()
-                .ok()
-                .map(|(state,)| state);
-            if sender.send((name, state)).is_err() {
-                break;
+            let Ok(rule) = MatchRule::builder()
+                .msg_type(zbus::message::Type::Signal)
+                .interface(interface)
+                .build()
+            else {
+                return;
+            };
+            let queue = std::num::NonZeroUsize::new(32).expect("non-zero queue");
+            let Ok(mut signals) =
+                zbus::MessageStream::for_match_rule(rule, &connection, Some(queue)).await
+            else {
+                return;
+            };
+            if sender.send(("__ready__".to_string(), None)).is_err() {
+                return;
             }
-        }
+            while let Some(message) = signals.next().await {
+                let Ok(message) = message else {
+                    break;
+                };
+                let name = message
+                    .header()
+                    .member()
+                    .map(ToString::to_string)
+                    .unwrap_or_default();
+                let state = message
+                    .body()
+                    .deserialize::<(String,)>()
+                    .ok()
+                    .map(|(state,)| state);
+                if sender.send((name, state)).is_err() {
+                    break;
+                }
+            }
+        });
     });
     receiver
 }
@@ -155,9 +162,7 @@ fn wait_for_signal(
 #[test]
 fn mock_daemon_dbus_contract() {
     let bus = TestBus::start();
-    let server = Builder::address(bus.address.as_str())
-        .expect("server builder")
-        .build()
+    let server = zbus::block_on(zbus::connection::Builder::address(bus.address.as_str()).build())
         .expect("server connection");
 
     let (transport, mock) = MockTransport::new(MockConfig {
@@ -190,10 +195,9 @@ fn mock_daemon_dbus_contract() {
     dbus::serve(&server, interface).expect("serve org.atvv.Daemon");
     let daemon_thread = std::thread::spawn(move || daemon.run());
 
-    let client_connection = Builder::address(bus.address.as_str())
-        .expect("client builder")
-        .build()
-        .expect("client connection");
+    let client_connection =
+        zbus::block_on(zbus::connection::Builder::address(bus.address.as_str()).build())
+            .expect("client connection");
     let client = Client::with_connection(client_connection.clone());
     let status = wait_status(&client, |status| status.state == "ready");
     assert_eq!(status.device.id, RC003.id);
@@ -202,15 +206,14 @@ fn mock_daemon_dbus_contract() {
 
     assert_eq!(client.devices().expect("devices"), vec![address]);
 
-    let reply = client_connection
-        .call_method(
-            Some(dbus::SERVICE),
-            dbus::PATH,
-            Some("org.freedesktop.DBus.Introspectable"),
-            "Introspect",
-            &(),
-        )
-        .expect("introspection");
+    let reply = zbus::block_on(client_connection.call_method(
+        Some(dbus::SERVICE),
+        dbus::PATH,
+        Some("org.freedesktop.DBus.Introspectable"),
+        "Introspect",
+        &(),
+    ))
+    .expect("introspection");
     let xml: String = reply.body().deserialize().expect("introspection XML");
     for member in [
         "GetStatus",

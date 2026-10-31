@@ -103,10 +103,10 @@ pub fn pair(config: PairConfig) -> Result<PairReport> {
 }
 
 async fn name(device: &Device) -> Option<String> {
-    if let Ok(alias) = device.alias().await {
-        if !alias.is_empty() {
-            return Some(alias);
-        }
+    if let Ok(alias) = device.alias().await
+        && !alias.is_empty()
+    {
+        return Some(alias);
     }
     device
         .name()

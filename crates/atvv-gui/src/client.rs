@@ -11,8 +11,9 @@ use std::thread;
 use std::time::Duration;
 
 use atvv_config::ConfigDocument;
+use futures_util::StreamExt;
 use serde::Deserialize;
-use zbus::blocking::{Connection, connection};
+use zbus::{Connection, connection};
 
 pub const SERVICE: &str = "org.atvv.Daemon";
 pub const PATH: &str = "/org/atvv/Daemon";
@@ -99,25 +100,24 @@ struct DaemonClient {
 
 impl DaemonClient {
     fn connect(address: Option<&str>) -> Result<Self, String> {
-        let builder = match address {
-            Some(address) => connection::Builder::address(address),
-            None => connection::Builder::session(),
-        }
-        .map_err(|error| format!("cannot use the session bus: {error}"))?;
-        let connection = builder
-            .method_timeout(METHOD_TIMEOUT)
-            .build()
-            .map_err(|error| format!("cannot connect to the session bus: {error}"))?;
+        let connection = zbus::block_on(async {
+            let builder = match address {
+                Some(address) => connection::Builder::address(address),
+                None => connection::Builder::session(),
+            };
+            builder.method_timeout(METHOD_TIMEOUT).build().await
+        })
+        .map_err(|error| format!("cannot connect to the session bus: {error}"))?;
         Ok(Self { connection })
     }
 
-    fn proxy(&self) -> Result<DaemonApiProxyBlocking<'_>, String> {
-        DaemonApiProxyBlocking::new(&self.connection).map_err(|error| error.to_string())
+    fn proxy(&self) -> Result<DaemonApiProxy<'_>, String> {
+        zbus::block_on(DaemonApiProxy::new(&self.connection)).map_err(|error| error.to_string())
     }
 
     fn load(&self) -> Result<(ConfigDocument, DaemonStatus), String> {
         let proxy = self.proxy()?;
-        let raw = proxy.get_config().map_err(|error| error.to_string())?;
+        let raw = zbus::block_on(proxy.get_config()).map_err(|error| error.to_string())?;
         let document: ConfigDocument = serde_json::from_str(&raw)
             .map_err(|error| format!("invalid configuration document: {error}"))?;
         let status = self.status()?;
@@ -125,36 +125,25 @@ impl DaemonClient {
     }
 
     fn status(&self) -> Result<DaemonStatus, String> {
-        let raw = self
-            .proxy()?
-            .get_status()
-            .map_err(|error| error.to_string())?;
+        let raw = zbus::block_on(self.proxy()?.get_status()).map_err(|error| error.to_string())?;
         serde_json::from_str(&raw).map_err(|error| format!("invalid status document: {error}"))
     }
 
     fn save(&self, document: &ConfigDocument) -> Result<(), String> {
         let json = serde_json::to_string(document).map_err(|error| error.to_string())?;
-        self.proxy()?
-            .set_config(&json)
-            .map_err(|error| error.to_string())
+        zbus::block_on(self.proxy()?.set_config(&json)).map_err(|error| error.to_string())
     }
 
     fn begin_capture(&self) -> Result<(), String> {
-        self.proxy()?
-            .begin_capture()
-            .map_err(|error| error.to_string())
+        zbus::block_on(self.proxy()?.begin_capture()).map_err(|error| error.to_string())
     }
 
     fn end_capture(&self) -> Result<(), String> {
-        self.proxy()?
-            .end_capture()
-            .map_err(|error| error.to_string())
+        zbus::block_on(self.proxy()?.end_capture()).map_err(|error| error.to_string())
     }
 
     fn run_action(&self, action: &str) -> Result<(), String> {
-        self.proxy()?
-            .run_action(action)
-            .map_err(|error| error.to_string())
+        zbus::block_on(self.proxy()?.run_action(action)).map_err(|error| error.to_string())
     }
 }
 
@@ -332,32 +321,34 @@ fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
     let _ = thread::Builder::new()
         .name("atvv-gui-signals".to_string())
         .spawn(move || {
-            let Ok(proxy) = DaemonApiProxyBlocking::new(&connection) else {
-                let _ = events.send(Event::SignalStreamEnded);
-                return;
-            };
-            let Ok(mut stream) = proxy.receive_button_event() else {
-                let _ = events.send(Event::SignalStreamEnded);
-                return;
-            };
-            for event in stream.by_ref() {
-                let Ok(args) = event.args() else {
-                    continue;
-                };
-                let button = args.button().to_string();
-                let trigger = args.trigger().to_string();
-                let pressed = *args.pressed();
-                if events
-                    .send(Event::Button(ButtonSignal {
-                        button,
-                        trigger,
-                        pressed,
-                    }))
-                    .is_err()
-                {
+            zbus::block_on(async {
+                let Ok(proxy) = DaemonApiProxy::new(&connection).await else {
+                    let _ = events.send(Event::SignalStreamEnded);
                     return;
+                };
+                let Ok(mut stream) = proxy.receive_button_event().await else {
+                    let _ = events.send(Event::SignalStreamEnded);
+                    return;
+                };
+                while let Some(event) = stream.next().await {
+                    let Ok(args) = event.args() else {
+                        continue;
+                    };
+                    let button = args.button().to_string();
+                    let trigger = args.trigger().to_string();
+                    let pressed = *args.pressed();
+                    if events
+                        .send(Event::Button(ButtonSignal {
+                            button,
+                            trigger,
+                            pressed,
+                        }))
+                        .is_err()
+                    {
+                        return;
+                    }
                 }
-            }
-            let _ = events.send(Event::SignalStreamEnded);
+                let _ = events.send(Event::SignalStreamEnded);
+            });
         });
 }

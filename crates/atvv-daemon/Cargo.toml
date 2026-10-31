@@ -30,3 +30,4 @@ zbus.workspace = true
 
 [dev-dependencies]
 evdevil.workspace = true
+futures-util.workspace = true

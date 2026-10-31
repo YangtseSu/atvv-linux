@@ -12,13 +12,6 @@ no-default-features = false
 
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# zbus 5.19 split these crates out and zbus 6.0 merged them back. They are
-# unmaintained, not vulnerable; migration is a separate dependency change.
-ignore = [
-    { id = "RUSTSEC-2026-0370", reason = "zbus 5.19 transitive crate; migrate to zbus 6 in a dedicated step" },
-    { id = "RUSTSEC-2026-0371", reason = "zbus 5.19 transitive crate; migrate to zbus 6 in a dedicated step" },
-    { id = "RUSTSEC-2026-0372", reason = "zbus 5.19 transitive crate; migrate to zbus 6 in a dedicated step" },
-]
 
 [licenses]
 allow = [

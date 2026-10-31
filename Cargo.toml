@@ -15,8 +15,9 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-# zbus 5 requires 1.87.
-rust-version = "1.87"
+# Tracks the stable toolchain used to build; zbus 6 needs 1.89 and gtk4 0.11
+# needs 1.92, so the MSRV no longer holds dependency upgrades back.
+rust-version = "1.99"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/YangtseSu/atvv-linux"
 authors = ["Yangtse Su <yangtsesu@gmail.com>"]
@@ -31,11 +32,11 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
 pipewire = "0.10"
 crossbeam-queue = "0.3"
-evdevil = "=0.5.0"
+evdevil = "0.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.9"
-zbus = "5.19"
+toml = "1.1"
+zbus = { version = "6.2", features = ["tokio-multithread"] }
 
 [profile.dev]
 debug = "line-tables-only"

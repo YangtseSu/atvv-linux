@@ -12,10 +12,9 @@ use std::time::Duration;
 use atvv_config::ConfigDocument;
 use atvv_protocol::profile::DeviceProfile;
 use serde_json::Value;
-use zbus::blocking::Connection;
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
-use zbus::zvariant::ObjectPath;
+use zbus::{Connection, ObjectPath};
 
 use crate::capture::{self, CaptureCell, CaptureState};
 use crate::daemon::{Command, DaemonEvent, EventSink};
@@ -183,8 +182,7 @@ fn wait(result: Receiver<Result<(), String>>) -> zbus::fdo::Result<()> {
 /// The owner is a unique bus name, so `NameHasOwner` is a direct check and
 /// avoids depending on match-rule argument filtering.
 fn watch_owner(connection: zbus::Connection, owner: String, cell: CaptureCell) {
-    let connection = zbus::blocking::Connection::from(connection);
-    let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+    let Ok(proxy) = zbus::block_on(zbus::fdo::DBusProxy::new(&connection)) else {
         return;
     };
     loop {
@@ -197,7 +195,7 @@ fn watch_owner(connection: zbus::Connection, owner: String, cell: CaptureCell) {
         let Ok(name) = zbus::names::BusName::try_from(owner.as_str()) else {
             return;
         };
-        match proxy.name_has_owner(name) {
+        match zbus::block_on(proxy.name_has_owner(name)) {
             Ok(true) => {}
             Ok(false) => break,
             Err(_) => return,
@@ -220,7 +218,7 @@ impl DbusSink {
         let path =
             ObjectPath::try_from(PATH).map_err(|error| zbus::Error::Failure(error.to_string()))?;
         Ok(Self {
-            emitter: SignalEmitter::new(connection.inner(), path)?.into_owned(),
+            emitter: SignalEmitter::new(connection, path)?.into_owned(),
         })
     }
 }
@@ -256,7 +254,7 @@ impl EventSink for DbusSink {
 
 /// Connect to the session bus.
 pub fn connect_session() -> zbus::Result<Connection> {
-    Connection::session()
+    zbus::block_on(Connection::session())
 }
 
 /// Register the object and then claim `org.atvv.Daemon`.
@@ -264,9 +262,11 @@ pub fn connect_session() -> zbus::Result<Connection> {
 /// The name is claimed after the object exists so a client that sees the name
 /// can never send a method call into an empty object path.
 pub fn serve(connection: &Connection, interface: DaemonInterface) -> zbus::Result<()> {
-    connection.object_server().at(PATH, interface)?;
-    connection.request_name(SERVICE)?;
-    Ok(())
+    zbus::block_on(async {
+        connection.object_server().at(PATH, interface).await?;
+        connection.request_name(SERVICE).await?;
+        Ok(())
+    })
 }
 
 #[zbus::proxy(
@@ -301,15 +301,22 @@ pub trait DaemonApi {
 }
 
 /// Blocking client for the daemon API.
+///
+/// zbus 6 has no blocking API; each method drives the async call with
+/// [`zbus::block_on`]. The connection runs on the process-wide Tokio runtime,
+/// so it keeps serving while this thread does other work.
 pub struct Client {
     connection: Connection,
 }
 
 impl Client {
     pub fn connect() -> Result<Self, ClientError> {
-        let connection = zbus::blocking::connection::Builder::session()?
-            .method_timeout(Duration::from_secs(10))
-            .build()?;
+        let connection = zbus::block_on(async {
+            zbus::connection::Builder::session()
+                .method_timeout(Duration::from_secs(10))
+                .build()
+                .await
+        })?;
         Ok(Self { connection })
     }
 
@@ -323,60 +330,60 @@ impl Client {
         &self.connection
     }
 
-    pub fn proxy(&self) -> Result<DaemonApiProxyBlocking<'_>, ClientError> {
-        Ok(DaemonApiProxyBlocking::new(&self.connection)?)
+    pub fn proxy(&self) -> Result<DaemonApiProxy<'_>, ClientError> {
+        Ok(zbus::block_on(DaemonApiProxy::new(&self.connection))?)
     }
 
     pub fn status(&self) -> Result<StatusView, ClientError> {
-        let raw = self.proxy()?.get_status()?;
+        let raw = zbus::block_on(self.proxy()?.get_status())?;
         Ok(serde_json::from_str(&raw)?)
     }
 
     pub fn status_json(&self) -> Result<Value, ClientError> {
-        let raw = self.proxy()?.get_status()?;
+        let raw = zbus::block_on(self.proxy()?.get_status())?;
         Ok(serde_json::from_str(&raw)?)
     }
 
     pub fn config(&self) -> Result<ConfigDocument, ClientError> {
-        let raw = self.proxy()?.get_config()?;
+        let raw = zbus::block_on(self.proxy()?.get_config())?;
         Ok(serde_json::from_str(&raw)?)
     }
 
     pub fn set_config(&self, document: &ConfigDocument) -> Result<(), ClientError> {
         let json = serde_json::to_string(document)?;
-        Ok(self.proxy()?.set_config(&json)?)
+        Ok(zbus::block_on(self.proxy()?.set_config(&json))?)
     }
 
     pub fn begin_capture(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.begin_capture()?)
+        Ok(zbus::block_on(self.proxy()?.begin_capture())?)
     }
 
     pub fn end_capture(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.end_capture()?)
+        Ok(zbus::block_on(self.proxy()?.end_capture())?)
     }
 
     pub fn devices(&self) -> Result<Vec<String>, ClientError> {
-        Ok(self.proxy()?.list_devices()?)
+        Ok(zbus::block_on(self.proxy()?.list_devices())?)
     }
 
     pub fn start_voice(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.start_voice()?)
+        Ok(zbus::block_on(self.proxy()?.start_voice())?)
     }
 
     pub fn stop_voice(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.stop_voice()?)
+        Ok(zbus::block_on(self.proxy()?.stop_voice())?)
     }
 
     pub fn toggle_voice(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.toggle_voice()?)
+        Ok(zbus::block_on(self.proxy()?.toggle_voice())?)
     }
 
     pub fn reload(&self) -> Result<(), ClientError> {
-        Ok(self.proxy()?.reload_config()?)
+        Ok(zbus::block_on(self.proxy()?.reload_config())?)
     }
 
     pub fn run_action(&self, action: &str) -> Result<(), ClientError> {
-        Ok(self.proxy()?.run_action(action)?)
+        Ok(zbus::block_on(self.proxy()?.run_action(action))?)
     }
 }
 

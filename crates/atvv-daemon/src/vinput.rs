@@ -16,7 +16,7 @@
 use std::time::Duration;
 
 use thiserror::Error;
-use zbus::blocking::Connection;
+use zbus::Connection;
 
 /// Well-known bus name of `vinput-daemon`.
 pub const SERVICE: &str = "org.fcitx.Vinput";
@@ -95,11 +95,13 @@ impl VinputClient {
 
     fn connection(&mut self) -> zbus::Result<&Connection> {
         if self.connection.is_none() {
-            self.connection = Some(
-                zbus::blocking::connection::Builder::session()?
+            let connection = zbus::block_on(async {
+                zbus::connection::Builder::session()
                     .method_timeout(METHOD_TIMEOUT)
-                    .build()?,
-            );
+                    .build()
+                    .await
+            })?;
+            self.connection = Some(connection);
         }
         Ok(self.connection.as_ref().expect("connection was just set"))
     }
@@ -107,7 +109,7 @@ impl VinputClient {
     fn call<T>(
         &mut self,
         operation: &'static str,
-        f: impl FnOnce(&VinputApiProxyBlocking<'_>) -> zbus::Result<T>,
+        f: impl FnOnce(&Connection) -> zbus::Result<T>,
     ) -> Result<T, VinputError> {
         let result = self.dispatch(f);
         match result {
@@ -127,30 +129,39 @@ impl VinputClient {
 
     /// Check name ownership first so an absent `vinput-daemon` fails at once
     /// instead of waiting for the method timeout.
-    fn dispatch<T>(
-        &mut self,
-        f: impl FnOnce(&VinputApiProxyBlocking<'_>) -> zbus::Result<T>,
-    ) -> zbus::Result<T> {
+    fn dispatch<T>(&mut self, f: impl FnOnce(&Connection) -> zbus::Result<T>) -> zbus::Result<T> {
         let connection = self.connection()?;
-        let bus = zbus::blocking::fdo::DBusProxy::new(connection)?;
         let name = zbus::names::BusName::try_from(SERVICE)
             .map_err(|error| zbus::Error::Failure(error.to_string()))?;
-        if !bus.name_has_owner(name)? {
+        let present = zbus::block_on(async {
+            let bus = zbus::fdo::DBusProxy::new(connection).await?;
+            bus.name_has_owner(name).await
+        })?;
+        if !present {
             return Err(zbus::Error::Failure(format!("{SERVICE} is not running")));
         }
-        let proxy = VinputApiProxyBlocking::new(connection)?;
-        f(&proxy)
+        f(connection)
     }
 }
 
 impl VinputControl for VinputClient {
     fn start(&mut self) -> Result<(), VinputError> {
-        self.call("StartRecording", |proxy| proxy.start_recording())
+        self.call("StartRecording", |connection| {
+            zbus::block_on(async {
+                let proxy = VinputApiProxy::new(connection).await?;
+                proxy.start_recording().await
+            })
+        })
     }
 
     fn stop(&mut self) -> Result<(), VinputError> {
-        self.call("StopRecording", |proxy| proxy.stop_recording(""))
+        self.call("StopRecording", |connection| {
+            zbus::block_on(async {
+                let proxy = VinputApiProxy::new(connection).await?;
+                proxy.stop_recording("").await
+            })
             .map(|_transcript| ())
+        })
     }
 
     fn available(&self) -> bool {

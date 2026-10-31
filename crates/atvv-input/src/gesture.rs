@@ -189,14 +189,12 @@ impl GestureEngine {
                         click_on_press,
                     },
                 );
-                if click_on_press {
-                    if let Some(interval) = policy.repeat {
-                        self.repeat = Some(RepeatArm {
-                            button,
-                            next: now + interval,
-                            interval,
-                        });
-                    }
+                if click_on_press && let Some(interval) = policy.repeat {
+                    self.repeat = Some(RepeatArm {
+                        button,
+                        next: now + interval,
+                        interval,
+                    });
                 }
                 Vec::new()
             }

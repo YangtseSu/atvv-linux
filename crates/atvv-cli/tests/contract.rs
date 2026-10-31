@@ -18,8 +18,8 @@ use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport, Transport};
 use atvv_protocol::profile::RC003;
 use serde_json::Value;
-use zbus::blocking::Connection;
-use zbus::blocking::connection::Builder;
+use zbus::Connection;
+use zbus::connection::Builder;
 
 struct TestBus {
     child: Child,
@@ -48,10 +48,7 @@ impl TestBus {
     }
 
     fn connect(&self) -> Connection {
-        Builder::address(self.address.as_str())
-            .expect("connection builder")
-            .build()
-            .expect("connection")
+        zbus::block_on(Builder::address(self.address.as_str()).build()).expect("connection")
     }
 }
 

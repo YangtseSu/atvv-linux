@@ -542,16 +542,16 @@ impl Daemon {
         }
 
         // Some firmware sends the 0x0A sync on the audio characteristic.
-        if bytes.first() == Some(&0x0A) && bytes.len() >= 7 {
-            if let CtlEvent::AudioSync {
+        if bytes.first() == Some(&0x0A)
+            && bytes.len() >= 7
+            && let CtlEvent::AudioSync {
                 predictor,
                 step_index,
                 ..
             } = CtlEvent::parse(bytes)
-            {
-                self.decoder.reset(predictor, step_index);
-                return;
-            }
+        {
+            self.decoder.reset(predictor, step_index);
+            return;
         }
 
         if self.session.state() != SessionState::Streaming {
@@ -1063,65 +1063,65 @@ impl Daemon {
     fn on_timers(&mut self, now: Instant) {
         let mut changed = false;
 
-        if let Some(deadline) = self.caps_deadline {
-            if now >= deadline {
-                if self.caps_attempts < 2 {
-                    self.caps_attempts += 1;
-                    self.caps_deadline = Some(now + self.caps_timeout);
-                    self.trace("CAPS_RESP timeout; retrying GET_CAPS");
-                    let get_caps = commands::get_caps();
-                    self.write(&get_caps);
-                } else {
-                    self.caps_deadline = None;
-                    self.last_error = Some("CAPS_RESP timeout".to_string());
-                    self.trace("CAPS_RESP timeout");
-                }
-                changed = true;
+        if let Some(deadline) = self.caps_deadline
+            && now >= deadline
+        {
+            if self.caps_attempts < 2 {
+                self.caps_attempts += 1;
+                self.caps_deadline = Some(now + self.caps_timeout);
+                self.trace("CAPS_RESP timeout; retrying GET_CAPS");
+                let get_caps = commands::get_caps();
+                self.write(&get_caps);
+            } else {
+                self.caps_deadline = None;
+                self.last_error = Some("CAPS_RESP timeout".to_string());
+                self.trace("CAPS_RESP timeout");
             }
+            changed = true;
         }
 
         if self.session.state() == SessionState::Streaming {
-            if let Some(deadline) = self.next_keepalive {
-                if now >= deadline {
-                    if let Some(payload) = self.session.keepalive() {
-                        self.write(&payload);
-                        self.trace("keepalive MIC_EXTEND");
-                    }
-                    self.next_keepalive = Some(now + self.keepalive_interval);
+            if let Some(deadline) = self.next_keepalive
+                && now >= deadline
+            {
+                if let Some(payload) = self.session.keepalive() {
+                    self.write(&payload);
+                    self.trace("keepalive MIC_EXTEND");
                 }
+                self.next_keepalive = Some(now + self.keepalive_interval);
             }
 
-            if let Some(last) = self.last_audio {
-                if now.duration_since(last) >= self.frame_timeout {
-                    self.last_error = Some("audio frame timeout".to_string());
-                    self.trace("audio frame timeout; closing the stream");
-                    let actions = self.session.on_audio_stop(AudioStopReason::TransferTimeout);
-                    self.execute(actions);
-                    changed = true;
-                }
-            }
-        }
-
-        if let Some(deadline) = self.input_retry_at {
-            if now >= deadline {
-                self.input_retry_at = None;
-                if self.config.input && self.input.is_none() {
-                    self.attach_input(now);
-                }
+            if let Some(last) = self.last_audio
+                && now.duration_since(last) >= self.frame_timeout
+            {
+                self.last_error = Some("audio frame timeout".to_string());
+                self.trace("audio frame timeout; closing the stream");
+                let actions = self.session.on_audio_stop(AudioStopReason::TransferTimeout);
+                self.execute(actions);
                 changed = true;
             }
         }
 
-        if let Some(deadline) = self.reconnect_at {
-            if now >= deadline {
-                self.reconnect_at = None;
-                self.trace("reconnecting");
-                if let Err(error) = self.transport.reconnect() {
-                    self.last_error = Some(format!("reconnect failed: {error}"));
-                    self.reconnect_at = Some(now + self.reconnect_delay);
-                }
-                changed = true;
+        if let Some(deadline) = self.input_retry_at
+            && now >= deadline
+        {
+            self.input_retry_at = None;
+            if self.config.input && self.input.is_none() {
+                self.attach_input(now);
             }
+            changed = true;
+        }
+
+        if let Some(deadline) = self.reconnect_at
+            && now >= deadline
+        {
+            self.reconnect_at = None;
+            self.trace("reconnecting");
+            if let Err(error) = self.transport.reconnect() {
+                self.last_error = Some(format!("reconnect failed: {error}"));
+                self.reconnect_at = Some(now + self.reconnect_delay);
+            }
+            changed = true;
         }
 
         if changed {

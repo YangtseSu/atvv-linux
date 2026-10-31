@@ -60,14 +60,14 @@ impl KeyMap {
                 button: mapping.button,
                 key: mapping.key,
             })?;
-            if let Some(previous) = codes.insert(code, mapping.button) {
-                if previous != mapping.button {
-                    return Err(KeyMapError::Duplicate {
-                        key: mapping.key.to_string(),
-                        first: previous,
-                        second: mapping.button,
-                    });
-                }
+            if let Some(previous) = codes.insert(code, mapping.button)
+                && previous != mapping.button
+            {
+                return Err(KeyMapError::Duplicate {
+                    key: mapping.key.to_string(),
+                    first: previous,
+                    second: mapping.button,
+                });
             }
         }
         Ok(Self { codes })

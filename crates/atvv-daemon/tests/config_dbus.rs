@@ -17,7 +17,9 @@ use atvv_daemon::dbus::{self, Client, DaemonInterface, DbusSink};
 use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport};
 use atvv_protocol::profile::RC003;
-use zbus::blocking::connection::Builder;
+use futures_util::StreamExt;
+use zbus::Connection;
+use zbus::connection::Builder;
 
 const ADDRESS: &str = "02:00:00:00:00:01";
 
@@ -47,11 +49,8 @@ impl TestBus {
         Self { child, address }
     }
 
-    fn connect(&self) -> zbus::blocking::Connection {
-        Builder::address(self.address.as_str())
-            .expect("connection builder")
-            .build()
-            .expect("connection")
+    fn connect(&self) -> Connection {
+        zbus::block_on(Builder::address(self.address.as_str()).build()).expect("connection")
     }
 }
 
@@ -107,7 +106,7 @@ fn wait_status(client: &Client, predicate: impl Fn(&StatusView) -> bool) -> Stat
 }
 
 struct Fixture {
-    server: zbus::blocking::Connection,
+    server: zbus::Connection,
     client: Client,
     handle: atvv_daemon::DaemonHandle,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -173,15 +172,14 @@ fn config_round_trip_persists_and_invalid_documents_do_not_apply() {
     let fixture = Fixture::start(&bus, "round-trip");
 
     let connection = fixture.client.connection();
-    let reply = connection
-        .call_method(
-            Some(dbus::SERVICE),
-            dbus::PATH,
-            Some("org.freedesktop.DBus.Introspectable"),
-            "Introspect",
-            &(),
-        )
-        .expect("introspection");
+    let reply = zbus::block_on(connection.call_method(
+        Some(dbus::SERVICE),
+        dbus::PATH,
+        Some("org.freedesktop.DBus.Introspectable"),
+        "Introspect",
+        &(),
+    ))
+    .expect("introspection");
     let xml: String = reply.body().deserialize().expect("introspection XML");
     for member in [
         "GetConfig",
@@ -268,21 +266,15 @@ fn button_event_signal_carries_the_capture_payload() {
     let fixture = Fixture::start(&bus, "signal");
     let sink = DbusSink::new(&fixture.server).expect("signal sink");
     let proxy = fixture.client.proxy().expect("proxy");
-    let mut events = proxy.receive_button_event().expect("receive ButtonEvent");
-    let (tx, rx) = std::sync::mpsc::channel();
+    let mut events = zbus::block_on(proxy.receive_button_event()).expect("receive ButtonEvent");
     std::thread::spawn(move || {
-        if let Some(event) = events.next() {
-            let _ = tx.send(event);
-        }
+        sink.publish(atvv_daemon::DaemonEvent::ButtonEvent {
+            button: "ok".to_string(),
+            trigger: "single".to_string(),
+            pressed: true,
+        });
     });
-    sink.publish(atvv_daemon::DaemonEvent::ButtonEvent {
-        button: "ok".to_string(),
-        trigger: "single".to_string(),
-        pressed: true,
-    });
-    let event = rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("ButtonEvent signal");
+    let event = zbus::block_on(events.next()).expect("ButtonEvent signal");
     let args = event.args().expect("signal args");
     assert_eq!(*args.button(), "ok");
     assert_eq!(*args.trigger(), "single");

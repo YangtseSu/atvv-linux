@@ -18,26 +18,15 @@ and must be refreshed when `Cargo.lock` changes.
 | `anstyle-parse` | 1.0.0 | MIT OR Apache-2.0 | https://github.com/rust-cli/anstyle.git |
 | `anstyle-query` | 1.1.5 | MIT OR Apache-2.0 | https://github.com/rust-cli/anstyle.git |
 | `anstyle-wincon` | 3.0.11 | MIT OR Apache-2.0 | https://github.com/rust-cli/anstyle.git |
-| `async-broadcast` | 0.7.2 | MIT OR Apache-2.0 | https://github.com/smol-rs/async-broadcast |
-| `async-channel` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-channel |
-| `async-executor` | 1.14.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-executor |
-| `async-io` | 2.6.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-io |
-| `async-lock` | 3.4.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-lock |
-| `async-process` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-process |
-| `async-recursion` | 1.2.0 | MIT OR Apache-2.0 | https://github.com/dcchut/async-recursion |
-| `async-signal` | 0.2.14 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-signal |
-| `async-task` | 4.7.1 | Apache-2.0 OR MIT | https://github.com/smol-rs/async-task |
 | `async-trait` | 0.1.92 | MIT OR Apache-2.0 | https://github.com/dtolnay/async-trait |
-| `atomic-waker` | 1.1.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/atomic-waker |
 | `autocfg` | 1.5.1 | Apache-2.0 OR MIT | https://github.com/cuviper/autocfg |
 | `bindgen` | 0.72.1 | BSD-3-Clause | https://github.com/rust-lang/rust-bindgen |
 | `bitflags` | 2.13.2 | MIT OR Apache-2.0 | https://github.com/bitflags/bitflags |
-| `blocking` | 1.7.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/blocking |
 | `bluer` | 0.17.4 | BSD-2-Clause | https://github.com/bluez/bluer |
 | `bumpalo` | 3.20.3 | MIT OR Apache-2.0 | https://github.com/fitzgen/bumpalo |
 | `bytes` | 1.12.1 | MIT | https://github.com/tokio-rs/bytes |
-| `cairo-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `cairo-sys-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `cairo-rs` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `cairo-sys-rs` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `cc` | 1.10.0 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | `cexpr` | 0.6.0 | Apache-2.0/MIT | https://github.com/jethrogb/rust-cexpr |
 | `cfg-expr` | 0.20.10 | MIT OR Apache-2.0 | https://github.com/EmbarkStudios/cfg-expr |
@@ -51,7 +40,6 @@ and must be refreshed when `Cargo.lock` changes.
 | `clap_lex` | 1.1.1 | MIT OR Apache-2.0 | https://github.com/clap-rs/clap |
 | `clap_mangen` | 0.3.3 | MIT OR Apache-2.0 | https://github.com/clap-rs/clap |
 | `colorchoice` | 1.0.5 | MIT OR Apache-2.0 | https://github.com/rust-cli/anstyle.git |
-| `concurrent-queue` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/concurrent-queue |
 | `cookie-factory` | 0.3.3 | MIT | https://github.com/rust-bakery/cookie-factory |
 | `crossbeam-queue` | 0.3.14 | MIT OR Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
 | `crossbeam-utils` | 0.8.23 | MIT OR Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
@@ -66,13 +54,9 @@ and must be refreshed when `Cargo.lock` changes.
 | `displaydoc` | 0.2.7 | MIT OR Apache-2.0 | https://github.com/yaahc/displaydoc |
 | `either` | 1.19.0 | MIT OR Apache-2.0 | https://github.com/rayon-rs/either |
 | `endi` | 1.1.1 | MIT | https://github.com/zeenix/endi |
-| `enumflags2` | 0.7.12 | MIT OR Apache-2.0 | https://github.com/meithecatte/enumflags2 |
-| `enumflags2_derive` | 0.7.12 | MIT OR Apache-2.0 | https://github.com/meithecatte/enumflags2 |
 | `equivalent` | 1.0.3 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/equivalent |
 | `errno` | 0.3.14 | MIT OR Apache-2.0 | https://github.com/lambda-fairy/rust-errno |
 | `evdevil` | 0.5.0 | 0BSD | https://github.com/SludgePhD/evdevil |
-| `event-listener` | 5.4.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener |
-| `event-listener-strategy` | 0.5.4 | Apache-2.0 OR MIT | https://github.com/smol-rs/event-listener-strategy |
 | `fastrand` | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/fastrand |
 | `field-offset` | 0.3.6 | MIT OR Apache-2.0 | https://github.com/Diggsey/rust-field-offset |
 | `find-msvc-tools` | 0.1.15 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
@@ -82,50 +66,48 @@ and must be refreshed when `Cargo.lock` changes.
 | `futures-core` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-executor` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-io` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
-| `futures-lite` | 2.6.1 | Apache-2.0 OR MIT | https://github.com/smol-rs/futures-lite |
 | `futures-macro` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-sink` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-task` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
-| `gdk-pixbuf` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `gdk-pixbuf-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `gdk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
-| `gdk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gdk-pixbuf` | 0.22.0 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gdk-pixbuf-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gdk4` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gdk4-sys` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
 | `getrandom` | 0.4.3 | MIT OR Apache-2.0 | https://github.com/rust-random/getrandom |
-| `gio` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `gio-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `glib` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `glib-macros` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `glib-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gio` | 0.22.10 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gio-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib` | 0.22.10 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib-macros` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `glib-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `glob` | 0.3.4 | MIT OR Apache-2.0 | https://github.com/rust-lang/glob |
-| `gobject-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `graphene-rs` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `graphene-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `gsk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
-| `gsk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
-| `gtk4` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
-| `gtk4-macros` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
-| `gtk4-sys` | 0.10.3 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gobject-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `graphene-rs` | 0.22.8 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `graphene-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `gsk4` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gsk4-sys` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4-macros` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gtk4-sys` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
 | `hashbrown` | 0.17.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | `heck` | 0.5.0 | MIT OR Apache-2.0 | https://github.com/withoutboats/heck |
-| `hermit-abi` | 0.5.3 | MIT OR Apache-2.0 | https://github.com/hermit-os/hermit-rs |
 | `hex` | 0.4.3 | MIT OR Apache-2.0 | https://github.com/KokaKiwi/rust-hex |
 | `ident_case` | 1.0.1 | MIT/Apache-2.0 | https://github.com/TedDriggs/ident_case |
 | `indexmap` | 2.14.2 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/indexmap |
 | `is_terminal_polyfill` | 1.70.2 | MIT OR Apache-2.0 | https://github.com/polyfill-rs/is_terminal_polyfill |
 | `itertools` | 0.13.0 | MIT OR Apache-2.0 | https://github.com/rust-itertools/itertools |
 | `itoa` | 1.0.18 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
-| `js-sys` | 0.3.106 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys |
+| `js-sys` | 0.3.107 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys |
 | `lazy_static` | 1.5.1 | MIT OR Apache-2.0 | https://github.com/rust-lang-nursery/lazy-static.rs |
-| `libadwaita` | 0.8.1 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
-| `libadwaita-sys` | 0.8.1 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
+| `libadwaita` | 0.9.2 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
+| `libadwaita-sys` | 0.9.2 | MIT | https://gitlab.gnome.org/World/Rust/libadwaita-rs |
 | `libc` | 0.2.191 | MIT OR Apache-2.0 | https://github.com/rust-lang/libc |
 | `libdbus-sys` | 0.2.7 | Apache-2.0/MIT | https://github.com/diwic/dbus-rs |
 | `libloading` | 0.8.9 | ISC | https://github.com/nagisa/rust_libloading/ |
 | `libspa` | 0.10.1 | MIT | https://gitlab.freedesktop.org/pipewire/pipewire-rs |
 | `libspa-sys` | 0.10.1 | MIT | https://gitlab.freedesktop.org/pipewire/pipewire-rs |
 | `linux-raw-sys` | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/sunfishcode/linux-raw-sys |
-| `log` | 0.4.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/log |
+| `log` | 0.4.35 | MIT OR Apache-2.0 | https://github.com/rust-lang/log |
 | `macaddr` | 1.0.1 | Apache-2.0 OR MIT | https://github.com/svartalf/rust-macaddr |
 | `memchr` | 2.8.3 | Unlicense OR MIT | https://github.com/BurntSushi/memchr |
 | `memoffset` | 0.9.1 | MIT | https://github.com/Gilnaa/memoffset |
@@ -139,17 +121,14 @@ and must be refreshed when `Cargo.lock` changes.
 | `once_cell` | 1.21.4 | MIT OR Apache-2.0 | https://github.com/matklad/once_cell |
 | `once_cell_polyfill` | 1.70.2 | MIT OR Apache-2.0 | https://github.com/polyfill-rs/once_cell_polyfill |
 | `ordered-stream` | 0.2.0 | MIT OR Apache-2.0 | https://github.com/danieldg/ordered-stream |
-| `pango` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `pango-sys` | 0.21.5 | MIT | https://github.com/gtk-rs/gtk-rs-core |
-| `parking` | 2.2.1 | Apache-2.0 OR MIT | https://github.com/smol-rs/parking |
+| `pango` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
+| `pango-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `pin-project` | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
 | `pin-project-internal` | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
 | `pin-project-lite` | 0.2.17 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project-lite |
-| `piper` | 0.2.5 | MIT OR Apache-2.0 | https://github.com/smol-rs/piper |
 | `pipewire` | 0.10.1 | MIT | https://gitlab.freedesktop.org/pipewire/pipewire-rs |
 | `pipewire-sys` | 0.10.1 | MIT | https://gitlab.freedesktop.org/pipewire/pipewire-rs |
 | `pkg-config` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/pkg-config-rs |
-| `polling` | 3.11.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/polling |
 | `proc-macro-crate` | 3.5.0 | MIT OR Apache-2.0 | https://github.com/bkchr/proc-macro-crate |
 | `proc-macro2` | 1.0.107 | MIT OR Apache-2.0 | https://github.com/dtolnay/proc-macro2 |
 | `quote` | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote |
@@ -182,6 +161,7 @@ and must be refreshed when `Cargo.lock` changes.
 | `syn` | 3.0.9 | MIT OR Apache-2.0 | https://github.com/dtolnay/syn |
 | `synstructure` | 0.13.2 | MIT | https://github.com/mystor/synstructure |
 | `system-deps` | 7.0.8 | MIT OR Apache-2.0 | https://github.com/gdesmott/system-deps |
+| `system-deps` | 9.0.1 | MIT OR Apache-2.0 | https://github.com/gdesmott/system-deps |
 | `target-lexicon` | 0.13.5 | Apache-2.0 WITH LLVM-exception | https://github.com/bytecodealliance/target-lexicon |
 | `tempfile` | 3.27.0 | MIT OR Apache-2.0 | https://github.com/Stebalien/tempfile |
 | `thiserror` | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
@@ -189,9 +169,7 @@ and must be refreshed when `Cargo.lock` changes.
 | `tokio` | 1.54.1 | MIT | https://github.com/tokio-rs/tokio |
 | `tokio-macros` | 2.7.2 | MIT | https://github.com/tokio-rs/tokio |
 | `tokio-stream` | 0.1.19 | MIT | https://github.com/tokio-rs/tokio |
-| `toml` | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | `toml` | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| `toml_datetime` | 0.7.5+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | `toml_datetime` | 1.1.2+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | `toml_edit` | 0.25.17+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
 | `toml_parser` | 1.1.5+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
@@ -204,22 +182,19 @@ and must be refreshed when `Cargo.lock` changes.
 | `unicode-width` | 0.2.3 | MIT OR Apache-2.0 | https://github.com/unicode-rs/unicode-width |
 | `uoctl` | 1.0.1 | 0BSD | https://github.com/SludgePhD/uoctl |
 | `utf8parse` | 0.2.2 | Apache-2.0 OR MIT | https://github.com/alacritty/vte |
-| `uuid` | 1.26.1 | Apache-2.0 OR MIT | https://github.com/uuid-rs/uuid |
+| `uuid` | 1.29.0 | Apache-2.0 OR MIT | https://github.com/uuid-rs/uuid |
 | `version-compare` | 0.2.1 | MIT | https://gitlab.com/timvisee/version-compare |
 | `wasi` | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/wasi |
-| `wasm-bindgen` | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen |
-| `wasm-bindgen-macro` | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro |
-| `wasm-bindgen-macro-support` | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support |
-| `wasm-bindgen-shared` | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared |
+| `wasm-bindgen` | 0.2.130 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen |
+| `wasm-bindgen-macro` | 0.2.130 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro |
+| `wasm-bindgen-macro-support` | 0.2.130 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support |
+| `wasm-bindgen-shared` | 0.2.130 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared |
 | `windows-link` | 0.2.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | `windows-sys` | 0.61.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| `winnow` | 0.7.15 | MIT | https://github.com/winnow-rs/winnow |
 | `winnow` | 1.0.4 | MIT | https://github.com/winnow-rs/winnow |
-| `zbus` | 5.19.0 | MIT | https://github.com/z-galaxy/zbus/ |
-| `zbus_macros` | 5.19.0 | MIT | https://github.com/z-galaxy/zbus/ |
-| `zbus_names` | 4.3.5 | MIT | https://github.com/z-galaxy/zbus/ |
-| `zcheapstr` | 1.1.0 | MIT | https://github.com/z-galaxy/zcheapstr/ |
+| `zbus` | 6.2.0 | MIT | https://github.com/z-galaxy/zbus/ |
+| `zbus_macros` | 6.2.0 | MIT | https://github.com/z-galaxy/zbus/ |
+| `zbus_utils` | 6.1.0 | MIT | https://github.com/z-galaxy/zbus/ |
+| `zcheapstr` | 1.2.0 | MIT | https://github.com/z-galaxy/zcheapstr/ |
 | `zmij` | 1.0.23 | MIT | https://github.com/dtolnay/zmij |
-| `zvariant` | 5.15.1 | MIT | https://github.com/z-galaxy/zbus/ |
-| `zvariant_derive` | 5.15.1 | MIT | https://github.com/z-galaxy/zbus/ |
-| `zvariant_utils` | 4.2.0 | MIT | https://github.com/z-galaxy/zbus/ |
+| `zruntime` | 0.2.1 | MIT | https://github.com/z-galaxy/zruntime |

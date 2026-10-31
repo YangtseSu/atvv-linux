@@ -29,7 +29,9 @@ is 0BSD.
 
 ## Decision
 
-- Replace `evdev` 0.13.2 with `evdevil`, pinned to `=0.5.0` for the migration.
+- Replace `evdev` 0.13.2 with `evdevil`; the requirement is `0.5` so patch
+  releases flow in automatically (the exact `=0.5.0` pin was removed on
+  2026-10-31).
 - Do not fork `evdev` and do not add a patched `evdev` git dependency.
 - Add `0BSD` to the cargo-deny license allow-list.
 - Keep `atvv-input`'s public behaviour and its `#![forbid(unsafe_code)]`
@@ -61,8 +63,8 @@ choice, not an evdevil requirement. The declared recording keys are
 - `evdevil` exposes `UinputDevice::sysname()` but not a direct `eventN` path;
   virtual-device node discovery must resolve the sysfs entry or enumerate by
   device name.
-- `evdevil` 0.5.0 is young. Pin the exact version, keep the migration
-  reversible, and re-evaluate when upstream makes a release.
+- `evdevil` 0.5 is young; the requirement allows patch releases, and the
+  migration stays reversible. Re-evaluate when upstream makes a new release.
 - No upstream PR is on the critical path. The fork clone was only an
   experiment and was removed.
 - The consumer-key mapping policy remains undecided, including whether one

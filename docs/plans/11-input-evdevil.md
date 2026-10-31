@@ -126,7 +126,8 @@ installed `0.1.0-3` unit was stopped for the run and restarted afterwards.
 
 ## Risks
 
-- `evdevil` 0.5.0 is young; pinned exactly and the migration is reversible.
+- `evdevil` 0.5 is young; the requirement allows patch releases and the
+  migration is reversible.
 - `enumerate()` error semantics differ; unreadable or vanished nodes are
   skipped per entry.
 - Dynamic uinput nodes may be root-owned without a uaccess rule; fake-remote
@@ -157,3 +158,6 @@ installed `0.1.0-3` unit was stopped for the run and restarted afterwards.
   `KEY_DICTATE`, streamed 104 frames / 24,960 samples on a press, and
   fcitx5-vinput recorded from `atvv-miremote-rc003` at 16 kHz on the same
   press. The joint real-press check is closed.
+- 2026-10-31 — dependency upgrade: the workspace requirement is now
+  `evdevil = "0.5"`, so patch releases flow in automatically; the migration
+  remains reversible and ADR 0006 carries the current policy.

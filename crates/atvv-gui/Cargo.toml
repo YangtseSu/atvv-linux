@@ -20,8 +20,9 @@ path = "src/lib.rs"
 atvv-config = { path = "../atvv-config" }
 atvv-input = { path = "../atvv-input" }
 atvv-protocol = { path = "../atvv-protocol" }
-gtk = { package = "gtk4", version = "0.10", features = ["v4_10"] }
-libadwaita = { version = "0.8", features = ["v1_5"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_10"] }
+libadwaita = { version = "0.9", features = ["v1_5"] }
+futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zbus.workspace = true

@@ -442,10 +442,10 @@ async fn resolve_atvv(device: &Device) -> Result<AtvvCharacteristics> {
 }
 
 async fn device_name(device: &Device, fallback: &str) -> String {
-    if let Ok(alias) = device.alias().await {
-        if !alias.is_empty() {
-            return alias;
-        }
+    if let Ok(alias) = device.alias().await
+        && !alias.is_empty()
+    {
+        return alias;
     }
     device
         .name()

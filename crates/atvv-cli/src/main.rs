@@ -22,6 +22,7 @@ use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find};
 use atvv_protocol::session::Session;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
+use futures_util::StreamExt;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -329,16 +330,17 @@ fn daemon_client() -> Result<Client, String> {
 
 /// Whether `vinput-daemon` owns its well-known name on the session bus.
 fn vinput_service_present() -> bool {
-    let Ok(connection) = zbus::blocking::Connection::session() else {
+    let Ok(connection) = zbus::block_on(zbus::Connection::session()) else {
         return false;
     };
     let Ok(name) = zbus::names::BusName::try_from(atvv_daemon::vinput::SERVICE) else {
         return false;
     };
-    let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
-        return false;
-    };
-    bus.name_has_owner(name).unwrap_or(false)
+    let present = zbus::block_on(async {
+        let bus = zbus::fdo::DBusProxy::new(&connection).await?;
+        bus.name_has_owner(name).await
+    });
+    present.unwrap_or(false)
 }
 
 fn status() -> Result<(), String> {
@@ -608,28 +610,30 @@ fn capture(timeout: u64, json: bool) -> Result<(), String> {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<()>();
     let (tx, rx) = std::sync::mpsc::channel::<(String, String, bool)>();
     std::thread::spawn(move || {
-        let Ok(proxy) = atvv_daemon::dbus::DaemonApiProxyBlocking::new(&connection) else {
-            return;
-        };
-        let Ok(mut events) = proxy.receive_button_event() else {
-            return;
-        };
-        let _ = ready_tx.send(());
-        for event in events.by_ref() {
-            let Ok(args) = event.args() else {
-                continue;
+        zbus::block_on(async {
+            let Ok(proxy) = atvv_daemon::dbus::DaemonApiProxy::new(&connection).await else {
+                return;
             };
-            if tx
-                .send((
-                    args.button().to_string(),
-                    args.trigger().to_string(),
-                    *args.pressed(),
-                ))
-                .is_err()
-            {
-                break;
+            let Ok(mut events) = proxy.receive_button_event().await else {
+                return;
+            };
+            let _ = ready_tx.send(());
+            while let Some(event) = events.next().await {
+                let Ok(args) = event.args() else {
+                    continue;
+                };
+                if tx
+                    .send((
+                        args.button().to_string(),
+                        args.trigger().to_string(),
+                        *args.pressed(),
+                    ))
+                    .is_err()
+                {
+                    break;
+                }
             }
-        }
+        });
     });
     ready_rx
         .recv_timeout(Duration::from_secs(5))
@@ -911,36 +915,40 @@ fn monitor() -> Result<(), String> {
         Err(error) => eprintln!("status: {error}"),
     }
 
-    let proxy = zbus::blocking::Proxy::new(
-        client.connection(),
-        atvv_daemon::dbus::SERVICE,
-        atvv_daemon::dbus::PATH,
-        atvv_daemon::dbus::INTERFACE,
-    )
-    .map_err(|error| error.to_string())?;
-    let signals = proxy
-        .receive_all_signals()
+    zbus::block_on(async {
+        let proxy = zbus::Proxy::new(
+            client.connection(),
+            atvv_daemon::dbus::SERVICE,
+            atvv_daemon::dbus::PATH,
+            atvv_daemon::dbus::INTERFACE,
+        )
+        .await
         .map_err(|error| error.to_string())?;
-    println!("monitoring {} (Ctrl-C to stop)", atvv_daemon::dbus::SERVICE);
-    for message in signals {
-        let member = message
-            .header()
-            .member()
-            .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
-        match member.as_str() {
-            "StateChanged" => {
-                let state: String = message
-                    .body()
-                    .deserialize()
-                    .map_err(|error| error.to_string())?;
-                println!("state: {state}");
+        let mut signals = proxy
+            .receive_all_signals()
+            .await
+            .map_err(|error| error.to_string())?;
+        println!("monitoring {} (Ctrl-C to stop)", atvv_daemon::dbus::SERVICE);
+        while let Some(message) = signals.next().await {
+            let member = message
+                .header()
+                .member()
+                .map_or_else(|| "<unknown>".to_string(), ToString::to_string);
+            match member.as_str() {
+                "StateChanged" => {
+                    let state: String = message
+                        .body()
+                        .deserialize()
+                        .map_err(|error| error.to_string())?;
+                    println!("state: {state}");
+                }
+                "VoiceStarted" => println!("voice: started"),
+                "VoiceStopped" => println!("voice: stopped"),
+                other => println!("{other}"),
             }
-            "VoiceStarted" => println!("voice: started"),
-            "VoiceStopped" => println!("voice: stopped"),
-            other => println!("{other}"),
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1650,7 +1658,9 @@ fn parse_hex(input: &str) -> Result<Vec<u8>, String> {
     }
 
     digits
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             let high = pair[0]
                 .to_digit(16)

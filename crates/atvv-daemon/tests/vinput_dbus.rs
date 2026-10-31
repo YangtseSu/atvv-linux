@@ -39,12 +39,13 @@ impl TestBus {
         Self { child, address }
     }
 
-    fn connect(&self) -> zbus::blocking::Connection {
-        zbus::blocking::connection::Builder::address(self.address.as_str())
-            .expect("connection builder")
-            .method_timeout(Duration::from_secs(2))
-            .build()
-            .expect("connection")
+    fn connect(&self) -> zbus::Connection {
+        zbus::block_on(
+            zbus::connection::Builder::address(self.address.as_str())
+                .method_timeout(Duration::from_secs(2))
+                .build(),
+        )
+        .expect("connection")
     }
 }
 
@@ -82,16 +83,14 @@ fn start_and_stop_reach_the_service() {
     let bus = TestBus::start();
     let server = bus.connect();
     let calls = Arc::new(Mutex::new(Vec::new()));
-    server
-        .object_server()
-        .at(
-            atvv_daemon::vinput::PATH,
-            MockVinput {
-                calls: Arc::clone(&calls),
-            },
-        )
-        .expect("register mock vinput");
-    server.request_name(SERVICE).expect("claim vinput name");
+    zbus::block_on(server.object_server().at(
+        atvv_daemon::vinput::PATH,
+        MockVinput {
+            calls: Arc::clone(&calls),
+        },
+    ))
+    .expect("register mock vinput");
+    zbus::block_on(server.request_name(SERVICE)).expect("claim vinput name");
 
     let mut client = VinputClient::with_connection(bus.connect());
     client.start().expect("StartRecording");

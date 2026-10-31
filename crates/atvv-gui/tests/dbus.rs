@@ -20,7 +20,7 @@ use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport};
 use atvv_gui::client::{Backend, Event};
 use atvv_protocol::profile::RC003;
-use zbus::blocking::connection::Builder;
+use zbus::connection::Builder;
 
 const ADDRESS: &str = "02:00:00:00:00:01";
 const TIMEOUT: Duration = Duration::from_secs(5);
@@ -51,11 +51,8 @@ impl TestBus {
         Self { child, address }
     }
 
-    fn connect(&self) -> zbus::blocking::Connection {
-        Builder::address(self.address.as_str())
-            .expect("connection builder")
-            .build()
-            .expect("connection")
+    fn connect(&self) -> zbus::Connection {
+        zbus::block_on(Builder::address(self.address.as_str()).build()).expect("connection")
     }
 }
 
@@ -104,7 +101,7 @@ fn wait_status(client: &Client, predicate: impl Fn(&StatusView) -> bool) -> Stat
 }
 
 struct Fixture {
-    server: zbus::blocking::Connection,
+    server: zbus::Connection,
     handle: atvv_daemon::DaemonHandle,
     thread: Option<std::thread::JoinHandle<()>>,
     path: PathBuf,

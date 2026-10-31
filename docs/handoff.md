@@ -159,6 +159,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `atvvctl doctor` checks it plus the live `atvv.*` properties, and
   `atvv-mcp` exposes it as the `contract` tool. Browser AI chat and IM recipes
   are first-class documents. See `docs/plans/12-integration-contract.md`.
+- **Dependencies (2026-10-31)**: zbus 6.2, gtk4 0.11, libadwaita 0.9, toml
+  1.1, and the current patch versions. `evdevil` moved from the exact
+  `=0.5.0` pin to the `0.5` requirement. zbus 6 removed the blocking API, so
+  the daemon `Client`/`VinputClient`, the GUI worker, `atvvctl`, and the
+  tests drive the async API with `zbus::block_on`; the `tokio-multithread`
+  feature keeps the process-wide connection runtime running outside
+  `block_on`. The zbus 5 split crates are gone, so their `deny.toml`
+  advisories were removed; third-party notices were regenerated. Dependabot
+  now opens one PR per version update instead of grouped PRs. Rust 1.99
+  clippy required let-chain collapses and an `as_chunks` cleanup in
+  `atvv-input`, `atvv-bluez`, `atvv-daemon`, and `atvvctl`.
 
 ## Not implemented
 
@@ -180,9 +191,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
   inspector with a central remote and per-button cards showing all three
   slots; the action editor becomes a modal dialog. GTK4/libadwaita and the
   original SVG stay; SayAll/Open Voice Bridge assets and code are not copied.
-  Depends on step 14; see `docs/plans/15-mapping-board.md`.- zbus 6 migration (the zbus 5 split crates are unmaintained; denied
-  advisories are documented in `deny.toml`). Do it as a separate dependency
-  step.
+  Depends on step 14; see `docs/plans/15-mapping-board.md`.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
 power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07
@@ -194,7 +203,8 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   `docs/research/`.
 - Userspace stack only: BlueZ + daemon + PipeWire + evdev/uinput.
 - ATVV v1.0+ only; v0.4 is out of scope.
-- Rust 2024; MSRV 1.87 (zbus 5 requires it); `atvv-protocol` is I/O-free.
+- Rust 2024; MSRV 1.99 tracks the stable toolchain (zbus 6 needs 1.89,
+  gtk4 0.11 needs 1.92); `atvv-protocol` is I/O-free.
 - Arch Linux packaging only; Debian/Fedora/Nix/Flatpak are out.
 - PipeWire service restart belongs to systemd (`PartOf=pipewire.service`,
   `Restart=always`), not to `atvv-audio`. Verified with a transient unit using
@@ -257,10 +267,10 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   completions <shell>` prints completions. `atvvd` shares its clap definition
   from `atvv-daemon/src/cli.rs`.
 - CI runs fmt, clippy, workspace tests, cargo-deny, and REUSE. Dependabot
-  checks Cargo and GitHub Actions daily and opens grouped minor/patch PRs;
-  it does not auto-merge. The runner is pinned to `ubuntu-26.04` with
-  `actions/checkout@v7` and `fsfe/reuse-action@v6` (Node 24); the Dependabot
-  actions PR is superseded.
+  checks Cargo and GitHub Actions daily and opens one PR per version update
+  (no groups); it does not auto-merge. The runner is pinned to `ubuntu-26.04`
+  with `actions/checkout@v7` and `fsfe/reuse-action@v6` (Node 24); the
+  Dependabot actions PR is superseded.
 - `deny.toml` allows GPL-3.0-or-later, MIT, Apache-2.0 (including the LLVM
   exception), BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, and Zlib.
   GPL-3.0-only is deliberately absent. Step 11 added 0BSD for `evdevil`
@@ -316,8 +326,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 - `cargo tree -i evdev` → `package ID specification 'evdev' did not match any
   packages`; `Cargo.lock` contains `evdevil 0.5.0` and `uoctl 1.0.1`.
 - `cargo deny check` → advisories, bans, licenses, sources ok; 0BSD accepted
-  for `evdevil`/`uoctl`; zbus 5 unmaintained advisories
-  `RUSTSEC-2026-0370/0371/0372` ignored with a migration note.
+  for `evdevil`/`uoctl`. zbus 6 merged the split crates, so
+  `RUSTSEC-2026-0370/0371/0372` no longer appear in the graph and their
+  ignores are gone from `deny.toml`.
 - `reuse lint` → REUSE 3.3 compliant, 96 files.
 - `udevadm verify` → 1 rule file, 0 failures.
 - `systemd-analyze verify --user` with a temp copy pointing at the built
