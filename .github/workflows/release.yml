@@ -14,7 +14,7 @@ jobs:
         include:
           - runner: ubuntu-26.04
             arch: x86_64
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-26.04-arm
             arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
@@ -44,7 +44,7 @@ jobs:
           archive="atvv-$version-${{ matrix.arch }}.tar.gz"
           tar -czf "$archive" "$dir"
           sha256sum "$archive" > "$archive.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: atvv-${{ matrix.arch }}
           path: |
@@ -62,7 +62,7 @@ jobs:
           archive="atvv-linux-$version.tar"
           git archive --format=tar --prefix="atvv-linux-$version/" HEAD > "$archive"
           sha256sum "$archive" > "$archive.sha256"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
