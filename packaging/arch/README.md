@@ -1,36 +1,28 @@
 # Arch package
 
-`PKGBUILD` builds a split package: `atvv-linux` contains the daemon, CLI, and
-MCP binaries, the user unit, udev rule, modules-load file, man pages, and
-completions; `atvv-linux-gui` contains the optional `atvv-config` app plus its
-desktop entry, AppStream metadata, and icon.
+`PKGBUILD` builds a split VCS package: `atvv-linux-git` contains the daemon,
+CLI, and MCP binaries, the user unit, udev rule, modules-load file, man pages,
+and completions; `atvv-linux-gui-git` contains the optional `atvv-config` app
+plus its desktop entry, AppStream metadata, and icon.
 
-## Build the release tarball
-
-`packaging/arch` is listed in `.gitattributes` with `export-ignore`, so the
-source tarball never contains this directory or its checksum. Generate it from
-a committed tree:
-
-```sh
-./make-source.sh
-```
-
-The script prints the SHA-256. Set that value in `sha256sums` before publishing;
-the archive is deterministic for a given tree, and changes to this directory do
-not change it.
+Both packages are built from this checkout's HEAD. `source` clones the local
+repository, so uncommitted files are not part of the build; commit first.
+`pkgver` is `0.1.0.r<commit-count>.g<short-hash>`.
 
 ## Build and install
 
 ```sh
 cd packaging/arch
 makepkg
-sudo pacman -U atvv-linux-0.1.0-8-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-git-*.pkg.tar.zst
 # optional GUI:
-sudo pacman -U atvv-linux-gui-0.1.0-8-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-gui-git-*.pkg.tar.zst
 ```
 
-`makepkg -si` installs both packages. The packages do not enable a user
-service. After installing:
+`makepkg -si` installs both packages. The `-git` packages provide and replace
+`atvv-linux` and `atvv-linux-gui`; pacman removes the release packages when
+they are replaced. The packages do not enable a user service. After
+installing:
 
 ```sh
 systemctl --user daemon-reload

@@ -8,21 +8,43 @@ Related: [`AGENTS.md`](../../AGENTS.md), [`docs/handoff.md`](../handoff.md),
 
 ## How these plans are used
 
-- One file per step: `NN-kebab-case-title.md`.
+The live plan is one file per scheduled step: `NN-kebab-case-title.md`.
+Deferred work that is understood but not scheduled is a backlog file:
+`B<NN>-kebab-case-title.md`. This index is the canonical order, the phase
+table, and the backlog table.
+
 - Read `docs/research/README.md` and the step's research links before editing;
   research records evidence, `docs/plans` records the decision.
 - A step is worked on alone, top to bottom. Every `- ⬜` item is one unit of
   work.
-- Progress uses the same markers inside each step file:
-  - `Status:` is one of `⬜ not-started`, `🚧 in-progress`, `⛔ blocked`, `✅ done`.
+- Progress uses the same markers inside every step and backlog file:
+  - `Status:` is one of `⬜ not-started`, `🚧 in-progress`, `⛔ blocked`,
+    `✅ done`, `⏸ backlog`.
   - `- ⬜` open / `- ✅` done on every deliverable and exit criterion.
   - `## Progress log` is append-only: `YYYY-MM-DD — note`.
 - A step is `✅ done` only when every item is checked and the Verification and
   Exit criteria sections have recorded commands and observed results.
-- Update the step file and this index in the same commit as the code. If reality
-  diverges from the plan, change the plan in that commit and say why.
-- New work is appended as a new numbered step. It runs after the existing tail.
+- Update the step file and this index in the same commit as the code. If
+  reality diverges from the plan, change the plan in that commit and say why.
+- New scheduled work is appended as a new numbered step. A B-series entry is
+  promoted to the next number when it is scheduled; its file keeps the
+  evidence and its progress log gains the promotion note.
+- A one-off task (a CI fix, a documentation edit, a bumped constant, a bug
+  fixed on the spot) is a `fix:`/`chore:`/`docs:` commit and does not create a
+  plan file.
+- Do not cite `docs/plans/` from code: plans are the process record, not a
+  runtime contract. Code comments carry the reason and measured value inline.
 - Hardware claims require a real-device run; synthetic tests do not count.
+
+## Backlog (B series)
+
+The B series holds deferred work. It is not part of the numbered execution
+order until promoted. A backlog entry still carries a real exit criterion so
+it can be picked up without re-deriving the design.
+
+| # | Step | Status | Depends on | Exit, in one line |
+|---|------|--------|------------|-------------------|
+| B01 | [Recording-key press and release actions](B01-recording-key-press-release-actions.md) | ⏸ backlog | 14 | one press and one release action run per edge while the mic, trigger key, and provider contract stay unchanged |
 
 ## Scope
 
@@ -206,14 +228,16 @@ the window. A real RC003 run saved a mapping through the GUI and
 verified it after a daemon restart. The physical test-mode run observed all
 thirteen keys, kept Test mode active after OK, and left system volume
 unchanged; Home/Menu use `KEY_HOME`/`KEY_COMPOSE`. Packaging is a split
-`atvv-linux-gui` package with desktop entry, AppStream metadata, icon, and GTK
-runtime dependencies kept out of `atvv-linux`; `0.1.0-9` is built and staged
-but not installed. The GUI decision is recorded in
+`atvv-linux-gui-git` package with desktop entry, AppStream metadata, icon, and
+GTK runtime dependencies kept out of `atvv-linux-git`; the packages are the
+local `-git` pair `atvv-linux-git` / `atvv-linux-gui-git`, built from HEAD, and
+replace the release package names. The GUI decision is recorded in
 [ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
 sayall-style mapping board (central remote + per-button cards with all three
 slots) that keeps the same GTK4/libadwaita model, D-Bus API, and original SVG;
-no SayAll/Open Voice Bridge code or screenshots are copied. Step 10 remains
-blocked on upstream review.
+no SayAll/Open Voice Bridge code or screenshots are copied. B01 is the first
+backlog entry: configurable press/release actions for the recording key. Step
+10 remains blocked on upstream review.
 
 ## Backlog after 14
 

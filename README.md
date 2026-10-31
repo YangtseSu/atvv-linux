@@ -10,11 +10,11 @@ graph; evdev/uinput owns input remapping.
 ## Status
 
 **Steps 01–09 and 11–14 are complete.** The installed package is
-`atvv-linux 0.1.0-6`, the user unit runs, and `atvvctl doctor` reports green
-on a real RC003. The step-14 tree builds as `atvv-linux 0.1.0-9` plus the
-optional `atvv-linux-gui` package; install them to get `atvv-config` and the
-step-13 `atvvctl config`, `capture`, and `map` commands. Step 10 (vinput zero-config) depends on an
-upstream consumer change.
+`atvv-linux 0.1.0-7`, the user unit runs, and `atvvctl doctor` reports green
+on a real RC003. The current tree builds as the split `-git` packages
+(`atvv-linux-git`, `atvv-linux-gui-git`); install them to get `atvv-config` and
+the step-13 `atvvctl config`, `capture`, and `map` commands. Step 10 (vinput
+zero-config) depends on an upstream consumer change.
 
 The RC003 path and the fcitx5-vinput source path have both run on real system
 services.
@@ -70,14 +70,12 @@ librsvg.
 ```sh
 git clone https://github.com/YangtseSu/atvv-linux.git
 cd atvv-linux
-# packaging/arch is export-ignored, so generate the source tarball from a
-# committed tree first; the script prints its SHA-256.
-./packaging/arch/make-source.sh
+# The local Arch packages build from this checkout's HEAD; commit first.
 cd packaging/arch
 makepkg
-sudo pacman -U atvv-linux-0.1.0-9-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-git-*.pkg.tar.zst
 # optional GUI:
-sudo pacman -U atvv-linux-gui-0.1.0-9-x86_64.pkg.tar.zst
+sudo pacman -U atvv-linux-gui-git-*.pkg.tar.zst
 ```
 
 `makepkg -si` installs both packages. The GUI app is optional; the daemon and

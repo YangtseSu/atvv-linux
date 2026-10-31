@@ -49,8 +49,8 @@ visible. The action editor is an `AdwDialog`, not a permanent pane.
     and card selection stay in sync.
   - Clicking a hotspot selects the card and its `single` slot; clicking a card
     slot selects that exact slot.
-  - The voice key is drawn but is not a card or hotspot; a note explains that
-    it drives the ATVV microphone.
+  - The voice key is drawn and opens the recording-key page; it is not a card
+    for action slots. A note explains that it drives the ATVV microphone.
   - No card-connector arrows in the first cut; adjacency and selection carry
     the mapping. Add lines later only if they can be drawn without fragile
     coordinate coupling.
@@ -83,8 +83,8 @@ visible. The action editor is an `AdwDialog`, not a permanent pane.
 - ⬜ Docs and screenshot:
   - Update `docs/gui.md` with the board, editor dialog, and test bar.
   - Replace `docs/gui.png` with the board screenshot.
-- ⬜ Packaging: rebuild the split `atvv-linux-gui` package; GTK dependencies
-  remain out of `atvv-linux`.
+- ⬜ Packaging: rebuild the split `atvv-linux-gui-git` package; GTK
+  dependencies remain out of `atvv-linux-git`.
 
 ## Out of scope
 
@@ -126,8 +126,8 @@ Manual:
 - ⬜ Apply/Revert remain atomic; invalid input leaves the old map active.
 - ⬜ No SayAll/Open Voice Bridge code, photo, or screenshot is copied.
 - ⬜ The board is usable at 1040×760 and at a narrow window via scrolling.
-- ⬜ `0.1.0-8` (or the next package revision) contains the new GUI and keeps
-  GTK out of `atvv-linux`.
+- ⬜ The current `-git` packages contain the new GUI and keep GTK out of
+  `atvv-linux-git`.
 
 ## Risks
 

@@ -3,6 +3,7 @@
 /packaging/arch/*.pkg.tar.*
 /packaging/arch/pkg/
 /packaging/arch/src/
+/packaging/arch/atvv-linux-git/
 /dist/
 /build/
 *.log

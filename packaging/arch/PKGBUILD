@@ -1,43 +1,55 @@
 # Maintainer: Yangtse Su <yangtsesu@gmail.com>
 
-pkgbase=atvv-linux
-pkgname=('atvv-linux' 'atvv-linux-gui')
-pkgver=0.1.0
-pkgrel=9
+pkgbase=atvv-linux-git
+pkgname=('atvv-linux-git' 'atvv-linux-gui-git')
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
 pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (atvvd, atvvctl, atvv-mcp)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/YangtseSu/atvv-linux"
 license=('GPL-3.0-or-later')
 depends=('pipewire' 'bluez' 'dbus')
-makedepends=('clang' 'pkgconf' 'rust' 'dbus' 'gtk4' 'libadwaita')
-source=("$pkgbase-$pkgver.tar.gz")
-sha256sums=('a727e4bb0e5b19e8782869d01277eabcdb3e8fea1f4eede97153a30100890f21')
+makedepends=('clang' 'pkgconf' 'rust' 'dbus' 'gtk4' 'libadwaita' 'git')
+# The package is built from this checkout's HEAD. The clone ignores
+# uncommitted files, matching a normal VCS package.
+source=("$pkgbase::git+file://$startdir/../..")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgbase"
+  printf '0.1.0.r%s.g%s' \
+    "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
 
 prepare() {
-  cd "$pkgbase-$pkgver"
-  # The deterministic source tarball uses fixed (epoch) mtimes. A target/
-  # directory left by a previous build would make Cargo treat changed sources
-  # as fresh, so packaging must start from a clean build tree.
+  cd "$pkgbase"
+  # A target/ directory left by a previous build would make Cargo treat
+  # changed sources as fresh, so packaging must start from a clean tree.
   rm -rf target
 }
 
 build() {
-  cd "$pkgbase-$pkgver"
+  cd "$pkgbase"
   # --locked keeps the committed dependency graph; the crates are fetched from
   # crates.io, so this is not --frozen/--offline.
   cargo build --release --locked --workspace --bins
 }
 
 check() {
-  cd "$pkgbase-$pkgver"
+  cd "$pkgbase"
   # Integration tests (D-Bus, Xvfb UI, real device) run in CI with the dev
   # profile. Compiling them with release LTO on every package rebuild adds
   # minutes; the package check runs the release library unit tests.
   cargo test --workspace --release --locked --lib --exclude atvv-cli
 }
 
-package_atvv-linux() {
-  cd "$pkgbase-$pkgver"
+package_atvv-linux-git() {
+  pkgdesc="ATVV v1.0 userspace stack for Bluetooth voice remotes (git)"
+  provides=('atvv-linux')
+  conflicts=('atvv-linux')
+  replaces=('atvv-linux')
+  cd "$pkgbase"
 
   install -Dm755 target/release/atvvd "$pkgdir/usr/bin/atvvd"
   install -Dm755 target/release/atvvctl "$pkgdir/usr/bin/atvvctl"
@@ -71,10 +83,13 @@ package_atvv-linux() {
     "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.md"
 }
 
-package_atvv-linux-gui() {
-  pkgdesc="GTK4/libadwaita configuration app for ATVV remotes"
-  depends=('gtk4' 'libadwaita' 'librsvg' 'atvv-linux')
-  cd "$pkgbase-$pkgver"
+package_atvv-linux-gui-git() {
+  pkgdesc="GTK4/libadwaita configuration app for ATVV remotes (git)"
+  depends=('gtk4' 'libadwaita' 'librsvg' 'atvv-linux-git')
+  provides=('atvv-linux-gui')
+  conflicts=('atvv-linux-gui')
+  replaces=('atvv-linux-gui')
+  cd "$pkgbase"
 
   install -Dm755 target/release/atvv-config "$pkgdir/usr/bin/atvv-config"
   install -Dm644 packaging/gui/org.atvv.Config.desktop \

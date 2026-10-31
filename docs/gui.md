@@ -10,14 +10,18 @@ BlueZ or PipeWire directly.
 
 ## Install and start
 
-The GUI is the optional `atvv-linux-gui` package; the daemon package does not
-depend on GTK.
+The GUI is the optional `atvv-linux-gui-git` package; the daemon package does
+not depend on GTK.
 
 ```sh
-sudo pacman -S atvv-linux atvv-linux-gui
+cd packaging/arch
+makepkg -si
 systemctl --user enable --now atvvd
 atvv-config
 ```
+
+The local `-git` packages replace the release packages `atvv-linux` and
+`atvv-linux-gui`.
 
 Without a running daemon the window opens a read-only *Daemon unavailable*
 page with a Retry button. The daemon stays headless; `atvvctl` remains the
