@@ -112,10 +112,18 @@ device-information dialog opened by the header chip and the menu.
   - `docs/gui.png` (board), `docs/gui-editor.png` (editor), and
     `docs/gui-recording-key.png` (recording key) are captured from the built
     app at 1040×760 in the light theme.
-- ✅ Packaging: the split VCS package `atvv-git 0.1.0.r9.g…` /
-  `atvv-gui-git 0.1.0.r9.g…` built from this commit; GTK dependencies remain
-  only in `atvv-gui-git`. The published recipe picks the commit up when the
-  branch is pushed.
+- ✅ Packaging: `atvv-git 0.1.0.r18.g0eac227-1` (6,648,052 bytes; sha256
+  `e0cd5dff9a740ee37c351e7494ff797d7af383c43a7e2d0f5eff63f540b56cfb`) and
+  `atvv-gui-git 0.1.0.r18.g0eac227-1` (1,357,669 bytes; sha256
+  `dd403bb1c3186ee4260e3f94a9aade7017717a852085395fc1918c60d8155030`) were
+  built from commit `0eac227` with the checked-in split recipe; the temporary
+  PKGBUILD pointed its git source at the local repository because the
+  published recipe tracks GitHub. `atvv-git` depends on `pipewire`, `bluez`,
+  and `dbus`; `atvv-gui-git` adds `gtk4`, `libadwaita`, `librsvg`, and
+  `atvv-git`. `namcap` reports only the expected implicit-library and
+  runtime-service notes, and the packaged `atvv-config` renders the board
+  under Xvfb. The published recipe picks the commit up when the branch is
+  pushed.
 
 ## Out of scope
 
@@ -226,5 +234,9 @@ Manual:
 - 2026-11-01 — refreshed `docs/gui.md`/`gui.zh-CN.md` and the three
   screenshots; regenerated `THIRD-PARTY-NOTICES.md` for the `x11rb` test
   dependency.
-- 2026-11-01 — built the split VCS packages from this commit; `atvv-gui-git`
-  carries `gtk4`/`libadwaita`/`librsvg` and `atvv-git` stays GTK-free.
+- 2026-11-01 — built the split VCS packages from this commit:
+  `atvv-git 0.1.0.r18.g0eac227-1` and `atvv-gui-git 0.1.0.r18.g0eac227-1`,
+  with `gtk4`/`libadwaita`/`librsvg` only in the GUI package. The packaged
+  `atvv-config` rendered the board under Xvfb; the packages are not installed,
+  so the installed r8 pair remains active. The published recipe is unchanged
+  and tracks the branch.

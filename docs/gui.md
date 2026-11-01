@@ -170,7 +170,10 @@ is not a second source of truth. The map survives daemon restarts.
 
 - One device profile at a time; the window shows the profile reported by the
   daemon.
-- No layout selection or per-device layouts yet (steps 17 and 21).
+- No layout selection or per-device layouts yet (steps 17 and 21). The board
+  follows the interface reference except for the layout chip, the device
+  switcher popover, the editor's raw-value preview line, and connector arrows
+  between cards and the diagram.
 - No per-application layers or automatic shortcut discovery.
 - No ASR or cloud protocol in the app; dictation only drives the ATVV session.
 - The GUI is optional. `atvvd`, `atvvctl`, `atvv-mcp`, and consumers such as

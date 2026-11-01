@@ -188,6 +188,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
   Screenshots: `docs/gui.png`, `docs/gui-editor.png`,
   `docs/gui-recording-key.png`. See `docs/gui.md` and
   `docs/plans/15-mapping-board.md`.
+- **Step 15 `-git` packages (built, not installed)**: `atvv-git
+  0.1.0.r18.g0eac227-1` (6,648,052 bytes; sha256
+  `e0cd5dff9a740ee37c351e7494ff797d7af383c43a7e2d0f5eff63f540b56cfb`) and
+  `atvv-gui-git 0.1.0.r18.g0eac227-1` (1,357,669 bytes; sha256
+  `dd403bb1c3186ee4260e3f94a9aade7017717a852085395fc1918c60d8155030`),
+  built from commit `0eac227` with the checked-in split recipe pointed at the
+  local repository. `atvv-gui-git` carries `gtk4`/`libadwaita`/`librsvg` and
+  depends on `atvv-git`; the base package keeps `pipewire`/`bluez`/`dbus`.
+  `namcap` reports only the expected implicit-library/runtime notes; the
+  packaged `atvv-config` rendered the board under Xvfb. The installed r8 pair
+  remains active. The published `arch-pkgs` recipe is unchanged.
 - **Recording-key declared chooser (2026-11-01)**: the recording-key page
   offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`) plus `None (disable synthetic key)` through **Declared key…**.
@@ -649,8 +660,12 @@ cargo run -q -p atvv-cli -- map test --button up --trigger single
 cargo run -q -p atvv-cli -- map test --action "combo:ctrl+alt+v"
 cargo run -q -p atvv-cli -- doctor
 cargo test -p atvv-gui
-xvfb-run -a cargo test -p atvv-gui --test ui
-cargo test -p atvv-gui --test real_run -- --ignored
+GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
+  cargo test -p atvv-gui --test ui                     # 36 slot + 13 hotspot clicks
+GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
+  cargo test -p atvv-gui --test narrow                 # 700x560 scroll-into-view
+GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
+  cargo test -p atvv-gui --test real_run -- --ignored  # live atvvd
 cargo run -q -p atvv-gui
 cargo run -q -p atvv-cli -- pair C0:5D:39:F8:2D:4C
 cargo run -q -p atvv-daemon -- --device C0:5D:39:F8:2D:4C --verbose
