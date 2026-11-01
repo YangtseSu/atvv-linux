@@ -74,7 +74,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | A — M0 protocol foundation | 01–03 | **done**: protocol, session state machine, and `atvvctl` diagnostics run without hardware |
 | B — M0 system foundation | 04–06 | **done**: PipeWire source, fake uinput remote, daemon/D-Bus skeleton |
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
-| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
+| D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream's own implementation after the maintainer closed the ATVV PRs during an architecture refactor; 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 | F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **done**: mapping board with per-button cards, modal action editor, test bar |
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
@@ -86,9 +86,9 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
-approval/upstream; steps 11–16 are complete. Step 17 is complete and verified
-with the real RC003; step 18 is complete with recorded app runs on mpv,
-Impress, WPS Presentation, and omp.
+upstream's own implementation; steps 11–18 are complete. Step 17 is complete
+and verified with the real RC003; step 18 is complete with recorded app runs
+on mpv, Impress, WPS Presentation, and omp.
 
 ## Step files
 

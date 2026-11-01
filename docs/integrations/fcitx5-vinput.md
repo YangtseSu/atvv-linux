@@ -75,10 +75,11 @@ key edge opens the microphone; a software start cannot produce frames.
    `VOICECOMMAND` and `ASSISTANT` are the supported fallbacks if the IME
    cannot bind the dictation key.
 
-   The source advertises the declared keys as `atvv.recording_keys`; the
-   upstream vinput request is to append the mapped set automatically when the
-   user selects the ATVV source. Until that lands, the manual entry above is
-   the supported setup. See
+   The source advertises the declared keys as `atvv.recording_keys`. Upstream
+   closed the ATVV proposal PRs during its architecture refactor and has taken
+   auto-selection and declared-key binding into its own follow-up design.
+   Until a released fcitx5-vinput ships that, the manual entry above is the
+   supported setup. See
    [`provider-contract.md`](provider-contract.md).
 
 Do not make the ATVV source the system default. fcitx records at 16 kHz mono

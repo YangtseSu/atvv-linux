@@ -16,8 +16,10 @@ server, and the optional GTK configuration app are implemented. The RC003
 audio path and the fcitx5-vinput source path have been verified on real devices
 and system services; evidence is linked below.
 
-Automatic fcitx5-vinput setup depends on an upstream consumer change. Until it
-lands, select the ATVV source by name and add the declared trigger key
+Automatic fcitx5-vinput setup is upstream-owned: the maintainer closed the
+ATVV proposal PRs during an architecture refactor and will implement
+auto-selection and declared-key binding in its own design. Until a release
+ships, select the ATVV source by name and add the declared trigger key
 manually; see the
 [fcitx5-vinput guide](docs/integrations/fcitx5-vinput.md).
 

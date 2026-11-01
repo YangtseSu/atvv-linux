@@ -66,9 +66,10 @@ ATVV 是提供方；vinput 是消费者（ADR 0007）。集成接口是 PipeWire
 
    如果 IME 无法绑定听写键，`VOICECOMMAND` 和 `ASSISTANT` 是支持的回退。
 
-   源把声明的按键公布为 `atvv.recording_keys`；上游 vinput 请求是在用户选择
-   ATVV 源时自动追加映射后的集合。在该功能落地之前，上述手动条目是受支持的
-   设置。见 [`provider-contract.zh-CN.md`](provider-contract.zh-CN.md)。
+   源把声明的按键公布为 `atvv.recording_keys`。上游在其架构重构期间关闭了
+   ATVV 的提案 PR，并把自动选择和声明键绑定纳入了自己的后续设计。在发布版
+   fcitx5-vinput 提供该功能之前，上述手动条目是受支持的设置。见
+   [`provider-contract.zh-CN.md`](provider-contract.zh-CN.md)。
 
 不要把 ATVV 源设为系统默认设备。fcitx 以 16 kHz 单声道 S16LE 录音，与源速率
 一致。

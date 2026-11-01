@@ -377,17 +377,21 @@ per-session copies; `docs/plans/` remains the canonical plan.
 ## Not implemented
 
 - **10 vinput zero-config (blocked)**: ATVV is the provider; vinput owns
-  source selection and trigger binding (ADR 0007). The primary upstream
-  request is a consumer-side capture-device auto-selection/priority list and
-  auto-binding of the declared recording keys. Until it exists, the one-time
+  source selection and trigger binding (ADR 0007). The consumer-side feature
+  is a capture-device auto-selection/priority list and auto-binding of the
+  declared recording keys. Until upstream ships it, the one-time
   `vinput device use atvv-miremote-rc003` plus `Dictate` at the next free
   index (default install: `[TriggerKey] 1=Dictate`) is the correct layered
   setup, not a workaround. The ATVV-side `SetCaptureDevice` push and
   `vinput_device` policy are dropped. `vinput = "trigger"` remains the
   default; `vinput = "dbus"` is an explicit fallback. The live `daemon.toml`
-  already sets `trigger_key = "DICTATE"`; the installed `0.1.0-5` service
-  accepts it. Issues #491 and #492 are open; PR #493 is ready and PRs #494
-  and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
+  already sets `trigger_key = "DICTATE"`; the installed service accepts it.
+  Upstream closed PRs #493–#495 and issues #491/#492 on
+  2026-10-30 during a low-level architecture refactor that is not merging
+  new features; the maintainer said auto-selection and recording-key binding
+  are in its follow-up design and will be implemented there. Until a release
+  ships, the manual setup above remains the supported path. See
+  `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
 - **21 multi-device switching (planned)**: one active device at a time, a
@@ -508,10 +512,11 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - vinput integration direction: ATVV is the lower layer and exposes a
   PipeWire source plus a uinput key; vinput owns source selection and trigger
   binding. ATVV does not write vinput config or call `org.fcitx.Vinput` in the
-  primary path. The D-Bus `vinput` mode is an opt-in fallback. The primary
-  upstream request is consumer-side source auto-selection plus auto-binding of
-  `atvv.recording_keys`; `AddTriggerKey` on `org.fcitx.Vinput` is out of scope
-  (ADR 0007).
+  primary path. The D-Bus `vinput` mode is an opt-in fallback. Consumer-side
+  source auto-selection and auto-binding of `atvv.recording_keys` were
+  proposed upstream and closed during its architecture refactor; upstream
+  will implement both in its own follow-up design. `AddTriggerKey` on
+  `org.fcitx.Vinput` is out of scope (ADR 0007).
 - Provider contract: the source exposes `atvv.contract_version=1`,
   `atvv.profile`, and `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`.
   Consumers bind the declared set; the provider emits one active key.
@@ -733,14 +738,16 @@ per-device layouts. The board and device chip already preview the UI in
 `docs/plans/15-mapping-board.html`. B01 (recording-key press/release actions)
 is backlog and does not block step 21.
 
-**Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
-the provider and vinput is the consumer. Issues #491 and #492 are open; PR
-#493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
-default; `vinput = "dbus"` is an explicit fallback.
+**Step 10 vinput-zero-config is blocked** on upstream's own implementation:
+ATVV is the provider and vinput is the consumer. The maintainer closed PRs
+#493–#495 and issues #491/#492 on 2026-10-30 during a low-level architecture
+refactor and said auto-selection and recording-key binding are in its
+follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
+is an explicit fallback.
 
-Immediate action: start step 21. In parallel, wait for upstream review on PR
-#493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
-vinput, and record the real auto-bind acceptance.
+Immediate action: start step 21. In parallel, watch upstream releases; when
+one ships its own auto-selection/declared-key binding, rebuild vinput and
+record the zero-config RC003 run. Do not reopen the PRs.
 
 ## Commands
 

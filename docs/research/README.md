@@ -103,10 +103,11 @@ implementation direction:
 - **vinput upstream API.** A 2026-10-30 source review of fcitx5-vinput
   `bd7dd4365` reduced step 10's upstream scope to the consumer side: ATVV
   provides the PipeWire source and the `Dictate` key; vinput owns source
-  selection and trigger binding. The primary upstream request is a
-  capture-device auto-selection/priority list. `AddTriggerKey` on
-  `org.fcitx.Vinput` is not viable, and ATVV does not call
-  `SetCaptureDevice` in the primary path (ADR 0007). See
+  selection and trigger binding. The ATVV proposals (auto-selection and
+  declared-key binding) were closed upstream on 2026-10-30 during its
+  architecture refactor; upstream will implement both in its own follow-up
+  design. `AddTriggerKey` on `org.fcitx.Vinput` is not viable, and ATVV does
+  not call `SetCaptureDevice` in the primary path (ADR 0007). See
   [`vinput-upstream-api.md`](vinput-upstream-api.md).
 - **Consumer integration.** The provider contract is implemented and recorded
   in `AGENTS.md` and

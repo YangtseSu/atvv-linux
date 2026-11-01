@@ -14,8 +14,9 @@ ATVV v1.0 采集、输入重映射、守护进程和 D-Bus API、CLI、MCP 服�
 GTK 配置应用均已实现。RC003 音频路径和 fcitx5-vinput 源路径已在真实设备和系统
 服务上验证；证据见下文链接。
 
-fcitx5-vinput 的自动设置依赖上游消费者改动。在该功能落地之前，请按名称选择
-ATVV 源并手动添加声明的触发键；见
+fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间关闭了 ATVV 的
+提案 PR，并会在自己的设计中实现自动选择和声明键绑定。在发布版提供该功能之前，
+请按名称选择 ATVV 源并手动添加声明的触发键；见
 [fcitx5-vinput 指南](docs/integrations/fcitx5-vinput.zh-CN.md)。
 
 已实现：

@@ -1,8 +1,8 @@
 # Step 10 — zero-config vinput integration
 
 Status: ⛔ blocked
-Depends on: 08 (integration); blocked on operator approval and upstream
-review
+Depends on: 08 (integration); blocked on upstream implementation after the
+maintainer closed the ATVV PRs during its architecture refactor
 Touches: `docs/`, upstream fcitx5-vinput
 
 ## Goal
@@ -17,14 +17,15 @@ setter called by ATVV (ADR 0007).
 
 ## Next action
 
-Wait for upstream review of PR #493; when it merges, rebase #494 and #495 onto
-`main`, rebuild vinput, and record the auto-selection and auto-bind run on the
-RC003.
+Watch upstream's refactor and releases. When a release ships its own
+auto-selection and declared-key binding (together or separately), rebuild it,
+run the zero-config check on the RC003, and record the release version and
+result. Do not reopen PRs #493–#495; upstream owns the implementation.
 
 ## Current state
 
-- ATVV is installed as `atvv-linux 0.1.0-5`; the enabled user unit runs
-  `/usr/bin/atvvd` with `trigger_key = "DICTATE"`. The live source advertises
+- ATVV is installed; the enabled user unit runs `/usr/bin/atvvd` with
+  `trigger_key = "DICTATE"`. The live source advertises
   `atvv.contract_version=1`, `atvv.profile`, and
   `atvv.recording_keys=DICTATE,VOICECOMMAND,ASSISTANT`; step 12 exposes the
   same contract through `atvvctl contract`, `atvvctl status.contract`, and the
@@ -38,8 +39,25 @@ RC003.
 - The fcitx addon owns `[TriggerKey]`; `org.fcitx.Vinput` cannot change it.
   fcitx's `org.fcitx.Fcitx.Controller1` `GetConfig`/`SetConfig` is the correct
   consumer-side path and is now implemented in the local vinput patches.
-- Local consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three
-  stacked branches, all based on upstream `bd7dd43`:
+- The consumer-side proposals are closed upstream on 2026-10-30. The
+  maintainer closed
+  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) (auto
+  selection) and drafts
+  [#494](https://github.com/xifan2333/fcitx5-vinput/pull/494)/
+  [#495](https://github.com/xifan2333/fcitx5-vinput/pull/495) (metadata and
+  binding), together with issues
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492). The issue
+  comments say the project is in a centralized low-level architecture
+  refactor and state-machine decoupling, that new features are not being
+  merged during the refactor, that automatic capture-device priority
+  selection is in the follow-up unified design, and that hardware voice-key
+  mapping and shortcut synchronization are in the future device-adaptation
+  design. Upstream will implement both itself after the core architecture
+  stabilizes; the PRs will not merge.
+- Local consumer patches remain in the `YangtseSu/fcitx5-vinput` fork on three
+  stacked branches, all based on upstream `bd7dd43`, as the record of the
+  proposal:
   - `feat/issue-491-auto-capture-device` (`42ccc26`): `auto` and comma-separated
     wildcard priority lists; exact names win; unmatched patterns use the
     system default; CLI/GUI Auto.
@@ -50,17 +68,8 @@ RC003.
     keys through fcitx's controller, preserving entries and using the next
     free indices; no direct file write and no D-Bus activation; fallback
     prints the exact entries.
-  Upstream issues
-  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
-  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. The
-  branches are pushed to the fork:
-  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready
-  (auto selection);
-  [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
-  [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) are drafts
-  (metadata and binding). All three target `main` because a fork branch cannot
-  be a base in the upstream repository; the follow-ups rebase after their
-  parent merges.
+  Reopening the PRs is not planned. The manual one-time setup stays the
+  supported path until an upstream release ships its own implementation.
 - The opt-in `vinput = "dbus"` fallback still has the addon
   `mostRecentInputContext` focus gap. That fallback is not part of the primary
   path and is deferred; see Deferred below.
@@ -80,15 +89,17 @@ RC003.
 - ✅ No ATVV-side device push. The `SetCaptureDevice` call and
   `vinput_device = "auto" | "none"` policy are absent; ADR 0007 records the
   decision. Source selection belongs to the consumer.
-- ⬜ Upstream issue/PR A: consumer-side capture-device auto-selection and
-  priority list. Issue
-  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) is open;
-  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready.
-- ⬜ Upstream issue/PR B: read `atvv.recording_keys` and append missing trigger
-  keys on `device use`. Issue
-  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) is open;
-  [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
-  [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) are drafts.
+- ⬜ Upstream feature A: capture-device auto-selection and priority list in
+  upstream's own post-refactor release. Our issue
+  [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
+  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) were closed
+  on 2026-10-30; upstream owns the implementation.
+- ⬜ Upstream feature B: read `atvv.recording_keys` and append missing trigger
+  keys on `device use`, in upstream's own post-refactor release. Our issue
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) and
+  [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494)/
+  [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) were closed
+  on 2026-10-30; upstream owns the implementation.
 - ✅ Keep `vinput = "trigger"` as the default and `vinput = "dbus"` as an
   explicit fallback. Do not make D-Bus the zero-config default.
 - ✅ Generic provider diagnostics: `atvvctl status.contract`,
@@ -104,8 +115,9 @@ RC003.
   `atvv-miremote-rc003`; the end-to-end fcitx text commit was
   operator-confirmed with the prior trigger. The local auto-bind test added
   `VoiceCommand` at the next free index and was idempotent on a second run.
-- ⬜ [hardware] Real auto-bind check after upstream merge/release: no manual
-  device step and no manual trigger entry.
+- ⬜ [hardware] Real auto-bind check after upstream ships its own
+  implementation in a release: no manual device step and no manual trigger
+  entry.
 - ✅ Record the default-mode decision and the layering rationale (ADR 0007).
 
 ## Out of scope
@@ -186,6 +198,11 @@ Recorded 2026-10-31:
   deprecates `StandardPath` in pre-existing code; CI runs its own Werror
   configuration.
 
+2026-11-02: upstream closed PRs #493–#495 and issues #491/#492 on 2026-10-30;
+there is no post-merge run to record. The manual-path evidence above and the
+local fork checks remain valid; the zero-config check moves to the upstream
+release gate.
+
 ## Exit criteria
 
 - ✅ Manual one-time setup (`device use` plus `Dictate` at the next free
@@ -194,9 +211,9 @@ Recorded 2026-10-31:
 - ✅ Full Dictate text commit, operator-confirmed on 2026-10-30 with the prior
   trigger; the vinput journal records the ATVV source at 16 kHz. See
   [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
-- ⬜ [hardware] If the consumer-side auto-selection/auto-bind feature lands,
-  the same run works without manual entries; this is the only path to true
-  zero-config.
+- ⬜ [hardware] When upstream ships its own auto-selection/auto-bind
+  implementation in a release, the same run works without manual entries;
+  this is the only path to true zero-config.
 - ✅ A user with a customized trigger key keeps it and can use `Dictate`
   (or `VOICECOMMAND`/`ASSISTANT`) as an additional ATVV trigger.
 - ✅ A user's explicit non-ATVV device is preserved; ATVV never selects it or
@@ -211,9 +228,11 @@ Recorded 2026-10-31:
 
 ## Risks
 
-- Upstream may reject a consumer-side auto-selection feature. Then the one-time
-  `vinput device use` plus `Dictate` at the next free index (default:
-  `1=Dictate`) remains the documented setup; do not claim zero-config.
+- Upstream declined the ATVV PRs and will implement the feature itself. The
+  timing and final shape are outside our control. Until a release ships and
+  we record the run, the one-time `vinput device use` plus `Dictate` at the
+  next free index (default: `1=Dictate`) remains the documented setup; do not
+  claim zero-config.
 - If auto-selection lands, it must not fight an explicit user choice or the
   system default.
 - Some applications may bind the declared consumer keys; the active key is
@@ -223,8 +242,8 @@ Recorded 2026-10-31:
   currently has no in-process retry. If PipeWire is late, the source is absent
   and no consumer can select it. That is a separate reliability gap, not an
   ATVV-to-vinput control problem.
-- Step completion is gated by operator approval (push, issues, draft PRs),
-  upstream review/merge, and the post-merge auto-bind run.
+- Step completion is gated by upstream's own implementation and release, then
+  the zero-config run on the RC003. No ATVV-side code change is pending.
 
 ## Progress log
 
@@ -305,3 +324,17 @@ Recorded 2026-10-31:
   and binding). All PRs target `main`; the follow-ups will be rebased onto
   `main` after their parent merges. Remaining work is upstream review/merge,
   a vinput rebuild, and the real auto-bind acceptance.
+- 2026-11-02 — upstream closed
+  [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) and drafts
+  [#494](https://github.com/xifan2333/fcitx5-vinput/pull/494)/
+  [#495](https://github.com/xifan2333/fcitx5-vinput/pull/495), together with
+  issues [#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
+  [#492](https://github.com/xifan2333/fcitx5-vinput/issues/492), on 2026-10-30.
+  The maintainer said the project is in a centralized low-level architecture
+  refactor and state-machine decoupling; new features are not being merged
+  during the refactor; automatic capture-device priority selection is in the
+  follow-up unified design, and hardware voice-key mapping/shortcut
+  synchronization is in the future device-adaptation design. Upstream will
+  implement both after the core architecture stabilizes. No ATVV code change;
+  do not reopen the PRs. The manual one-time setup stays the supported path
+  until an upstream release ships the feature.

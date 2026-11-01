@@ -1,7 +1,8 @@
 # fcitx5-vinput upstream API: zero-config gaps
 
-Status: research snapshot 2026-10-30. This document records the source facts
-behind step 10's upstream PR list. It is evidence, not a plan.
+Status: research snapshot 2026-10-30, with the upstream outcome recorded
+2026-11-02. This document records the source facts behind step 10's upstream
+PR list. It is evidence, not a plan.
 
 - Source: <https://github.com/xifan2333/fcitx5-vinput>
 - Pinned snapshot: `d9a409d` (the version tested in steps 08/11)
@@ -166,6 +167,32 @@ Do not file:
 - An addon-side trigger D-Bus object: contradicts ADR 0001.
 - `StartRecording() -> s`: empty scene id already resolves to the active
   scene; a docs sentence is enough.
+
+## Upstream outcome (2026-11-02)
+
+On 2026-10-30 the maintainer closed all three ATVV PRs and both issues:
+
+- [PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) (auto
+  selection) closed; [PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494)
+  and [PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) (drafts)
+  closed "to keep the PR queue clean while we focus discussion on the base
+  PR".
+- [Issue #491](https://github.com/xifan2333/fcitx5-vinput/issues/491) closed.
+  The comment says the project is in a centralized low-level architecture
+  refactor and state-machine decoupling; new features are not being merged
+  during the refactor; automatic capture-device priority selection is in the
+  follow-up unified design and will be implemented after the core
+  architecture stabilizes.
+- [Issue #492](https://github.com/xifan2333/fcitx5-vinput/issues/492) closed.
+  The comment says hardware voice-key mapping and shortcut synchronization are
+  in the future device-adaptation design and will be evaluated as a whole
+  after the refactor.
+
+The ATVV-side proposal is therefore not a merge candidate; do not reopen the
+PRs. The manual one-time setup (select `atvv-miremote-rc003`, append `Dictate`
+at the next free index) remains the supported path until a released
+fcitx5-vinput ships its own implementation. The local fork branches are
+evidence only.
 
 ## Sources
 
