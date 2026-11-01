@@ -844,7 +844,10 @@ fn record(wav: &PathBuf, seconds: u64, trigger: bool) -> Result<(), String> {
         ));
     }
 
-    let rate = RC003.sample_rate;
+    // Record at the rate the source actually runs at, not a compiled profile
+    // constant: the daemon converts the negotiated stream rate to the graph
+    // rate (ADR 0009), so a mismatch here would mislabel the WAV.
+    let rate = status.contract.sample_rate;
     let seconds = seconds.max(1);
     let samples = u64::from(rate) * seconds;
     let mut child = ProcessCommand::new("pw-cat")
@@ -1569,8 +1572,6 @@ fn show_profile(id: &str) -> Result<(), String> {
     println!("mic_open: {:?}", profile.mic_open);
     println!("mic_close: {:?}", profile.mic_close);
     println!("keepalive: {:?}", profile.keepalive);
-    println!("direct_audio_start: {}", profile.direct_audio_start);
-    println!("stop_echo: {}", profile.stop_echo);
     println!("post_stop_discard_ms: {}", profile.post_stop_discard_ms);
     println!("sample_rate: {} Hz", profile.sample_rate);
     println!("gain_db: {} dB", profile.gain_db);

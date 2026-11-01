@@ -117,39 +117,6 @@ atvvctl doctor
 [`docs/device-support.zh-CN.md`](docs/device-support.zh-CN.md) 和
 [`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md)。
 
-## 已知缺陷
-
-2026-11-01 真实设备测试中发现的未修正正确性问题。每一条都与暴露它的设备无关。
-
-- **`output_frame` 遇到 `i16::MIN` 会 panic。**
-  `crates/atvv-daemon/src/daemon.rs` 用 `sample.abs()` 计算 verbose 首帧峰值，
-  而 `i16::abs()` 对 `-32768` 会 panic，因此 `atvvd --verbose` 收到削顶帧即
-  中止。复现方式：`atvvd --device <MAC> --verbose` 加 `atvvctl mic start`，
-  进程在 `daemon.rs:613` 报 `attempt to negate with overflow` 退出。release
-  构建下同表达式静默回绕为 `-32768`，峰值变成负数而不 panic；两种行为都用
-  独立的 `i16::MIN.abs()` 检查确认过。修法是先转 `i32` 再取绝对值（或用
-  `unsigned_abs`），并让诊断路径不含会 panic 的运算。
-- **采样率没有以 `CAPS_RESP` 为准。**
-  `crates/atvv-daemon/src/main.rs` 用 `profile.sample_rate` 构建 PipeWire 源，
-  `crates/atvv-cli/src/main.rs` 的 `record` 按 `RC003.sample_rate` 写 WAV。
-  daemon 解析了 `caps.codec` 并在 `atvvctl status` 里报出 `adpcm-8k`，但音频
-  图仍是 16 kHz。协商到 8 kHz 的遥控器因此以两倍速播放并出现欠采样空档；
-  实测填充率 43.9%，而 268 样本帧对应的理论值是 52.2%。需要 ADR 的后续：
-  按协商编解码器决定音源采样率并在不一致时重采样，或在 `CAPS_RESP` 到达时
-  重建 PipeWire 节点。`atvv-audio` 目前没有重采样路径。
-- **短于 7 字节的 `AUDIO_SYNC` 被丢弃且没有限速诊断。**
-  `crates/atvv-protocol/src/events.rs` 对操作码 `0x0A` 要求 `data.len() >= 7`，
-  否则返回 `CtlEvent::Unknown`。daemon 随后在 `--verbose` 下为每个包打印一行
-  `unknown control notification`（实测约 2 秒 151 行），违反 `AGENTS.md` 中
-  「以有界速率记录协议异常」的要求。畸形或固件截断的同步包还会让解码器永久
-  失步，因为 v1.0 中 `0x0A` 是唯一的重同步机制。修法是新增专门的错误变体
-  加限速告警。
-- **daemon 从不读取 `DeviceProfile::stop_echo` 与 `direct_audio_start`。**
-  两个字段由 `atvvctl profile show` 打印、由 RC003 profile 与伪遥控器设置，
-  但没有任何控制流分支使用；停止回显逻辑在 `Session::on_audio_stop` 里是
-  无条件的。要么把它们接进会话状态机，要么删掉，保证 profile 始终是设备事实
-  的唯一来源。
-
 ## 构建与测试
 
 ```sh

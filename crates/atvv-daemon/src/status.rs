@@ -164,10 +164,15 @@ pub struct McpView {
 }
 
 /// Build the provider contract for the current input and integration state.
+///
+/// `sample_rate` is the graph rate the resident source runs at, not the rate
+/// `CAPS_RESP` negotiated: the daemon converts a negotiated stream rate to it
+/// (ADR 0009), so consumers and `atvvctl record` must use this value.
 #[must_use]
 pub fn contract_view(
     profile: &DeviceProfile,
     source: &str,
+    sample_rate: u32,
     input: &InputView,
     vinput: &VinputView,
 ) -> ContractView {
@@ -182,7 +187,7 @@ pub fn contract_view(
         source: source.to_string(),
         media_class: MEDIA_CLASS.to_string(),
         sample_format: SAMPLE_FORMAT.to_string(),
-        sample_rate: profile.sample_rate,
+        sample_rate,
         channels: CHANNELS,
         recording_keys: RECORDING_KEYS
             .iter()
@@ -246,7 +251,13 @@ mod tests {
     fn contract_reports_the_declared_set_and_active_key() {
         let input = input_view(true, true, true);
         let vinput = vinput_view("trigger", Some("DICTATE"));
-        let contract = contract_view(&RC003, "atvv-miremote-rc003", &input, &vinput);
+        let contract = contract_view(
+            &RC003,
+            "atvv-miremote-rc003",
+            RC003.sample_rate,
+            &input,
+            &vinput,
+        );
 
         assert_eq!(contract.version, "1");
         assert_eq!(contract.profile, "miremote-rc003");
@@ -276,15 +287,33 @@ mod tests {
         let ready_input = input_view(true, true, true);
         let trigger = vinput_view("trigger", Some("DICTATE"));
 
-        let disabled = contract_view(&RC003, "atvv-x", &input_view(false, true, true), &trigger);
+        let disabled = contract_view(
+            &RC003,
+            "atvv-x",
+            RC003.sample_rate,
+            &input_view(false, true, true),
+            &trigger,
+        );
         assert_eq!(disabled.active_key.as_deref(), Some("DICTATE"));
         assert!(!disabled.input_ready);
 
-        let absent = contract_view(&RC003, "atvv-x", &input_view(true, false, true), &trigger);
+        let absent = contract_view(
+            &RC003,
+            "atvv-x",
+            RC003.sample_rate,
+            &input_view(true, false, true),
+            &trigger,
+        );
         assert_eq!(absent.active_key.as_deref(), Some("DICTATE"));
         assert!(!absent.input_ready);
 
-        let no_keyboard = contract_view(&RC003, "atvv-x", &input_view(true, true, false), &trigger);
+        let no_keyboard = contract_view(
+            &RC003,
+            "atvv-x",
+            RC003.sample_rate,
+            &input_view(true, true, false),
+            &trigger,
+        );
         assert_eq!(no_keyboard.active_key.as_deref(), Some("DICTATE"));
         assert!(no_keyboard.input_ready);
         assert!(!no_keyboard.keyboard_ready);
@@ -292,6 +321,7 @@ mod tests {
         let dbus = contract_view(
             &RC003,
             "atvv-x",
+            RC003.sample_rate,
             &ready_input,
             &vinput_view("dbus", Some("DICTATE")),
         );
@@ -300,6 +330,7 @@ mod tests {
         let no_trigger = contract_view(
             &RC003,
             "atvv-x",
+            RC003.sample_rate,
             &ready_input,
             &vinput_view("trigger", None),
         );
@@ -307,10 +338,25 @@ mod tests {
     }
 
     #[test]
+    fn contract_reports_the_graph_rate_not_the_profile_rate() {
+        // ADR 0009: the contract describes the resident source, so it carries
+        // the graph rate even when it differs from the profile's own rate.
+        let contract = contract_view(
+            &RC003,
+            "atvv-x",
+            8_000,
+            &input_view(true, true, true),
+            &vinput_view("trigger", Some("DICTATE")),
+        );
+        assert_eq!(contract.sample_rate, 8_000);
+    }
+
+    #[test]
     fn contract_round_trips_through_json() {
         let contract = contract_view(
             &RC003,
             "atvv-miremote-rc003",
+            RC003.sample_rate,
             &input_view(true, true, true),
             &vinput_view("trigger", Some("DICTATE")),
         );

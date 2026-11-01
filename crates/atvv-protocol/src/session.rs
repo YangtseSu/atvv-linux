@@ -94,7 +94,9 @@ impl Session {
                 self.stream_id = None;
                 Vec::new()
             }
-            CtlEvent::AudioSync { .. } | CtlEvent::Unknown(_) => Vec::new(),
+            CtlEvent::AudioSync { .. }
+            | CtlEvent::MalformedAudioSync { .. }
+            | CtlEvent::Unknown(_) => Vec::new(),
         }
     }
 
@@ -212,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn rc003_direct_audio_start_is_a_press() {
+    fn direct_audio_start_is_a_press() {
         let mut session = ready();
         let actions = session.on_event(CtlEvent::AudioStart {
             reason: crate::events::AudioStartReason::HoldToTalk,

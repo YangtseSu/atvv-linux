@@ -172,7 +172,7 @@ media.class      = Audio/Source
 node.name        = atvv-<id>
 node.description = <device name>
 node.virtual     = true
-audio.rate       = <codec rate>
+audio.rate       = <graph rate>
 audio.channels   = 1
 audio.position   = [ MONO ]
 ```
@@ -187,8 +187,11 @@ audio.position   = [ MONO ]
 - The registry `global_remove` callback recreates the node. A full PipeWire
   service restart is systemd's responsibility (ADR 0005), not an in-process
   monitor.
-- PipeWire converts the source rate to the graph rate; do not resample in the
-  daemon unless a profile requires it.
+- PipeWire converts the node rate to the graph rate. The node rate is fixed
+  for the daemon lifetime at the profile rate
+  (`AudioSourceConfig.sample_rate`); the daemon converts the
+  `CAPS_RESP`-negotiated stream rate to it (ADR 0009). Rebuilding the node per
+  codec would drop every consumer link.
 
 ### Input
 

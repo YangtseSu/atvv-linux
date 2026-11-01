@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
+use atvv_audio::Resampler;
 use atvv_config::{Config, ConfigDocument, VinputMode};
 use atvv_input::{Action, ActionMap, DictationMode, InputOptions, InputRuntime, RemoteEvent};
 use atvv_protocol::adpcm::Decoder;
@@ -31,6 +32,39 @@ use crate::vinput::VinputControl;
 
 /// How often the daemon refreshes the cached battery while connected.
 const HARDWARE_REFRESH: Duration = Duration::from_secs(60);
+
+/// Minimum gap between repeats of the same anomaly line.
+///
+/// A firmware that emits a malformed notification per audio frame would
+/// otherwise print one line per frame, which drowns the log and violates the
+/// bounded-rate rule. One summary per anomaly kind per interval keeps the
+/// signal and prints the suppressed count on the next report.
+const ANOMALY_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Bounded-rate diagnostic for one protocol anomaly kind.
+#[derive(Debug, Clone, Default)]
+struct Anomaly {
+    /// Last time this anomaly was reported.
+    last_report: Option<Instant>,
+    /// Occurrences since the last report.
+    suppressed: u64,
+}
+
+impl Anomaly {
+    /// Decide whether to report now, and how many occurrences to fold in.
+    fn record(&mut self, now: Instant) -> Option<u64> {
+        let due = self
+            .last_report
+            .is_none_or(|last| now.duration_since(last) >= ANOMALY_INTERVAL);
+        if !due {
+            self.suppressed += 1;
+            return None;
+        }
+        let folded = std::mem::take(&mut self.suppressed);
+        self.last_report = Some(now);
+        Some(folded)
+    }
+}
 
 /// Request from D-Bus or the CLI.
 #[derive(Debug, Clone)]
@@ -87,6 +121,13 @@ pub struct DaemonConfig {
     pub address: String,
     /// PipeWire `node.name`.
     pub source_name: String,
+    /// Rate the resident PipeWire source was created with.
+    ///
+    /// The source is created once for the daemon lifetime (ADR 0009); decoded
+    /// frames are converted to this rate when `CAPS_RESP` negotiates another.
+    /// Defaults to the profile rate so a daemon built without a real sink
+    /// still behaves like one.
+    pub graph_rate: u32,
     pub config_path: PathBuf,
     pub config_loaded: bool,
     /// Validated configuration; the daemon applies changes live.
@@ -106,6 +147,7 @@ impl DaemonConfig {
             profile,
             address: address.into(),
             source_name: format!("atvv-{}", profile.id),
+            graph_rate: profile.sample_rate,
             config_path: atvv_config::default_path(),
             config_loaded: false,
             config: Config::defaults(&profile),
@@ -185,6 +227,12 @@ pub struct Daemon {
     decoder: Decoder,
     swap: Vec<u8>,
     pcm: Vec<i16>,
+    /// Converts device PCM into the resident graph rate (ADR 0009).
+    resampler: Resampler,
+    /// Buffer for the converted stream handed to the sink.
+    converted: Vec<i16>,
+    /// Rate the resident PipeWire source runs at.
+    graph_rate: u32,
 
     gain: f32,
     config: Config,
@@ -209,6 +257,10 @@ pub struct Daemon {
     samples: u64,
     dropped_frames: u64,
     traced_audio: bool,
+    /// Truncated `AUDIO_SYNC` notifications, rate limited.
+    malformed_sync: Anomaly,
+    /// Unrecognized control opcodes, rate limited.
+    unknown_control: Anomaly,
     input_degraded: Vec<String>,
     last_button: Option<String>,
     voice_key: Option<bool>,
@@ -255,8 +307,13 @@ impl Daemon {
                 .as_ref()
                 .and_then(|control| control.last_error().map(str::to_string)),
         };
-        let contract =
-            crate::status::contract_view(&config.profile, audio.name(), &input_view, &vinput_view);
+        let contract = crate::status::contract_view(
+            &config.profile,
+            audio.name(),
+            config.graph_rate,
+            &input_view,
+            &vinput_view,
+        );
         let status = StatusView {
             state: "disconnected".to_string(),
             connected: false,
@@ -324,6 +381,9 @@ impl Daemon {
             decoder: Decoder::new(),
             swap: Vec::new(),
             pcm: Vec::new(),
+            resampler: Resampler::new(config.profile.sample_rate, config.graph_rate),
+            converted: Vec::new(),
+            graph_rate: config.graph_rate,
             gain: gain_factor(config.config.gain_db),
             config: config.config,
             config_path: config.config_path,
@@ -344,6 +404,8 @@ impl Daemon {
             samples: 0,
             dropped_frames: 0,
             traced_audio: false,
+            malformed_sync: Anomaly::default(),
+            unknown_control: Anomaly::default(),
             input_degraded,
             last_button: None,
             voice_key: None,
@@ -430,6 +492,14 @@ impl Daemon {
             .map_or(self.profile.frame_size, |caps| caps.frame_size);
         self.accumulator = FrameAccumulator::new(frame_size).ok();
         self.decoder = Decoder::new();
+        // `CAPS_RESP` is authoritative for the stream rate (ADR 0009); the
+        // profile rate is only the fallback before it arrives.
+        let device_rate = self
+            .session
+            .caps()
+            .and_then(|caps| caps.best_codec())
+            .map_or(self.profile.sample_rate, |codec| codec.sample_rate());
+        self.resampler = Resampler::new(device_rate, self.graph_rate);
         self.frames = 0;
         self.samples = 0;
         self.dropped_frames = 0;
@@ -504,8 +574,19 @@ impl Daemon {
     }
 
     fn on_control(&mut self, bytes: &[u8]) {
-        self.trace(format!("control {bytes:02x?}"));
-        match CtlEvent::parse(bytes) {
+        let event = CtlEvent::parse(bytes);
+        // The per-packet dump is a protocol anomaly log, so it is rate limited:
+        // a firmware that sends a sync per audio frame would otherwise print
+        // hundreds of lines per session (the malformed-sync and unknown-opcode
+        // arms below report the same data in summary form).
+        let rate_limited = matches!(
+            event,
+            CtlEvent::AudioSync { .. } | CtlEvent::MalformedAudioSync { .. } | CtlEvent::Unknown(_)
+        );
+        if !rate_limited {
+            self.trace(format!("control {bytes:02x?}"));
+        }
+        match event {
             CtlEvent::CapsResp(caps) => {
                 self.caps_deadline = None;
                 self.trace(format!(
@@ -531,8 +612,19 @@ impl Daemon {
                 let actions = self.session.on_event(CtlEvent::MicOpenError(code));
                 self.execute(actions);
             }
+            CtlEvent::MalformedAudioSync { len } => {
+                if let Some(folded) = self.malformed_sync.record(Instant::now()) {
+                    self.trace(format!(
+                        "malformed AUDIO_SYNC ({len} bytes, need 7); {folded} more suppressed"
+                    ));
+                }
+            }
             CtlEvent::Unknown(raw) => {
-                self.trace(format!("unknown control notification {raw:02x?}"));
+                if let Some(folded) = self.unknown_control.record(Instant::now()) {
+                    self.trace(format!(
+                        "unknown control notification {raw:02x?}; {folded} more suppressed"
+                    ));
+                }
             }
             event => {
                 let actions = self.session.on_event(event);
@@ -552,16 +644,28 @@ impl Daemon {
         }
 
         // Some firmware sends the 0x0A sync on the audio characteristic.
-        if bytes.first() == Some(&0x0A)
-            && bytes.len() >= 7
-            && let CtlEvent::AudioSync {
-                predictor,
-                step_index,
-                ..
-            } = CtlEvent::parse(bytes)
-        {
-            self.decoder.reset(predictor, step_index);
-            return;
+        if bytes.first() == Some(&0x0A) {
+            match CtlEvent::parse(bytes) {
+                CtlEvent::AudioSync {
+                    predictor,
+                    step_index,
+                    ..
+                } => {
+                    self.decoder.reset(predictor, step_index);
+                    return;
+                }
+                CtlEvent::MalformedAudioSync { len } => {
+                    // Never feed a truncated sync to the accumulator: it is
+                    // control data, not audio.
+                    if let Some(folded) = self.malformed_sync.record(now) {
+                        self.trace(format!(
+                            "malformed AUDIO_SYNC ({len} bytes, need 7); {folded} more suppressed"
+                        ));
+                    }
+                    return;
+                }
+                _ => {}
+            }
         }
 
         if self.session.state() != SessionState::Streaming {
@@ -610,7 +714,12 @@ impl Daemon {
 
         if self.verbose && !self.traced_audio {
             let raw = &frame[..frame.len().min(16)];
-            let peak = self.pcm[..written].iter().map(|sample| sample.abs()).max();
+            // `i16::abs` panics on `i16::MIN`, and a clipped frame legitimately
+            // decodes to it. Widen before taking the magnitude.
+            let peak = self.pcm[..written]
+                .iter()
+                .map(|sample| i32::from(*sample).unsigned_abs())
+                .max();
             self.trace(format!(
                 "first frame {} B raw {raw:02x?} peak {}",
                 frame.len(),
@@ -625,7 +734,16 @@ impl Daemon {
                 *sample = scaled.clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
             }
         }
-        self.audio.push(&self.pcm[..written]);
+        // The graph runs at one rate for the daemon lifetime; a device that
+        // negotiated another rate is converted here (ADR 0009).
+        if self.resampler.is_identity() {
+            self.audio.push(&self.pcm[..written]);
+        } else {
+            self.converted.clear();
+            self.resampler
+                .process(&self.pcm[..written], &mut self.converted);
+            self.audio.push(&self.converted);
+        }
         self.frames += 1;
         self.samples += written as u64;
     }
@@ -1206,8 +1324,13 @@ impl Daemon {
                 .as_ref()
                 .and_then(|control| control.last_error().map(str::to_string)),
         };
-        let contract =
-            crate::status::contract_view(&self.profile, self.audio.name(), &input, &vinput);
+        let contract = crate::status::contract_view(
+            &self.profile,
+            self.audio.name(),
+            self.graph_rate,
+            &input,
+            &vinput,
+        );
         StatusView {
             state: self.state_name(),
             connected: self.connected,
@@ -1347,7 +1470,7 @@ mod tests {
 
     use atvv_protocol::profile::{RC003, RemoteButton};
 
-    use crate::transport::{MockConfig, MockHandle, MockTransport};
+    use crate::transport::{DEFAULT_CAPS, MockConfig, MockHandle, MockTransport};
 
     struct CountingSink {
         samples: usize,
@@ -1844,7 +1967,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_audio_start_streams_and_stop_echo_closes_once() {
+    fn direct_audio_start_streams_and_stop_closes_once() {
         let (handle, mock, signals) = start();
         wait_for(&handle, |status| status.state == "ready");
 
@@ -1997,5 +2120,193 @@ mod tests {
         );
         let _ = mock;
         handle.send(Command::Shutdown).unwrap();
+    }
+
+    /// Sink that keeps every sample, for rate and content assertions.
+    #[derive(Clone, Default)]
+    struct CaptureSink {
+        inner: Arc<std::sync::Mutex<Vec<i16>>>,
+    }
+
+    impl CaptureSink {
+        fn len(&self) -> usize {
+            self.inner
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .len()
+        }
+    }
+
+    impl PcmSink for CaptureSink {
+        fn push(&mut self, samples: &[i16]) {
+            self.inner
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .extend_from_slice(samples);
+        }
+
+        fn name(&self) -> &str {
+            "capture"
+        }
+
+        fn is_available(&self) -> bool {
+            true
+        }
+
+        fn queued_samples(&self) -> usize {
+            self.len()
+        }
+
+        fn degraded(&self) -> Option<&str> {
+            None
+        }
+    }
+
+    fn start_with(
+        caps: Vec<u8>,
+        frame_size: usize,
+    ) -> (DaemonHandle, MockHandle, CaptureSink, Arc<RecordingSink>) {
+        let (transport, mock) = MockTransport::new(MockConfig {
+            caps,
+            frame_size,
+            ..MockConfig::default()
+        });
+        let signals = Arc::new(RecordingSink::default());
+        let sink = CaptureSink::default();
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        config.tick = Duration::from_millis(5);
+        config.keepalive_interval = Duration::from_millis(40);
+        config.frame_timeout = Duration::from_millis(80);
+        config.reconnect_delay = Duration::from_millis(100);
+        let (daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(sink.clone()),
+            signals.clone(),
+            None,
+        );
+        std::thread::spawn(move || daemon.run());
+        (handle, mock, sink, signals)
+    }
+
+    #[test]
+    fn verbose_peak_survives_i16_min() {
+        // `i16::abs()` panics on `i16::MIN` in a debug build. A clipped ADPCM
+        // frame legitimately decodes to that value, so `output_frame` must
+        // widen before taking the magnitude.
+        //
+        // Driven directly rather than through the mock: the mock also streams
+        // its own frames, which would consume the one-shot `traced_audio` flag
+        // before the clipped frame arrives.
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        config.verbose = true;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CaptureSink::default()),
+            Arc::new(NullSink),
+            None,
+        );
+        daemon.traced_audio = false;
+        // 0xFF nibbles drive the predictor to the negative rail and decode to
+        // `i16::MIN`.
+        let clipped = vec![0xFFu8; 120];
+        daemon.output_frame(&clipped);
+        assert!(
+            daemon.pcm[..240].contains(&i16::MIN),
+            "the fixture must decode to i16::MIN, got {:?}",
+            &daemon.pcm[..8]
+        );
+        assert!(daemon.traced_audio, "the verbose path was not exercised");
+    }
+
+    #[test]
+    fn cap_negotiated_8k_is_resampled_to_the_graph_rate() {
+        // A device that negotiates ADPCM 8 kHz into a 16 kHz source must
+        // produce twice as many graph samples as decoded device samples.
+        let caps = vec![0x0B, 0x01, 0x00, 0x01, 0x03, 0x00, 0x78];
+        let (handle, mock, sink, _signals) = start_with(caps, 120);
+        let status = wait_for(&handle, |status| status.state == "ready");
+        assert_eq!(status.caps.as_ref().unwrap().codec, "adpcm-8k");
+
+        mock.start_audio();
+        wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames >= 8
+        });
+        mock.stop_audio(0x02);
+        // Measure after the stream ended: the mock emits a frame every 20 ms,
+        // so comparing the sink against an older status snapshot can race.
+        let status = wait_for(&handle, |status| !status.streaming);
+        let decoded = status.audio.samples;
+        let queued = sink.len() as u64;
+        // 120-byte frames decode to 240 samples each; the graph must see
+        // roughly double that per frame. The resampler holds back a constant
+        // two-sample tail.
+        assert!(
+            queued >= decoded * 2 - 8 && queued <= decoded * 2,
+            "decoded {decoded} samples produced {queued} graph samples"
+        );
+        handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn matching_rate_is_a_passthrough() {
+        // The default 16 kHz CAPS against the 16 kHz graph copies verbatim.
+        let (handle, mock, sink, _signals) = start_with(DEFAULT_CAPS.to_vec(), 120);
+        wait_for(&handle, |status| status.state == "ready");
+        mock.start_audio();
+        wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames >= 8
+        });
+        mock.stop_audio(0x02);
+        let status = wait_for(&handle, |status| !status.streaming);
+        assert_eq!(sink.len() as u64, status.audio.samples);
+        handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn malformed_sync_never_reaches_the_accumulator() {
+        // Driven directly instead of through the mock: the mock also emits
+        // real frames, which would mask a leak. A three-byte `0x0A` on the
+        // audio characteristic is control data, so it must neither buffer nor
+        // produce PCM.
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let sink = CaptureSink::default();
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(sink.clone()),
+            Arc::new(NullSink),
+            None,
+        );
+
+        let caps = atvv_protocol::Capabilities::parse(&DEFAULT_CAPS).unwrap();
+        daemon.session.on_caps(caps);
+        daemon
+            .session
+            .on_audio_start(atvv_protocol::StreamId::MIC_OPEN);
+        daemon.accumulator = Some(FrameAccumulator::new(120).unwrap());
+        daemon.decoder = Decoder::new();
+
+        let now = Instant::now();
+        for _ in 0..50 {
+            daemon.on_audio(&[0x0A, 0x00, 0x01], now);
+        }
+        assert_eq!(
+            daemon.accumulator.as_ref().unwrap().pending_len(),
+            0,
+            "truncated sync was buffered as audio"
+        );
+        assert_eq!(daemon.frames, 0, "truncated sync produced frames");
+        assert_eq!(sink.len(), 0, "truncated sync reached the PCM sink");
+        assert!(
+            daemon.malformed_sync.suppressed > 0 || daemon.malformed_sync.last_report.is_some(),
+            "the anomaly was not counted for rate limiting"
+        );
     }
 }

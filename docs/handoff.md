@@ -7,7 +7,7 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 174 passed, 5 ignored tests (two
+- Tests: `cargo test --workspace` → 191 passed, 5 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, the real-device
   GUI test, and a locale-detection test; the first three pass with
   `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
@@ -19,8 +19,10 @@ Updated: 2026-11-01
 3. `docs/research/README.md` — evidence index and current deltas.
 4. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
 5. `docs/decisions/0008-gui-toolkit.md` — GTK4/libadwaita/GNOME HIG.
-6. The next step file and its research links before editing code.
-7. For step 15, the interface reference
+6. `docs/decisions/0009-caps-authoritative-sample-rate.md` — `CAPS_RESP` owns
+   the stream rate; the daemon resamples to the resident graph rate.
+7. The next step file and its research links before editing code.
+8. For step 15, the interface reference
    [`docs/plans/15-mapping-board.html`](plans/15-mapping-board.html).
 
 This file is updated in place at the end of every step/session. Do not create
@@ -231,6 +233,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
   log and steps 21/B01 a verification block; step 10's text-commit criterion
   now matches the acceptance record. The plan invariants are listed in
   `AGENTS.md`.
+- **Correctness fixes (2026-11-01)**: four defects found during real-device
+  testing are fixed. `output_frame` takes the first-frame peak on `i32`;
+  `CAPS_RESP` decides the stream rate and `atvv_audio::Resampler` converts
+  each decoded frame to the resident graph rate (ADR 0009); a truncated
+  `AUDIO_SYNC` returns `CtlEvent::MalformedAudioSync` and protocol-anomaly
+  logging is rate limited; the dead `DeviceProfile::stop_echo` and
+  `direct_audio_start` fields are gone. The 8 kHz conversion is covered by
+  `cap_negotiated_8k_is_resampled_to_the_graph_rate`; no real 8 kHz device is
+  verified, and the 16 kHz RC003 path is the identity path.
 
 ## Not implemented
 
@@ -276,14 +287,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
   UID trigger and only test a rewrite after a verified dump and restore. NFC
   stays out of the daemon core. Needs an NFC reader; see
   `docs/plans/B02-nfc-tag.md`.
-- **Known defects (unfixed)**: README `## Known defects` lists four open
-  correctness issues found on 2026-11-01 and none of them needs a plan step:
-  `output_frame` panics on `i16::MIN` under `--verbose`; the PipeWire source
-  and `atvvctl record` take the sample rate from the profile instead of
-  `CAPS_RESP` and nothing resamples; a sub-7-byte `AUDIO_SYNC` becomes
-  `CtlEvent::Unknown` and floods the verbose log at one line per packet;
-  `DeviceProfile::stop_echo` and `direct_audio_start` are read by no control
-  flow. Fix them as `fix:` commits; the sample-rate one needs an ADR first.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
 power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07

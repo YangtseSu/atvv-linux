@@ -76,6 +76,14 @@ pub enum CtlEvent {
         predictor: i16,
         step_index: u8,
     },
+    /// Opcode `0x0A` shorter than the seven-byte `AUDIO_SYNC` payload.
+    ///
+    /// v1.0 defines exactly one resynchronization mechanism; a truncated sync
+    /// cannot reset the decoder, so the daemon reports it instead of treating
+    /// it as audio. Some firmware emits a three-byte counter form.
+    MalformedAudioSync {
+        len: usize,
+    },
     CapsResp(Capabilities),
     MicOpenError(u16),
     Unknown(Vec<u8>),
@@ -108,7 +116,7 @@ impl CtlEvent {
             0x08 => Self::StartSearch,
             0x0A => {
                 if data.len() < 7 {
-                    return Self::Unknown(data.to_vec());
+                    return Self::MalformedAudioSync { len: data.len() };
                 }
                 Self::AudioSync {
                     codec: Codec::from_wire(data[1]),
@@ -197,6 +205,27 @@ mod tests {
         assert!(matches!(
             CtlEvent::parse(&[0x0B, 0x01, 0x00]),
             CtlEvent::Unknown(_)
+        ));
+    }
+
+    #[test]
+    fn truncated_audio_sync_is_not_treated_as_audio() {
+        // v1.0 defines a seven-byte AUDIO_SYNC. A shorter payload cannot reset
+        // the decoder, so it must not silently become `Unknown` audio that a
+        // caller could append to the frame accumulator.
+        for len in 1..7 {
+            let packet = vec![0x0A; len];
+            match CtlEvent::parse(&packet) {
+                CtlEvent::MalformedAudioSync { len: reported } => {
+                    assert_eq!(reported, len, "length must be reported");
+                }
+                other => panic!("len {len} parsed as {other:?}"),
+            }
+        }
+        // Seven bytes is a valid sync and must keep parsing as one.
+        assert!(matches!(
+            CtlEvent::parse(&[0x0A, 0x02, 0x01, 0x2C, 0xFF, 0xF0, 0x1E]),
+            CtlEvent::AudioSync { .. }
         ));
     }
 

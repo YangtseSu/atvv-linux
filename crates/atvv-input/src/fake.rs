@@ -39,8 +39,6 @@ pub const FAKE_REMOTE: DeviceProfile = DeviceProfile {
     mic_open: MicOpenVariant::Short,
     mic_close: MicCloseVariant::Bare,
     keepalive: KeepaliveVariant::Bare,
-    direct_audio_start: true,
-    stop_echo: true,
     post_stop_discard_ms: 300,
     sample_rate: 16_000,
     gain_db: 0,

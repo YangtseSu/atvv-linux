@@ -60,8 +60,22 @@ fn run() -> Result<(), Box<dyn Error>> {
     let address = transport.address().to_string();
     let transport_label = format!("{} transport for {}", transport.kind(), transport.address());
 
+    // The resident source runs at one rate for the daemon lifetime; the
+    // negotiated `CAPS_RESP` rate is converted to it per frame (ADR 0009).
+    // The sink configuration is the one authority for that rate.
+    let source = AudioSourceConfig {
+        name: dbus::source_name(profile),
+        description: profile.display_name.to_string(),
+        sample_rate: profile.sample_rate,
+        channels: 1,
+        queue_capacity: profile.sample_rate as usize,
+        extra_properties: atvv_audio::contract_properties(profile.id),
+    };
+    let graph_rate = source.sample_rate;
+
     let mut config = DaemonConfig::new(profile, address.clone());
-    config.source_name = dbus::source_name(profile);
+    config.source_name = source.name.clone();
+    config.graph_rate = graph_rate;
     let existed = loaded.existed;
     // The document mirrors `daemon.toml`, not CLI overrides; `endpoint` and
     // `adapter` below are only the transport's effective values.
@@ -70,14 +84,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     config.config_loaded = existed;
     config.verbose = args.verbose;
 
-    let audio = PipeWireSink::start(AudioSourceConfig {
-        name: config.source_name.clone(),
-        description: profile.display_name.to_string(),
-        sample_rate: profile.sample_rate,
-        channels: 1,
-        queue_capacity: profile.sample_rate as usize,
-        extra_properties: atvv_audio::contract_properties(profile.id),
-    });
+    let audio = PipeWireSink::start(source);
 
     let connection = dbus::connect_session()?;
     let signals: Arc<dyn EventSink> = Arc::new(DbusSink::new(&connection)?);
