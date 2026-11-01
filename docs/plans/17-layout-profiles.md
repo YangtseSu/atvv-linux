@@ -17,6 +17,11 @@ automatic foreground-app switch.
 
 "NFC" is not part of this step; see backlog B02.
 
+## Next action
+
+Settle the v2 schema in `atvv-config`: layout records, reserved ids, and the
+v1 migration.
+
 ## Why layouts, not another profile
 
 `DeviceProfile` already means the hardware/firmware identity
@@ -188,9 +193,9 @@ libadwaita widgets, not the HTML/CSS.
   update the list; a dirty manager footer shows Revert/Apply; Apply with only
   layout-list changes persists them without opening Save as layout; the chip
   updates after a device switch (step 21).
-- Real RC003: two layouts with different actions for one button; switch and
-  press the remote; the emitted key changes without a daemon restart; the
-  active layout survives a restart.
+- ⬜ [hardware] Real RC003: two layouts with different actions for one button;
+  switch and press the remote; the emitted key changes without a daemon
+  restart; the active layout survives a restart.
 
 ## Verification
 
@@ -221,7 +226,8 @@ atvvctl layout use default
   layout, and it cannot be renamed, deleted, or reset; user layouts can be
   created, renamed, deleted, and reset.
 - ⬜ The active layout is persisted and shown in status.
-- ⬜ Switching applies live and changes the emitted key on the real RC003.
+- ⬜ [hardware] Switching applies live and changes the emitted key on the real
+  RC003.
 - ⬜ Invalid documents or unknown layouts leave the current state untouched.
 - ⬜ CLI, GUI, and D-Bus agree on the active layout.
 - ⬜ No automatic per-app/focus switching is introduced.
@@ -240,3 +246,8 @@ atvvctl layout use default
   dropped: Apply always opens Save as layout for a changed slot map, and
   switching layouts or devices stays blocked until Apply or Revert.
 - `exec:` policy is global by design; a layout must never enable it.
+
+## Progress log
+
+- 2026-11-01 — plan reviewed; a `Next action` line was added and the hardware
+  items tagged. No implementation started.

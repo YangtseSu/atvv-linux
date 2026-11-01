@@ -15,6 +15,12 @@ vinput in the primary path. Zero configuration is still the long-term target,
 but it requires a consumer-side auto-selection feature in vinput, not a device
 setter called by ATVV (ADR 0007).
 
+## Next action
+
+Wait for upstream review of PR #493; when it merges, rebase #494 and #495 onto
+`main`, rebuild vinput, and record the auto-selection and auto-bind run on the
+RC003.
+
 ## Current state
 
 - ATVV is installed as `atvv-linux 0.1.0-5`; the enabled user unit runs
@@ -98,11 +104,11 @@ setter called by ATVV (ADR 0007).
   `atvv-miremote-rc003`; the end-to-end fcitx text commit was
   operator-confirmed with the prior trigger. The local auto-bind test added
   `VoiceCommand` at the next free index and was idempotent on a second run.
-- ⬜ Real auto-bind check after upstream merge/release: no manual device step
-  and no manual trigger entry.
+- ⬜ [hardware] Real auto-bind check after upstream merge/release: no manual
+  device step and no manual trigger entry.
 - ✅ Record the default-mode decision and the layering rationale (ADR 0007).
 
-## Deferred
+## Out of scope
 
 - The generic `GetCaptureDevice`/`SetCaptureDevice` control API is not
   pursued. ATVV does not call a setter (ADR 0007).
@@ -184,12 +190,13 @@ Recorded 2026-10-31:
 
 - ✅ Manual one-time setup (`device use` plus `Dictate` at the next free
   index): fcitx5-vinput records from the ATVV source and `atvvd` does not
-  write vinput's configuration. The Dictate text-commit leg is
-  recording-verified; the full text commit was operator-confirmed with the
-  prior trigger and remains an operator spot check.
-- ⬜ Full Dictate text commit (operator spot check).
-- ⬜ If the consumer-side auto-selection/auto-bind feature lands, the same run
-  works without manual entries; this is the only path to true zero-config.
+  write vinput's configuration.
+- ✅ Full Dictate text commit, operator-confirmed on 2026-10-30 with the prior
+  trigger; the vinput journal records the ATVV source at 16 kHz. See
+  [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
+- ⬜ [hardware] If the consumer-side auto-selection/auto-bind feature lands,
+  the same run works without manual entries; this is the only path to true
+  zero-config.
 - ✅ A user with a customized trigger key keeps it and can use `Dictate`
   (or `VOICECOMMAND`/`ASSISTANT`) as an additional ATVV trigger.
 - ✅ A user's explicit non-ATVV device is preserved; ATVV never selects it or

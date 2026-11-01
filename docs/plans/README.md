@@ -17,15 +17,28 @@ table, and the backlog table.
   research records evidence, `docs/plans` records the decision.
 - A step is worked on alone, top to bottom. Every `- ⬜` item is one unit of
   work.
-- Progress uses the same markers inside every step and backlog file:
+- Progress uses the same markers inside every step and backlog file. This list
+  is their only definition; other documents link here.
   - `Status:` is one of `⬜ not-started`, `🚧 in-progress`, `⛔ blocked`,
     `✅ done`, `⏸ backlog`.
   - `- ⬜` open / `- ✅` done on every deliverable and exit criterion.
   - `## Progress log` is append-only: `YYYY-MM-DD — note`.
-- A step is `✅ done` only when every item is checked and the Verification and
-  Exit criteria sections have recorded commands and observed results.
+- A file that is not `✅ done` carries a `## Next action` section: the single
+  action that resumes it.
+- An item tagged `[hardware]` needs a recorded run on physical hardware (the
+  RC003, or an NFC reader for B02): command, observed output, date, and the
+  device address or model. Synthetic tests do not satisfy it.
+- A step is `✅ done` only when every item is checked, including every
+  `[hardware]` item, and the Verification and Exit criteria sections have
+  recorded commands and observed results.
+- A step file reports its own evidence. `docs/research/` holds research,
+  `docs/decisions/` holds decisions, and `docs/handoff.md` holds current state;
+  do not copy that content into a plan file.
 - Update the step file and this index in the same commit as the code. If
   reality diverges from the plan, change the plan in that commit and say why.
+- Keep the `## Next action` line current whenever the resume point changes.
+- The plan invariants checked before a commit are listed in
+  [`AGENTS.md`](../../AGENTS.md).
 - New scheduled work is appended as a new numbered step. A B-series entry is
   promoted to the next number when it is scheduled; its file keeps the
   evidence and its progress log gains the promotion note.
@@ -34,7 +47,6 @@ table, and the backlog table.
   plan file.
 - Do not cite `docs/plans/` from code: plans are the process record, not a
   runtime contract. Code comments carry the reason and measured value inline.
-- Hardware claims require a real-device run; synthetic tests do not count.
 
 ## Backlog (B series)
 
@@ -72,10 +84,25 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | K — Device management | 21 | **planned**: single-active device registry and switching, per-device layouts |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
-step 08 is complete and verified; step 09 is complete. Step 10 is blocked
-on approval/upstream; steps 11–13 are complete.
+step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
+approval/upstream; steps 11–13 are complete.
 
 ## Step files
+
+Completed steps stay in this directory as the record of what was built and
+verified; they are not reopened. Live work is listed first.
+
+### Live steps
+
+| # | Phase | Step | Status | Depends on | Exit, in one line |
+|---|-------|------|--------|------------|-------------------|
+| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
+| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one; [interface reference](15-mapping-board.html) |
+| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a template default whose edits save as a new layout; the active layout is explicit and switches live; selector UI decided |
+| 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
+| 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
+
+### Completed steps
 
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
@@ -88,18 +115,13 @@ on approval/upstream; steps 11–13 are complete.
 | 07 | C | [rc003-hardware-bringup](07-rc003-hardware-bringup.md) | ✅ done | 01, 02, 04, 06 | real RC003 CAPS, audio, keepalive, and reconnect are recorded |
 | 08 | D | [vinput-and-mcp](08-vinput-and-mcp.md) | ✅ done | 03, 06, 07 | trigger integration and all MCP tools work end to end |
 | 09 | E | [packaging-and-acceptance](09-packaging-and-acceptance.md) | ✅ done | all of 01–08 | a split Arch package, uaccess rule, and signed hardware acceptance |
-| 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
 | 11 | D | [input-evdevil](11-input-evdevil.md) | ✅ done | 05, 08, 10 | the evdevil path and `DICTATE` default are verified |
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) | contract, status, and the consumer recipe agree and are tested |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 | `config get/set`, capture, and live apply are atomic |
 | 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
-| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one; [interface reference](15-mapping-board.html) |
 | 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
-| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a template default whose edits save as a new layout; the active layout is explicit and switches live; selector UI decided |
-| 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
 | 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | ✅ done | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |
-| 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 
 ## Architecture contract
 
@@ -139,7 +161,9 @@ frames, high-nibble-first, short `MIC_OPEN` `[0C 00]`, bare `MIC_CLOSE` `[0D]`,
 bare `MIC_EXTEND` `[0E]`, direct `AUDIO_START`, 0 dB gain, 300 ms post-stop
 discard, and an `AUDIO_STOP` echo that must not trigger another close.
 
-## M0 exit criteria
+## M0 exit criteria (met)
+
+M0 is complete. The criteria are kept as the definition of the milestone.
 
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D
   warnings`, and `cargo test --workspace` are clean.
@@ -148,134 +172,16 @@ discard, and an `AUDIO_STOP` echo that must not trigger another close.
 - A PipeWire source can be created and recorded from without a remote (step 04).
 - A fake uinput remote exercises the input path without a physical device
   (step 05).
-- ✅ A mock BLE session drives the daemon D-Bus API, including a direct
+- A mock BLE session drives the daemon D-Bus API, including a direct
   `AUDIO_START` and an ignored stop echo (step 06).
 - No claim of RC003 hardware support is made before step 07.
 
-## Current state — 2026-11-01
+## Current state
 
-Step 15 now has a committed interactive interface reference,
-[`15-mapping-board.html`](15-mapping-board.html): the three-column board,
-per-button cards, modal editor, banners, test bar, and header device chip. It
-is the interface implementation basis for step 15, and it contains the decided
-step 17 layout UI (header layout chip, popover, manager dialog, Default as a
-template whose edits save as a new layout). Step 17 implementation remains
-pending. Step 21 is planned for
-single-active multi-device switching with per-device layouts; the reference
-previews its device popover. Simultaneous devices are out of scope for v1.
+See [`docs/handoff.md`](../handoff.md) for the current commit, test result,
+blockers, and the next action. This index does not repeat it.
 
-Step 19 completed the localization pass: the GTK app follows the desktop locale
-with an English/Simplified Chinese catalog, and the user-facing documents have
-linked `.zh-CN.md` siblings. Step 20 published `v0.1.0` with x86_64/aarch64
-binary archives and the source archive, and moved the Arch recipes outside the
-repository: one split AUR pkgbase `atvv` (`atvv`, `atvv-gui`) and one split VCS
-pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`). Both declare `x86_64` and
-`aarch64`. Steps 15, 17–18, and 21 remain planned; step 10 remains blocked on
-upstream review.
-
-Steps 01–09, 11–14, 16, and 19 are implemented. Step 16 adds passive hardware
-information (battery, firmware/revisions, serial, manufacturer, model) to
-`StatusView`, `atvvctl`, `atvv-mcp`, and the GUI home view. Steps 17–18 are
-planned: named user layouts, then built-in presets; the layout-selector UI is
-decided in the reference, with implementation still in step 17. Step 21
-follows for known-device switching. B02 is the NFC
-investigation backlog (it needs an NFC reader). Step 07 ran on a real RC003
-(`C0:5D:39:F8:2D:4C`): real `CAPS_RESP`, direct `AUDIO_START`, 120-byte
-frames, a 60-second keepalive session, a non-silent 16 kHz WAV, and automatic
-reconnect without a daemon restart. The run also fixed the resident PipeWire
-source, which had stayed suspended without a playback driver. Full evidence is
-in [`docs/research/rc003-hardware-evidence.md`](../research/rc003-hardware-evidence.md).
-
-Step 08 verified the voice-edge mic control, the synthetic trigger, the
-`org.fcitx.Vinput` client, `atvv-mcp`, and the fcitx/source path at 16 kHz;
-the same evidence document records the real-press and automated runs.
-
-Step 09 packaging and acceptance is complete: `atvv-linux 0.1.0-3` is the
-acceptance baseline, `0.1.0-5` is installed and active with the provider contract; the enabled user unit starts
-`/usr/bin/atvvd`, and `atvvctl doctor` reports all green on the real RC003.
-The end-to-end fcitx text commit is operator-confirmed and the vinput journal
-records the ATVV source at 16 kHz. The completed record is
-[`docs/acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).
-CI also runs `cargo deny` and `reuse lint`, and Dependabot checks Cargo and
-GitHub Actions daily.
-
-Step 10 is blocked on upstream review/merge. ATVV is the
-provider: it exposes the resident `Audio/Source` and the standard `Dictate`
-key. vinput is the consumer and owns source selection and trigger binding.
-Issues
-[#491](https://github.com/xifan2333/fcitx5-vinput/issues/491) and
-[#492](https://github.com/xifan2333/fcitx5-vinput/issues/492) are open. Local
-consumer patches exist in the `YangtseSu/fcitx5-vinput` fork on three stacked
-issue-named branches (auto selection, recording-key metadata, and `device use`
-binding); the branches are pushed and
-[PR #493](https://github.com/xifan2333/fcitx5-vinput/pull/493) is ready, with
-[PR #494](https://github.com/xifan2333/fcitx5-vinput/pull/494) and
-[PR #495](https://github.com/xifan2333/fcitx5-vinput/pull/495) as drafts. The
-manual `device use` plus `Dictate` path is verified; automatic binding and the
-post-merge real check remain. The primary upstream request is a
-consumer-side capture-device auto-selection/priority list plus auto-binding of
-the declared recording keys; until it exists, the one-time
-`vinput device use` plus `Dictate` at the next free index (default
-`1=Dictate`) is the correct layered setup.
-The earlier ATVV-side `SetCaptureDevice` push and the `vinput_device` policy
-are dropped (ADR 0007). D-Bus mode remains an opt-in fallback, not the
-zero-config default. The daemon trigger default is `DICTATE` (`KEY_DICTATE`);
-the declared set is `DICTATE`, `VOICECOMMAND`, `ASSISTANT`. Evidence:
-[`docs/research/vinput-upstream-api.md`](../research/vinput-upstream-api.md) and
-[ADR 0007](../decisions/0007-integration-direction.md).
-
-Step 12 is complete: the provider contract
-(`atvv.contract_version`, `atvv.profile`, `atvv.recording_keys`) is on the
-source and documented in
-[`docs/integrations/provider-contract.md`](../integrations/provider-contract.md).
-`atvvctl contract [--json]`, the `contract` object in `atvvctl status`, the
-`atvv-mcp` `contract` tool, the browser recipe, and generic IM guidance are
-implemented. The dependency is `03, 06`; the vinput consumer recipe is step 10
-and is blocked. Automatic fcitx5-vinput binding is not claimed here. The target
-consumers are fcitx5-vinput, browser AI chat pages, coding agents (Claude Code,
-Codex, OMP), and IM applications (Telegram, WeChat). No per-application
-diagnostics are provided.
-
-Step 11 is complete. `atvv-input` now uses `evdevil` 0.5.0 instead of
-`evdev` 0.13.2, so `VOICECOMMAND`, `ASSISTANT`, and `DICTATE` resolve and
-emit. The default synthetic trigger is `DICTATE`; the daemon and vinput names
-are documented side by side. A real RC003 press at 2026-10-30 produced
-`KEY_DICTATE`, streamed 104 frames / 24,960 samples, and made fcitx5-vinput
-record from `atvv-miremote-rc003` at 16 kHz. The evdev fork experiment was
-abandoned; the decision and evidence are in
-[ADR 0006](../decisions/0006-evdevil-input-backend.md) and
-[`consumer-keys.md`](../research/consumer-keys.md). Context-dependent mapping
-of the three keys is deferred.
-
-Step 13 is complete: `atvv-config` is the single schema parser; per-button
-mappings, gesture overrides, `exec:` opt-in, and live D-Bus
-`GetConfig`/`SetConfig`/capture are implemented and verified with the fake
-remote.
-
-Step 14 is complete and packaged: `atvv-gui` (`atvv-config`) is a GTK4/libadwaita
-client with an embedded SVG remote diagram, twelve action hotspots plus the
-recording key, a per-slot action editor, keyboard and remote learning, test
-mode with an explicit Run once, `exec` confirmation, banners/toasts, and a
-daemon-unavailable state. The recording key opens a settings page that edits
-only its output `trigger_key`; the physical key and microphone path stay fixed.
-`RunAction` was added to `org.atvv.Daemon` for test mode. The worker tests use
-a private bus and the real daemon service; a headless `xvfb-run` test drives
-the window. A real RC003 run saved a mapping through the GUI and
-verified it after a daemon restart. The physical test-mode run observed all
-thirteen keys, kept Test mode active after OK, and left system volume
-unchanged; Home/Menu use `KEY_HOME`/`KEY_COMPOSE`. Packaging is a split
-`atvv-linux-gui-git` package with desktop entry, AppStream metadata, icon, and
-GTK runtime dependencies kept out of `atvv-linux-git`; the packages are the
-local `-git` pair `atvv-linux-git` / `atvv-linux-gui-git`, built from HEAD, and
-replace the release package names. The GUI decision is recorded in
-[ADR 0008](../decisions/0008-gui-toolkit.md). Step 15 is planned: a
-sayall-style mapping board (central remote + per-button cards with all three
-slots) that keeps the same GTK4/libadwaita model, D-Bus API, and original SVG;
-no SayAll/Open Voice Bridge code or screenshots are copied. B01 and B02 are
-backlog entries: configurable press/release actions for the recording key, and
-the NFC tag investigation. Step 10 remains blocked on upstream review.
-
-## Backlog after 14
+## Unscheduled ideas
 
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.

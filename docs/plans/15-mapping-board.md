@@ -13,6 +13,12 @@ a card slot selects it; a modal action editor edits the selected slot. The app
 remains GTK4 + libadwaita + GNOME HIG, uses the original vector diagram, and
 does not copy the SayAll or Open Voice Bridge code, photos, or screenshots.
 
+## Next action
+
+Build the `MappingBoard` widget and the twelve `KeyCard`s against the
+committed interface reference, with hotspot and card selection driving one
+selection model.
+
 References for the information architecture only:
 
 - SayAll / `remote-mic-app` (GPL-3.0-only code; website design, photos, logo,
@@ -93,7 +99,7 @@ visible. The action editor is an `AdwDialog`, not a permanent pane.
     update the model, the dialog edits the correct slot, invalid input leaves
     the old map, test mode selects the pressed slot.
   - XTest pointer clicks on every card slot and hotspot under `xvfb-run`.
-  - Real RC003 save/persistence check after the layout change.
+  - [hardware] Real RC003 save/persistence check after the layout change.
 - ⬜ Docs and screenshot:
   - Update `docs/gui.md` with the board, editor dialog, and test bar.
   - Replace `docs/gui.png` with the board screenshot.

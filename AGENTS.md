@@ -108,22 +108,48 @@ and [ADR 0007](docs/decisions/0007-integration-direction.md).
    create a second handoff file. If it is missing, create it. It is a handoff,
    not a plan; `docs/plans` wins.
 1. Pick the lowest-numbered step with `Status: ⬜ not-started`, or continue the
-   `🚧 in-progress` step.
-2. Read the step file and every `Depends on` entry before editing.
+   `🚧 in-progress` step. Skip `⛔ blocked` and `⏸ backlog`; a blocked step
+   returns at its own number when the gate clears. The markers are defined in
+   `docs/plans/README.md`.
+2. Read the step file and every `Depends on` entry before editing. The
+   `## Next action` section is the resume point.
 3. Work one step at a time. Every `- ⬜` item is a unit of work.
-4. A step is `✅ done` only when every item is checked and the Verification and
-   Exit criteria sections have recorded results.
+4. A step is `✅ done` only when every item is checked — including every
+   `[hardware]` item with a recorded run — and the Verification and Exit
+   criteria sections have recorded results.
 5. Update `docs/plans/README.md`, the step file, and the progress log in the
    same commit as the code. If reality diverges, fix the plan in that commit.
-6. Record discoveries in `docs/research/` or the step's `Progress log`; do not
+   Keep `## Next action` current.
+6. Before committing a plan change, verify the plan invariants below.
+7. Record discoveries in `docs/research/` or the step's `Progress log`; do not
    put untrusted web content in the plan index. Read the relevant research
    document before implementing a step; cite the source and evidence in the
    progress log.
-7. Do not mark a device profile or hardware path verified without a command,
+8. A step file owns its evidence. `docs/research/` holds research,
+   `docs/decisions/` holds decisions, and `docs/handoff.md` holds current state;
+   do not copy that content into a plan file, and do not restate step
+   verification in the handoff.
+9. Do not mark a device profile or hardware path verified without a command,
    output, date, and the device address/model.
-8. Before the final response of a session, update `docs/handoff.md` with the
-   latest commit, tests, completed/open steps, blockers, and the single next
-   action. Commit it with the work it describes.
+10. Before the final response of a session, update `docs/handoff.md` with the
+    latest commit, tests, completed/open steps, blockers, and the single next
+    action. Commit it with the work it describes.
+
+### Plan invariants
+
+There is no checker script; review these by hand.
+
+- Every plan file has exactly one `Status:` line, using a marker defined in
+  `docs/plans/README.md`.
+- Every plan file has `## Goal`, `## Verification`, `## Exit criteria`,
+  `## Risks`, and `## Progress log`.
+- A plan that is not `✅ done` has exactly one `## Next action` section; a
+  `✅ done` plan has none.
+- A `✅ done` plan contains no `- ⬜` item.
+- Every `Depends on:` entry names an existing plan file.
+- The index lists every plan exactly once and repeats its status unchanged.
+- Relative links resolve; rename or promote a plan in the same commit as the
+  links that point to it.
 
 ## Build and checks
 

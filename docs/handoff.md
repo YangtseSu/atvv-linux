@@ -223,6 +223,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `arch-pkgs` repository. Both declare `x86_64` and `aarch64`; aarch64 was not
   built here. The split Cargo build compiles the shared graph once. See
   `docs/plans/20-release-and-external-packaging.md`.
+- **Plan docs pass (2026-11-01)**: the earlier archive/format rewrite was
+  reverted and `docs/plans/` stays flat. The seven live plans gained a
+  `## Next action` section; the index was split into live and completed
+  tables and its duplicated current-state narrative replaced by a handoff
+  pointer; `[hardware]` items are tagged; steps 17/18/B02 gained a progress
+  log and steps 21/B01 a verification block; step 10's text-commit criterion
+  now matches the acceptance record. The plan invariants are listed in
+  `AGENTS.md`.
 
 ## Not implemented
 
@@ -389,6 +397,9 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   quoted output may keep their source language.
 
 ## Verified
+
+Historical session log, kept as recorded. Step-level evidence belongs in the
+step file's `## Verification`; new results go there, not here.
 
 - 2026-11-01 recording-key chooser: `cargo fmt --all -- --check`,
   `cargo clippy --workspace --all-targets -- -D warnings` clean;

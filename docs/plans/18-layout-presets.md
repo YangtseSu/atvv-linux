@@ -12,6 +12,11 @@ preview and turn into a user layout. Presets are templates, not live state:
 the active layout is still a layout from step 17, and `default` remains the
 synthesized profile template.
 
+## Next action
+
+Add the static preset catalog to `atvv-config` with a grammar test over every
+action.
+
 ## Presets
 
 Initial catalog (generic, no `exec:`, no app detection):
@@ -153,3 +158,8 @@ atvvctl config get --json | jq '.layouts.coding'
 - Preset ids colliding with user layout ids would be confusing; reserve them.
 - A future preset schema change must keep old user layouts readable; presets
   are code constants and never stored, so only layout data matters.
+
+## Progress log
+
+- 2026-11-01 — plan reviewed; a `Next action` line was added. No
+  implementation started.

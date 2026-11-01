@@ -17,6 +17,11 @@ The step 15 interface reference previews the header device chip and the
 known-device popover (`docs/plans/15-mapping-board.html`); the second remote
 there is illustrative, not verified hardware.
 
+## Next action
+
+Add the device registry, `active_device`, and the migration from the single
+`device` field in `atvv-config`.
+
 ## Current gap
 
 - `ListDevices()` returns `vec![self.address]`
@@ -101,10 +106,26 @@ consumer-side capture selection would need a per-device source and routing.
 - Two fake devices on a private bus: switch, layout reload, capture ends,
   failure rollback, old address not grabbed, source name unchanged.
 - GUI: chip/popover, dirty block, per-device map, error state; UI smoke.
-- Real RC003: switch to a second device and back; the active RC003 still
-  streams and the source survives. The second device path needs real hardware;
-  a fake remote proves only the code path. No hardware claim without a
-  recorded run.
+- [hardware] Real RC003: switch to a second device and back; the active RC003
+  still streams and the source survives. The second device path needs real
+  hardware; a fake remote proves only the code path. No hardware claim without
+  a recorded run.
+
+## Verification
+
+```text
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+xvfb-run -a cargo test -p atvv-gui --test ui
+```
+
+```text
+atvvctl device list
+atvvctl device use <address>
+atvvctl status
+atvvctl doctor
+```
 
 ## Out of scope
 

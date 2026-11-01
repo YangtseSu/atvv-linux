@@ -17,6 +17,11 @@ release, or run a notifier per edge. Consumers still bind one of the declared
 recording keys; these actions are local configuration, not a new consumer
 interface.
 
+## Next action
+
+Add the optional `[recording]` section to `ConfigDocument` and `daemon.toml` in
+`atvv-config`.
+
 ## Interface
 
 ```toml
@@ -67,8 +72,17 @@ release = "none"
   - Daemon fake-remote press/release: each action runs once in edge order;
     mic start/stop still happens; capture suppresses both.
   - GUI model/UI smoke: edit, validate, apply, and display the actions.
-  - Real RC003 run only if claiming hardware behavior: a harmless `exec:`
-    marker on each edge plus a working mic session; record it.
+  - [hardware] Real RC003 run only if claiming hardware behavior: a harmless
+    `exec:` marker on each edge plus a working mic session; record it.
+
+## Verification
+
+```text
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+xvfb-run -a cargo test -p atvv-gui --test ui
+```
 
 ## Exit criteria
 

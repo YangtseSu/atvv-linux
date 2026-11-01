@@ -21,6 +21,10 @@ outcomes are acceptable:
 If the tag is read-only or locked, the step closes with the documented dump
 and no integration.
 
+## Next action
+
+Attach a libnfc-supported reader and identify the tag with `nfc-list`.
+
 ## Evidence
 
 - The RC003's NFC is a passive tag used by Xiaomi's phone tap-to-cast: the
@@ -85,14 +89,14 @@ seeing exactly one daemon action (no repeat while the tag stays present).
 
 ## Exit criteria
 
-- ⬜ Reader model/firmware recorded.
+- ⬜ [hardware] Reader model/firmware recorded.
 - ⬜ Tag IC, UID, memory size, and full dump hash recorded.
 - ⬜ NDEF payload recorded and explained.
 - ⬜ Lock state is known; the step states whether the tag is writable.
 - ⬜ If writable and a write was tested, the original dump is restored and the
   cast behavior is re-verified.
-- ⬜ Read-only trigger either demonstrated once per tap or explicitly closed
-  as not useful.
+- ⬜ [hardware] Read-only trigger either demonstrated once per tap or
+  explicitly closed as not useful.
 - ⬜ No NFC dependency or NFC code enters the daemon core.
 
 ## Risks
@@ -108,3 +112,7 @@ seeing exactly one daemon action (no repeat while the tag stays present).
   security-sensitive actions.
 - The remote is a physical object shared with the TV; do not leave a rewritten
   tag in place after the experiment.
+
+## Progress log
+
+- 2026-11-01 — plan reviewed; no NFC reader is attached, no work started.
