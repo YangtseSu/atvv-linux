@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use atvv_config::{ConfigDocument, parse_checked_action};
-use atvv_input::{ActionMap, Trigger};
+use atvv_input::{Action, ActionMap, Trigger, parse_action};
 use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
 
 use crate::i18n::tr;
@@ -37,6 +37,160 @@ pub fn button_label(button: RemoteButton) -> &'static str {
         RemoteButton::VolumeDown => tr("Volume down"),
         RemoteButton::Voice => tr("Voice"),
     }
+}
+
+/// Human label for a gesture slot.
+#[must_use]
+pub fn trigger_label(trigger: Trigger) -> &'static str {
+    match trigger {
+        Trigger::Single => tr("Single"),
+        Trigger::Double => tr("Double"),
+        Trigger::Long => tr("Long"),
+    }
+}
+
+/// Parse the protocol name used by `ButtonEvent`.
+#[must_use]
+pub fn trigger_from_name(name: &str) -> Option<Trigger> {
+    match name {
+        "single" => Some(Trigger::Single),
+        "double" => Some(Trigger::Double),
+        "long" => Some(Trigger::Long),
+        _ => None,
+    }
+}
+
+/// Compact form of one slot value, as shown by the board.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionLabel {
+    pub text: String,
+    /// The slot swallows the button; the card renders it dimmed.
+    pub none: bool,
+}
+
+fn none_label() -> ActionLabel {
+    ActionLabel {
+        text: tr("None").to_string(),
+        none: true,
+    }
+}
+
+/// Render `raw` the way the board shows it: `Return`, `F13`,
+/// `Ctrl+Alt+V`, `Command…`, `Start dictation`, or `None`.
+///
+/// An unparseable value is returned unchanged so a hand-edited document stays
+/// visible instead of silently reading as unbound.
+#[must_use]
+pub fn action_label(raw: Option<&str>) -> ActionLabel {
+    let Some(raw) = raw else {
+        return none_label();
+    };
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return none_label();
+    }
+    match parse_action(raw) {
+        Ok(Action::None) => none_label(),
+        Ok(Action::Key { name }) => ActionLabel {
+            text: friendly_key(&name),
+            none: false,
+        },
+        Ok(Action::Combo { mods, key }) => {
+            let mut text = mods
+                .iter()
+                .map(|modifier| modifier_label(modifier))
+                .collect::<Vec<_>>()
+                .join("+");
+            text.push('+');
+            text.push_str(&friendly_key(&key));
+            ActionLabel { text, none: false }
+        }
+        Ok(Action::Exec { .. }) => ActionLabel {
+            text: tr("Command…").to_string(),
+            none: false,
+        },
+        Ok(Action::Dictation(mode)) => ActionLabel {
+            text: match mode {
+                atvv_input::DictationMode::Start => tr("Start dictation"),
+                atvv_input::DictationMode::Stop => tr("Stop dictation"),
+                atvv_input::DictationMode::Toggle => tr("Toggle dictation"),
+            }
+            .to_string(),
+            none: false,
+        },
+        Err(_) => ActionLabel {
+            text: raw.to_string(),
+            none: false,
+        },
+    }
+}
+
+/// Present one modifier token in the board's chord form.
+fn modifier_label(token: &str) -> String {
+    match token.trim().to_ascii_lowercase().as_str() {
+        "ctrl" | "control" => "Ctrl".to_string(),
+        "alt" => "Alt".to_string(),
+        "shift" => "Shift".to_string(),
+        "super" | "meta" => "Super".to_string(),
+        other => title_case(other),
+    }
+}
+
+/// Display name for one evdev key name.
+///
+/// Known keys use their desktop label; anything else falls back to a
+/// title-cased bare name, so `KEY_F13` reads `F13` and `KEY_COMMA` reads
+/// `Comma`.
+#[must_use]
+pub fn friendly_key(name: &str) -> String {
+    let upper = name.trim().to_ascii_uppercase();
+    let known = match upper.as_str() {
+        "KEY_ENTER" | "KEY_KPENTER" => Some(tr("Return")),
+        "KEY_BACK" => Some(tr("Back")),
+        "KEY_BACKSPACE" => Some(tr("Backspace")),
+        "KEY_DELETE" => Some(tr("Delete")),
+        "KEY_UP" => Some(tr("Up")),
+        "KEY_DOWN" => Some(tr("Down")),
+        "KEY_LEFT" => Some(tr("Left")),
+        "KEY_RIGHT" => Some(tr("Right")),
+        "KEY_HOME" | "KEY_HOMEPAGE" => Some(tr("Home")),
+        "KEY_COMPOSE" | "KEY_MENU" => Some(tr("Menu")),
+        "KEY_GRAVE" => Some(tr("TV")),
+        "KEY_VOLUMEUP" => Some(tr("Volume up")),
+        "KEY_VOLUMEDOWN" => Some(tr("Volume down")),
+        "KEY_POWER" => Some(tr("Power")),
+        "KEY_ESC" => Some(tr("Escape")),
+        "KEY_SPACE" => Some(tr("Space")),
+        "KEY_TAB" => Some(tr("Tab")),
+        "KEY_PLAYPAUSE" => Some(tr("Play/Pause")),
+        _ => None,
+    };
+    if let Some(label) = known {
+        return label.to_string();
+    }
+    let bare = upper.strip_prefix("KEY_").unwrap_or(&upper);
+    if bare.len() > 1 && bare.starts_with('F') && bare[1..].chars().all(|c| c.is_ascii_digit()) {
+        return bare.to_string();
+    }
+    title_case(bare)
+}
+
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first
+                    .to_uppercase()
+                    .chain(chars.flat_map(char::to_lowercase))
+                    .collect(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ")
 }
 
 /// One slot in the document for a logical button.
@@ -376,5 +530,45 @@ mod tests {
         assert_eq!(model.selected, RemoteButton::Menu);
         assert!(!model.dirty);
         assert_eq!(model.document.schema_version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn slot_labels_are_compact_and_readable() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
+        assert_eq!(action_label(None).text, "None");
+        assert!(action_label(None).none);
+        assert_eq!(action_label(Some("none")).text, "None");
+        assert_eq!(action_label(Some("key:KEY_ENTER")).text, "Return");
+        assert_eq!(action_label(Some("key:KEY_HOMEPAGE")).text, "Home");
+        assert_eq!(action_label(Some("key:KEY_COMPOSE")).text, "Menu");
+        assert_eq!(action_label(Some("key:KEY_F13")).text, "F13");
+        assert_eq!(action_label(Some("key:KEY_COMMA")).text, "Comma");
+        assert_eq!(action_label(Some("combo:ctrl+alt+v")).text, "Ctrl+Alt+V");
+        assert_eq!(action_label(Some("combo:shift+F11")).text, "Shift+F11");
+        assert_eq!(action_label(Some("exec:notify-send hi")).text, "Command…");
+        assert_eq!(
+            action_label(Some("dictation:start")).text,
+            "Start dictation"
+        );
+        assert_eq!(action_label(Some("dictation:stop")).text, "Stop dictation");
+        assert_eq!(
+            action_label(Some("dictation:toggle")).text,
+            "Toggle dictation"
+        );
+        let unknown = action_label(Some("bogus-value"));
+        assert_eq!(unknown.text, "bogus-value");
+        assert!(!unknown.none, "invalid values stay visible, not dimmed");
+    }
+
+    #[test]
+    fn trigger_names_round_trip() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
+        for trigger in [Trigger::Single, Trigger::Double, Trigger::Long] {
+            assert_eq!(trigger_from_name(trigger.name()), Some(trigger));
+        }
+        assert_eq!(trigger_from_name("release"), None);
+        assert_eq!(trigger_label(Trigger::Double), "Double");
     }
 }

@@ -7,10 +7,12 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 191 passed, 5 ignored tests (two
+- Tests: `cargo test --workspace` → 198 passed, 5 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, the real-device
   GUI test, and a locale-detection test; the first three pass with
   `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
+  The GUI XTest suite needs `GDK_BACKEND=x11` and an X screen at least as large
+  as the window; it skips the pointer section otherwise.
 
 ## Read first
 
@@ -22,8 +24,6 @@ Updated: 2026-11-01
 6. `docs/decisions/0009-caps-authoritative-sample-rate.md` — `CAPS_RESP` owns
    the stream rate; the daemon resamples to the resident graph rate.
 7. The next step file and its research links before editing code.
-8. For step 15, the interface reference
-   [`docs/plans/15-mapping-board.html`](plans/15-mapping-board.html).
 
 This file is updated in place at the end of every step/session. Do not create
 per-session copies; `docs/plans/` remains the canonical plan.
@@ -31,13 +31,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
 ## Design reference
 
 - `docs/plans/15-mapping-board.html` is the committed interactive interface
-  reference for the step 15 mapping board: three-column layout, per-button
-  cards, modal action editor, banners, test bar, and header device chip. It is
-  a design artifact, not shipped code. The device popover and per-device maps
+  reference for the step 15 mapping board, now implemented in
+  `crates/atvv-gui/src/board.rs` and `crates/atvv-gui/src/editor.rs`. It is a
+  design artifact, not shipped code. The device popover and per-device maps
   preview step 21; the second remote is illustrative. It also contains the
   decided step 17 layout UI: header layout chip, layout popover, manager
   dialog, template Default, and the manager's Apply/Revert footer. Step 17
-  implementation is still pending.
+  implementation is still pending, and the board has no layout chip yet.
 
 ## Completed
 
@@ -168,6 +168,26 @@ per-session copies; `docs/plans/` remains the canonical plan.
   unchanged. Home/Menu now use `KEY_HOME`/`KEY_COMPOSE` from the HID
   descriptor; capture suppresses mapped keys, exec, dictation, and voice
   session control. See `docs/gui.md` and `docs/plans/14-config-gui.md`.
+- **15 mapping board (complete and verified)**: `atvv-config` now shows a
+  three-column board: twelve `KeyCard`s (Power, Up, Left, Back, Home, Menu /
+  Right, OK, Down, Volume +, Volume -, TV) around the original RC003 diagram,
+  each with Single/Double/Long slots and compact action labels (`Return`,
+  `F13`, `Ctrl+Alt+V`, `Command…`, `Start dictation`, `None`). Hotspots and
+  cards share `GuiModel` selection; clicking either opens a modal `AdwDialog`
+  editor with inline validation, Reset/Cancel/Update, keyboard learning,
+  `Learn remote…`, and the `allow_exec` confirmation. Test mode selects and
+  highlights the pressed slot; the bottom bar shows the resolved action and an
+  explicit Run once. The header device chip shows the profile model and opens
+  a read-only device-information dialog, replacing the old sidebar. The
+  diagram minimum width dropped to 130 px so the board fits 1040×760 without
+  scrolling. 36 card slots and 13 hotspots were clicked through XTest under
+  Xvfb. Real-daemon save/persistence: the workspace GUI saved
+  `up/double = key:KEY_F13` to the live `atvv-git 0.1.0.r8.gfcd422b-1`
+  daemon, the value survived `systemctl --user restart atvvd`, and the slot
+  was restored; the RC003 was disconnected, so no RF press was involved.
+  Screenshots: `docs/gui.png`, `docs/gui-editor.png`,
+  `docs/gui-recording-key.png`. See `docs/gui.md` and
+  `docs/plans/15-mapping-board.md`.
 - **Recording-key declared chooser (2026-11-01)**: the recording-key page
   offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`) plus `None (disable synthetic key)` through **Declared key…**.
@@ -259,13 +279,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **15 sayall-style mapping board (planned)**: replace the single-key
-  inspector with a central remote and per-button cards showing all three
-  slots; the action editor becomes a modal dialog. GTK4/libadwaita and the
-  original SVG stay; SayAll/Open Voice Bridge assets and code are not copied.
-  The interface reference is `docs/plans/15-mapping-board.html`; it previews
-  the step 21 device chip/popover and per-device maps. Depends on step 14; see
-  `docs/plans/15-mapping-board.md`.
 - **17 layout profiles (planned)**: add named user layouts (button slots plus
   gesture timing) beside the device profile, with a synthesized `default`
   template whose edits save as a new layout; schema v2, v1 migration,
@@ -333,7 +346,10 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   `daemon.toml`, grabs evdev, or touches BlueZ/PipeWire. `RunAction` parses a
   checked action and runs key/chord through the input runtime, `exec` through
   the serial worker, and dictation through the session. The daemon package
-  stays GTK-free; `atvv-linux-gui` is a split package.
+  stays GTK-free; `atvv-gui` is a split package. The mapping board keeps one
+  selection model (`GuiModel.selected`/`trigger`) shared by the diagram
+  hotspots, the card slots, the modal editors, and test mode; layout/profile
+  switching stays out until steps 17 and 21.
 - Config: `$XDG_CONFIG_HOME/atvv/daemon.toml`; missing file = defaults;
   invalid file is reported by `ReloadConfig` and `atvvctl doctor`.
   `atvv-config` is the only parser. A slot that is absent means "profile
@@ -424,10 +440,10 @@ step file's `## Verification`; new results go there, not here.
   `atvv-gui-git 0.1.0.r8.gfcd422b-1` (sha256
   `0582c339899264b2e7b357ebd3f11544f88da436363f79daadf019408e9d9200`).
   The temporary PKGBUILD pointed at the local repository because the
-  checked-in VCS recipe tracks GitHub. The installed
-  `atvv-linux-git`/`atvv-linux-gui-git` pair owns the same binary paths, so
-  installing the new packages requires removing that pair first. `namcap`
-  reports only the expected implicit-library/runtime-service notes.
+  checked-in VCS recipe tracks GitHub. The installed `atvv-git`/`atvv-gui-git`
+  pair now owns those binary paths; the older `atvv-linux-git`/
+  `atvv-linux-gui-git` pair is no longer installed. `namcap` reports only the
+  expected implicit-library/runtime-service notes.
 - 2026-10-31 step 20: the tag-triggered release workflow YAML parses; it
   builds x86_64 and aarch64 binaries on GitHub runners;
   `v0.1.0` is tagged; the AUR PKGBUILD pins the source archive checksum.
@@ -578,25 +594,23 @@ split pkgbase `atvv` is published as `atvv`/`atvv-gui` `0.1.0-1`; the
 personal `arch-pkgs` split pkgbase `atvv-git` is ready. The repository carries
 no PKGBUILD. See `docs/plans/20-release-and-external-packaging.md`.
 
-**Step 19 (localization) is complete.** The GUI follows the desktop locale
-(English or Simplified Chinese) and the user-facing docs have Chinese
-counterparts. Step 15 remains the next UI step: it replaces the single-key
-inspector with a sayall-style board (central remote + per-key
-single/double/long cards) while staying GTK4/libadwaita. Use the committed
-interface reference `docs/plans/15-mapping-board.html` as the visual and
-interaction basis; the second remote and per-device maps there preview step
-21, so step 15 implements the one-device board and its device chip without
-switching. See `docs/plans/15-mapping-board.md`. Step 17's layout-selector UI
-is decided in the same reference; its plan now defines Default as a template:
-board edits are staged, and Apply saves them as a new layout. Implementation
-remains in step 17. B01 (recording-key press/release actions) is backlog and does not block step 15.
+**Step 15 (mapping board) is complete and verified.** The single-key inspector
+is gone: `atvv-config` shows twelve per-button cards around the RC003 diagram,
+a modal action editor, a test bar, and a header device chip; see
+`docs/plans/15-mapping-board.md`. The next UI step is **step 17 (layout
+profiles)**: Default is a template, board edits are staged, and Apply saves
+them as a new layout. Its selector UI (header chip, popover, manager dialog)
+is decided in `docs/plans/15-mapping-board.html`; the board does not have the
+chip yet. Step 21's device popover and per-device maps also preview there.
+B01 (recording-key press/release actions) is backlog and does not block step
+17.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: start step 15. In parallel, wait for upstream review on PR
+Immediate action: start step 17. In parallel, wait for upstream review on PR
 #493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
 vinput, and record the real auto-bind acceptance.
 

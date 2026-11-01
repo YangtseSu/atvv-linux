@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! GTK4/libadwaita window, editor, capture-mode, and test-mode wiring.
+//! GTK4/libadwaita window: mapping board, modal editors, capture, test bar.
+//!
+//! The window owns the [`GuiModel`] and renders it through the board. Every
+//! edit goes through the model and the daemon's `SetConfig`; the window never
+//! writes the configuration file, grabs input devices, or talks to BlueZ.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -9,18 +13,17 @@ use std::time::Duration;
 use atvv_config::ConfigDocument;
 use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
-use gtk::glib::variant::ToVariant;
 use gtk::{gio, glib};
 use libadwaita as adw;
 
 use adw::prelude::*;
 
-use crate::actions::{ActionDraft, ActionKind, DictationChoice};
+use crate::board::{MappingBoard, scroll_into_view};
 use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
-use crate::diagram::RemoteDiagram;
+use crate::editor::{ActionEditor, VoiceEditor, voice_mode_hint};
 use crate::i18n::{self, tr, tr_args};
 use crate::keylearn;
-use crate::model::{GuiModel, button_label};
+use crate::model::{GuiModel, action_label, button_label, trigger_from_name, trigger_label};
 
 pub const APP_ID: &str = "org.atvv.Config";
 
@@ -32,7 +35,7 @@ const CSS: &str = r#"
 .remote-hotspot {
   background: transparent;
   border: 1.5px solid transparent;
-  border-radius: 999px;
+  border-radius: 14px;
   box-shadow: none;
   padding: 0;
   min-width: 0;
@@ -75,6 +78,130 @@ const CSS: &str = r#"
   background: alpha(@accent_bg_color, 0.62);
   border: 2px solid @accent_color;
 }
+
+.mapping-board {
+  padding: 16px 20px;
+}
+.mapping-card {
+  background: alpha(@card_bg_color, 0.92);
+  border: 1px solid @borders;
+  border-radius: 12px;
+  padding: 6px;
+}
+.mapping-card.selected {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 1px alpha(@accent_color, 0.35);
+}
+.mapping-card.conflict {
+  border-color: @warning_color;
+}
+.card-title {
+  font-weight: 700;
+}
+.card-warn {
+  color: @warning_color;
+}
+.mapping-slot {
+  min-height: 0;
+  min-width: 0;
+  padding: 1px 2px;
+  background: transparent;
+  border: 0 solid transparent;
+  box-shadow: none;
+  border-radius: 6px;
+}
+.mapping-slot:hover {
+  background: alpha(currentColor, 0.07);
+}
+.mapping-slot:focus-visible {
+  outline: 2px solid @accent_color;
+  outline-offset: -1px;
+}
+.mapping-slot.selected {
+  background: alpha(@accent_bg_color, 0.32);
+  border-left: 2px solid @accent_color;
+}
+.mapping-slot.conflict {
+  background: alpha(@warning_bg_color, 0.30);
+  border-left: 2px solid @warning_color;
+}
+.mapping-slot.test {
+  background: @accent_bg_color;
+}
+.mapping-slot.test label {
+  color: @accent_fg_color;
+}
+.slot-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: alpha(currentColor, 0.55);
+}
+.slot-action {
+  font-size: 12px;
+}
+.mapping-slot.none .slot-action {
+  color: alpha(currentColor, 0.45);
+}
+
+.voice-card {
+  padding: 8px 10px;
+  border: 1px solid @borders;
+  border-radius: 12px;
+  background: alpha(@card_bg_color, 0.90);
+}
+.voice-card:hover {
+  border-color: alpha(@accent_color, 0.50);
+}
+.voice-card.selected {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 1px alpha(@accent_color, 0.35);
+}
+.voice-icon {
+  color: @accent_color;
+}
+.voice-title {
+  font-weight: 700;
+}
+.voice-sub {
+  font-size: 11px;
+  color: alpha(currentColor, 0.60);
+}
+.voice-output-chip {
+  font-family: monospace;
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: alpha(currentColor, 0.08);
+}
+
+.device-chip {
+  padding: 2px 10px;
+}
+.test-bar {
+  padding: 8px 16px;
+  border-top: 1px solid @borders;
+}
+.test-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: alpha(currentColor, 0.35);
+}
+.test-bar.on .test-dot {
+  background: @accent_color;
+  box-shadow: 0 0 0 3px alpha(@accent_color, 0.25);
+}
+.test-title {
+  font-weight: 700;
+}
+.test-sub {
+  font-size: 12px;
+  color: alpha(currentColor, 0.65);
+}
+.last-action {
+  font-weight: 600;
+  color: @accent_color;
+}
 label.error {
   color: @error_color;
 }
@@ -112,7 +239,7 @@ pub fn run() -> glib::ExitCode {
     app.connect_activate(|app| {
         i18n::init();
         // GTK/GDK must be initialized before a display exists; installing the
-        // stylesheet here is what makes the hotspot states render.
+        // stylesheet here is what makes the board states render.
         install_css();
         apply_color_scheme_override();
         let window = build_window(Some(app), Backend::start(None));
@@ -144,7 +271,7 @@ enum CaptureMode {
     Learn,
 }
 
-/// One Device Information Service fact shown in the Hardware group.
+/// One Device Information Service fact shown in the device dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HardwareField {
     Firmware,
@@ -199,74 +326,210 @@ fn battery_icon(percent: u8) -> &'static str {
     }
 }
 
+/// Battery text for the chip and the device dialog.
+fn battery_text(status: Option<&DaemonStatus>) -> String {
+    let Some(status) = status else {
+        return tr("Unknown").to_string();
+    };
+    match status.hardware.battery_percent {
+        Some(percent) if status.connected => format!("{percent} %"),
+        Some(percent) => {
+            let text = percent.to_string();
+            tr_args("{percent} % · last known", &[("percent", &text)])
+        }
+        None => tr("Unknown").to_string(),
+    }
+}
+
+/// Passive device facts, shown from the menu and the header chip.
+struct DeviceDialog {
+    dialog: adw::Dialog,
+    battery_row: adw::ActionRow,
+    address_row: adw::ActionRow,
+    hardware_group: adw::PreferencesGroup,
+    hardware_rows: Vec<(HardwareField, adw::ActionRow)>,
+}
+
+impl DeviceDialog {
+    fn new() -> Self {
+        let remote_group = adw::PreferencesGroup::builder().title(tr("Remote")).build();
+        let battery_row = adw::ActionRow::builder().title(tr("Battery")).build();
+        let address_row = adw::ActionRow::builder()
+            .title(tr("Address"))
+            .subtitle("—")
+            .build();
+        remote_group.add(&battery_row);
+        remote_group.add(&address_row);
+
+        let hardware_group = adw::PreferencesGroup::builder()
+            .title(tr("Hardware"))
+            .build();
+        let mut hardware_rows = Vec::new();
+        for field in HardwareField::ALL {
+            let row = adw::ActionRow::builder().title(field.label()).build();
+            row.set_visible(false);
+            hardware_group.add(&row);
+            hardware_rows.push((field, row));
+        }
+
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        content.set_margin_top(12);
+        content.set_margin_bottom(12);
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+        content.append(&remote_group);
+        content.append(&hardware_group);
+        let hint = gtk::Label::new(Some(tr(
+            "Passive facts reported by BlueZ and the ATVV GATT session.",
+        )));
+        hint.add_css_class("caption");
+        hint.add_css_class("dim-label");
+        hint.set_wrap(true);
+        hint.set_xalign(0.0);
+        content.append(&hint);
+
+        let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        footer.set_margin_top(10);
+        footer.set_margin_bottom(10);
+        footer.set_margin_start(12);
+        footer.set_margin_end(12);
+        let close = gtk::Button::with_label(tr("Close"));
+        close.add_css_class("flat");
+        footer.append(&spacer());
+        footer.append(&close);
+
+        let header = adw::HeaderBar::new();
+        header.set_title_widget(Some(&adw::WindowTitle::new(
+            tr("Device information"),
+            tr("Bluetooth and GATT facts"),
+        )));
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_top_bar(&header);
+        toolbar.set_content(Some(&content));
+        toolbar.add_bottom_bar(&footer);
+        let dialog = adw::Dialog::builder()
+            .title(tr("Device information"))
+            .content_width(440)
+            .child(&toolbar)
+            .build();
+        let weak = dialog.downgrade();
+        close.connect_clicked(move |_| {
+            if let Some(dialog) = weak.upgrade() {
+                dialog.close();
+            }
+        });
+
+        Self {
+            dialog,
+            battery_row,
+            address_row,
+            hardware_group,
+            hardware_rows,
+        }
+    }
+
+    fn present(&self, parent: &impl IsA<gtk::Widget>) {
+        self.dialog.present(Some(parent));
+    }
+
+    fn refresh(&self, status: Option<&DaemonStatus>) {
+        self.battery_row.set_subtitle(&battery_text(status));
+        let address = status
+            .map(|status| status.device.address.as_str())
+            .filter(|address| !address.is_empty())
+            .unwrap_or("—");
+        self.address_row.set_subtitle(address);
+
+        let hardware = status.map(|status| &status.hardware);
+        let mut any = false;
+        for (field, row) in &self.hardware_rows {
+            let value = hardware.and_then(|hardware| field.value(hardware));
+            row.set_subtitle(value.unwrap_or(""));
+            row.set_visible(value.is_some());
+            any |= value.is_some();
+        }
+        self.hardware_group.set_visible(any);
+    }
+
+    fn battery_text(&self) -> String {
+        self.battery_row
+            .subtitle()
+            .map(|subtitle| subtitle.to_string())
+            .unwrap_or_default()
+    }
+
+    fn hardware_text(&self, field: HardwareField) -> Option<String> {
+        self.hardware_rows
+            .iter()
+            .find(|(candidate, _)| *candidate == field)
+            .and_then(|(_, row)| row.subtitle().map(|subtitle| subtitle.to_string()))
+    }
+}
+
+fn spacer() -> gtk::Box {
+    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+    spacer
+}
+
+#[derive(Debug, Clone)]
+struct TestResult {
+    button: String,
+    trigger: String,
+    shown: String,
+    action: Option<String>,
+}
+
 pub struct AppWindow {
     window: adw::ApplicationWindow,
     backend: Backend,
     model: RefCell<Option<GuiModel>>,
     status: RefCell<Option<DaemonStatus>>,
     title: adw::WindowTitle,
-    battery_row: adw::ActionRow,
-    battery_icon: gtk::Image,
-    hardware_group: adw::PreferencesGroup,
-    hardware_rows: Vec<(HardwareField, adw::ActionRow)>,
-    stack: gtk::Stack,
-    split: adw::NavigationSplitView,
-    diagram: RemoteDiagram,
+    device_chip: gtk::Button,
+    device_chip_name: gtk::Label,
+    device_chip_icon: gtk::Image,
+    device_chip_battery: gtk::Label,
+    device_chip_battery_icon: gtk::Image,
+    board: MappingBoard,
+    board_scroll: gtk::ScrolledWindow,
+    test_bar: gtk::Box,
+    test_title: gtk::Label,
+    test_sub: gtk::Label,
+    last_action_label: gtk::Label,
+    run_once_button: gtk::Button,
+    retry_button: gtk::Button,
     apply_button: gtk::Button,
     revert_button: gtk::Button,
     test_button: gtk::ToggleButton,
     error_banner: adw::Banner,
     dirty_banner: adw::Banner,
     capture_banner: adw::Banner,
-    key_group: adw::PreferencesGroup,
-    action_group: adw::PreferencesGroup,
-    voice_group: adw::PreferencesGroup,
-    selected_row: adw::ActionRow,
-    trigger_row: adw::ComboRow,
-    type_row: adw::ComboRow,
-    value_row: adw::EntryRow,
-    learn_key_button: gtk::Button,
-    learn_remote_button: gtk::Button,
-    retry_button: gtk::Button,
-    exec_row: adw::EntryRow,
-    exec_warning: gtk::Label,
-    dictation_row: adw::ComboRow,
-    action_error: gtk::Label,
-    apply_action: gtk::Button,
-    reset_action: gtk::Button,
-    voice_value_row: adw::EntryRow,
-    voice_key_button: gtk::MenuButton,
-    voice_keys: RefCell<Vec<String>>,
-    voice_learn_button: gtk::Button,
-    voice_apply_button: gtk::Button,
-    voice_reset_button: gtk::Button,
-    voice_hint: gtk::Label,
-    voice_error: gtk::Label,
-    allow_exec_row: adw::SwitchRow,
-    test_result_row: adw::ActionRow,
-    run_once_button: gtk::Button,
+    editor: ActionEditor,
+    voice_editor: VoiceEditor,
+    device_dialog: DeviceDialog,
+    stack: gtk::Stack,
     toast_overlay: adw::ToastOverlay,
-    loading: Cell<bool>,
     capture_mode: Cell<CaptureMode>,
     suppress_test_toggle: Cell<bool>,
     voice_selected: Cell<bool>,
-    pressed: Cell<Option<RemoteButton>>,
-    last_action: RefCell<Option<String>>,
+    pressed: Cell<Option<(RemoteButton, Trigger)>>,
+    last_test: RefCell<Option<TestResult>>,
 }
 
 impl AppWindow {
     /// Build the window. `application` is `None` in display-only tests.
     #[must_use]
     pub fn build(application: Option<&adw::Application>, backend: Backend) -> Rc<Self> {
-        let diagram = RemoteDiagram::new();
         let title = adw::WindowTitle::new(tr("ATVV Remote"), tr("Connecting…"));
 
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&title));
 
         let menu = gio::Menu::new();
-        menu.append(Some(tr("About ATVV")), Some("win.about"));
+        menu.append(Some(tr("Device information…")), Some("win.device-info"));
         menu.append(Some(tr("Revert changes")), Some("win.revert"));
+        menu.append(Some(tr("About ATVV")), Some("win.about"));
         menu.append(Some(tr("Quit")), Some("app.quit"));
         let menu_button = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
@@ -274,6 +537,30 @@ impl AppWindow {
             .tooltip_text(tr("Main menu"))
             .build();
         header.pack_start(&menu_button);
+
+        let device_chip = gtk::Button::builder()
+            .tooltip_text(tr("Device information"))
+            .build();
+        device_chip.add_css_class("flat");
+        device_chip.add_css_class("device-chip");
+        let chip_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let device_chip_icon = gtk::Image::from_icon_name("bluetooth-symbolic");
+        device_chip_icon.set_pixel_size(13);
+        let device_chip_name = gtk::Label::new(Some(tr("No remote")));
+        device_chip_name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        device_chip_name.set_max_width_chars(22);
+        let device_chip_battery_icon = gtk::Image::from_icon_name("battery-empty-symbolic");
+        device_chip_battery_icon.set_pixel_size(16);
+        device_chip_battery_icon.set_visible(false);
+        let device_chip_battery = gtk::Label::new(None);
+        device_chip_battery.add_css_class("caption");
+        device_chip_battery.add_css_class("dim-label");
+        chip_row.append(&device_chip_icon);
+        chip_row.append(&device_chip_name);
+        chip_row.append(&device_chip_battery_icon);
+        chip_row.append(&device_chip_battery);
+        device_chip.set_child(Some(&chip_row));
+        header.pack_start(&device_chip);
 
         let test_button = gtk::ToggleButton::builder()
             .label(tr("Test"))
@@ -305,226 +592,46 @@ impl AppWindow {
         banners.append(&dirty_banner);
         banners.append(&capture_banner);
 
-        let sidebar_scroll = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
+        let board = MappingBoard::new();
+        let board_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .hexpand(true)
             .vexpand(true)
+            .child(board.root())
             .build();
-        let sidebar_content = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        sidebar_content.set_margin_top(18);
-        sidebar_content.set_margin_bottom(18);
-        sidebar_content.set_margin_start(18);
-        sidebar_content.set_margin_end(18);
 
-        let battery_row = adw::ActionRow::builder()
-            .title(tr("Battery"))
-            .subtitle(tr("Unknown"))
-            .build();
-        let battery_icon = gtk::Image::from_icon_name("battery-empty-symbolic");
-        battery_icon.set_pixel_size(18);
-        battery_icon.set_visible(false);
-        battery_row.add_suffix(&battery_icon);
-        let device_group = adw::PreferencesGroup::builder().title(tr("Remote")).build();
-        device_group.add(&battery_row);
-        sidebar_content.append(&device_group);
-
-        sidebar_content.append(diagram.root());
-        let legend = gtk::Label::new(Some(tr(
-            "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
-             The top-right voice key is fixed; its output key is configurable.",
-        )));
-        legend.add_css_class("caption");
-        legend.add_css_class("dim-label");
-        legend.set_wrap(true);
-        legend.set_justify(gtk::Justification::Center);
-        sidebar_content.append(&legend);
-
-        let hardware_group = adw::PreferencesGroup::builder()
-            .title(tr("Hardware"))
-            .build();
-        hardware_group.set_visible(false);
-        let mut hardware_rows = Vec::new();
-        for field in HardwareField::ALL {
-            let row = adw::ActionRow::builder().title(field.label()).build();
-            row.set_visible(false);
-            hardware_group.add(&row);
-            hardware_rows.push((field, row));
-        }
-        sidebar_content.append(&hardware_group);
-        sidebar_scroll.set_child(Some(&sidebar_content));
-        let sidebar_page = adw::NavigationPage::new(&sidebar_scroll, tr("Remote"));
-
-        let trigger_list = gtk::StringList::new(&[tr("Single"), tr("Double"), tr("Long")]);
-        let dictation_list =
-            gtk::StringList::new(&DictationChoice::ALL.map(DictationChoice::label));
-        let type_list = gtk::StringList::new(&ActionKind::ALL.map(ActionKind::label));
-
-        let key_group = adw::PreferencesGroup::builder()
-            .title(tr("Selected key"))
-            .build();
-        let selected_row = adw::ActionRow::builder().title(tr("Key")).build();
-        let learn_remote = gtk::Button::with_label(tr("Learn…"));
-        learn_remote.add_css_class("flat");
-        learn_remote.set_tooltip_text(Some(tr("Press a physical remote key to select it")));
-        selected_row.add_suffix(&learn_remote);
-        let trigger_row = adw::ComboRow::builder()
-            .title(tr("Gesture"))
-            .model(&trigger_list)
-            .selected(0)
-            .build();
-        key_group.add(&selected_row);
-        key_group.add(&trigger_row);
-
-        let action_group = adw::PreferencesGroup::builder().title(tr("Action")).build();
-        let type_row = adw::ComboRow::builder()
-            .title(tr("Type"))
-            .model(&type_list)
-            .selected(0)
-            .build();
-        let value_row = adw::EntryRow::builder().title(tr("Key")).build();
-        let learn_key_button = gtk::Button::with_label(tr("Learn Key"));
-        learn_key_button.add_css_class("flat");
-        learn_key_button.set_tooltip_text(Some(tr("Capture a keyboard key or chord")));
-        value_row.add_suffix(&learn_key_button);
-        let exec_row = adw::EntryRow::builder().title(tr("Command")).build();
-        let exec_warning = gtk::Label::new(None);
-        exec_warning.add_css_class("caption");
-        exec_warning.add_css_class("dim-label");
-        exec_warning.set_wrap(true);
-        exec_warning.set_xalign(0.0);
-        exec_warning.set_margin_start(12);
-        exec_warning.set_margin_end(12);
-        exec_warning.set_margin_bottom(6);
-        let dictation_row = adw::ComboRow::builder()
-            .title(tr("Dictation"))
-            .model(&dictation_list)
-            .selected(0)
-            .build();
-        let apply_row = adw::ActionRow::builder()
-            .title(tr("Mapping"))
-            .subtitle(tr(
-                "Update this slot, then use Apply in the header to save.",
-            ))
-            .build();
-        let reset_action = gtk::Button::with_label(tr("Reset"));
-        reset_action.add_css_class("flat");
-        reset_action.set_tooltip_text(Some(tr("Restore the profile default")));
-        let apply_action = gtk::Button::with_label(tr("Update"));
-        apply_action.add_css_class("suggested-action");
-        apply_row.add_suffix(&reset_action);
-        apply_row.add_suffix(&apply_action);
-        let action_error = gtk::Label::new(None);
-        action_error.add_css_class("error");
-        action_error.add_css_class("caption");
-        action_error.set_wrap(true);
-        action_error.set_xalign(0.0);
-        action_error.set_margin_start(12);
-        action_error.set_margin_end(12);
-        action_error.set_margin_bottom(6);
-        action_error.set_visible(false);
-        action_group.add(&type_row);
-        action_group.add(&value_row);
-        action_group.add(&exec_row);
-        action_group.add(&exec_warning);
-        action_group.add(&dictation_row);
-        action_group.add(&apply_row);
-        action_group.add(&action_error);
-
-        let voice_group = adw::PreferencesGroup::builder()
-            .title(tr("Recording key"))
-            .build();
-        let voice_info = adw::ActionRow::builder()
-            .title(tr("Physical key"))
-            .subtitle(tr(
-                "KEY_F5 is grabbed and fixed; it controls the ATVV microphone.",
-            ))
-            .build();
-        let voice_value_row = adw::EntryRow::builder().title(tr("Output key")).build();
-        let voice_key_button = gtk::MenuButton::builder()
-            .label(tr("Declared key…"))
-            .always_show_arrow(true)
-            .tooltip_text(tr("Choose a declared recording key"))
-            .build();
-        voice_key_button.add_css_class("flat");
-        voice_key_button.set_visible(false);
-        let voice_learn_button = gtk::Button::with_label(tr("Learn Key"));
-        voice_learn_button.add_css_class("flat");
-        voice_learn_button.set_tooltip_text(Some(tr("Capture a key or chord for the output")));
-        voice_value_row.add_suffix(&voice_key_button);
-        voice_value_row.add_suffix(&voice_learn_button);
-        let voice_apply_row = adw::ActionRow::builder()
-            .title(tr("Output key"))
-            .subtitle(tr("Emitted while the recording key is held; Apply saves."))
-            .build();
-        let voice_reset_button = gtk::Button::with_label(tr("Reset"));
-        voice_reset_button.add_css_class("flat");
-        voice_reset_button.set_tooltip_text(Some(tr("Restore DICTATE")));
-        let voice_apply_button = gtk::Button::with_label(tr("Update"));
-        voice_apply_button.add_css_class("suggested-action");
-        voice_apply_row.add_suffix(&voice_reset_button);
-        voice_apply_row.add_suffix(&voice_apply_button);
-        let voice_hint = gtk::Label::new(None);
-        voice_hint.add_css_class("caption");
-        voice_hint.add_css_class("dim-label");
-        voice_hint.set_wrap(true);
-        voice_hint.set_xalign(0.0);
-        voice_hint.set_margin_start(12);
-        voice_hint.set_margin_end(12);
-        voice_hint.set_margin_bottom(6);
-        let voice_error = gtk::Label::new(None);
-        voice_error.add_css_class("error");
-        voice_error.add_css_class("caption");
-        voice_error.set_wrap(true);
-        voice_error.set_xalign(0.0);
-        voice_error.set_margin_start(12);
-        voice_error.set_margin_end(12);
-        voice_error.set_margin_bottom(6);
-        voice_error.set_visible(false);
-        voice_group.add(&voice_info);
-        voice_group.add(&voice_value_row);
-        voice_group.add(&voice_apply_row);
-        voice_group.add(&voice_hint);
-        voice_group.add(&voice_error);
-        voice_group.set_visible(false);
-
-        let test_group = adw::PreferencesGroup::builder()
-            .title(tr("Test mode"))
-            .build();
-        let test_result_row = adw::ActionRow::builder()
-            .title(tr("Last test"))
-            .subtitle(tr("Test mode is off"))
-            .build();
+        // Bottom bar: capture state, the last resolved action, and Run once.
+        let test_bar = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        test_bar.add_css_class("test-bar");
+        let test_dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        test_dot.add_css_class("test-dot");
+        test_dot.set_size_request(8, 8);
+        test_dot.set_valign(gtk::Align::Center);
+        let test_copy = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        test_copy.set_hexpand(true);
+        let test_title = gtk::Label::new(Some(tr("Test mode off")));
+        test_title.add_css_class("test-title");
+        test_title.set_xalign(0.0);
+        let test_sub = gtk::Label::new(Some(tr("Turn on Test to see what each key sends.")));
+        test_sub.add_css_class("test-sub");
+        test_sub.set_xalign(0.0);
+        test_sub.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        test_copy.append(&test_title);
+        test_copy.append(&test_sub);
+        let last_action_label = gtk::Label::new(None);
+        last_action_label.add_css_class("last-action");
+        last_action_label.set_visible(false);
+        last_action_label.set_tooltip_text(Some(tr("Last resolved action")));
         let run_once_button = gtk::Button::with_label(tr("Run once"));
         run_once_button.add_css_class("flat");
         run_once_button.set_sensitive(false);
         run_once_button.set_tooltip_text(Some(tr("Run the displayed action once through atvvd")));
-        test_result_row.add_suffix(&run_once_button);
-        test_group.add(&test_result_row);
-
-        let advanced_group = adw::PreferencesGroup::builder()
-            .title(tr("Advanced"))
-            .build();
-        let allow_exec_row = adw::SwitchRow::builder()
-            .title(tr("Allow shell commands"))
-            .subtitle(tr(
-                "Exec mappings run as your user with a 5 s timeout. Off by default.",
-            ))
-            .build();
-        advanced_group.add(&allow_exec_row);
-
-        let prefs = adw::PreferencesPage::new();
-        prefs.add(&key_group);
-        prefs.add(&action_group);
-        prefs.add(&voice_group);
-        prefs.add(&test_group);
-        prefs.add(&advanced_group);
-        let content_page = adw::NavigationPage::new(&prefs, tr("Key mapping"));
-
-        let split = adw::NavigationSplitView::new();
-        split.set_sidebar(Some(&sidebar_page));
-        split.set_content(Some(&content_page));
-        split.set_show_content(false);
-        split.set_vexpand(true);
+        test_bar.append(&test_dot);
+        test_bar.append(&test_copy);
+        test_bar.append(&last_action_label);
+        test_bar.append(&run_once_button);
+        test_bar.set_visible(false);
 
         let unavailable = adw::StatusPage::builder()
             .icon_name("network-offline-symbolic")
@@ -541,16 +648,14 @@ impl AppWindow {
         let stack = gtk::Stack::new();
         stack.set_vexpand(true);
         stack.add_named(&unavailable, Some("unavailable"));
-        stack.add_named(&split, Some("config"));
+        stack.add_named(&board_scroll, Some("config"));
         stack.set_visible_child_name("unavailable");
-
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        content.append(&banners);
-        content.append(&stack);
 
         let toolbar = adw::ToolbarView::new();
         toolbar.add_top_bar(&header);
-        toolbar.set_content(Some(&content));
+        toolbar.add_top_bar(&banners);
+        toolbar.set_content(Some(&stack));
+        toolbar.add_bottom_bar(&test_bar);
         toolbar.set_vexpand(true);
 
         let toast_overlay = adw::ToastOverlay::new();
@@ -575,53 +680,35 @@ impl AppWindow {
             model: RefCell::new(None),
             status: RefCell::new(None),
             title,
-            battery_row,
-            battery_icon,
-            hardware_group,
-            hardware_rows,
-            stack,
-            split,
-            diagram,
+            device_chip,
+            device_chip_name,
+            device_chip_icon,
+            device_chip_battery,
+            device_chip_battery_icon,
+            board,
+            board_scroll,
+            test_bar,
+            test_title,
+            test_sub,
+            last_action_label,
+            run_once_button,
+            retry_button: retry,
             apply_button,
             revert_button,
             test_button,
             error_banner,
             dirty_banner,
             capture_banner,
-            key_group,
-            action_group,
-            voice_group,
-            selected_row,
-            trigger_row,
-            type_row,
-            value_row,
-            learn_key_button,
-            learn_remote_button: learn_remote,
-            retry_button: retry,
-            exec_row,
-            exec_warning,
-            dictation_row,
-            action_error,
-            apply_action,
-            reset_action,
-            voice_value_row,
-            voice_key_button,
-            voice_keys: RefCell::new(Vec::new()),
-            voice_learn_button,
-            voice_apply_button,
-            voice_reset_button,
-            voice_hint,
-            voice_error,
-            allow_exec_row,
-            test_result_row,
-            run_once_button,
+            editor: ActionEditor::new(),
+            voice_editor: VoiceEditor::new(),
+            device_dialog: DeviceDialog::new(),
+            stack,
             toast_overlay,
-            loading: Cell::new(false),
             capture_mode: Cell::new(CaptureMode::Off),
             suppress_test_toggle: Cell::new(false),
             voice_selected: Cell::new(false),
             pressed: Cell::new(None),
-            last_action: RefCell::new(None),
+            last_test: RefCell::new(None),
         });
         Self::connect_events(&ui);
         connect_timers(&ui);
@@ -643,8 +730,23 @@ impl AppWindow {
 
     fn connect_events(ui: &Rc<Self>) {
         let this = Rc::clone(ui);
-        ui.diagram
-            .connect_selected(move |button| this.select_button(button));
+        ui.board
+            .connect_slot(move |button, trigger| this.open_slot(button, trigger));
+
+        let this = Rc::clone(ui);
+        ui.board.diagram().connect_selected(move |button| {
+            if button == RemoteButton::Voice {
+                this.open_voice();
+            } else {
+                this.open_slot(button, Trigger::Single);
+            }
+        });
+        let this = Rc::clone(ui);
+        ui.board.connect_voice(move || this.open_voice());
+
+        let this = Rc::clone(ui);
+        ui.device_chip
+            .connect_clicked(move |_| this.device_dialog.present(&this.window));
 
         let this = Rc::clone(ui);
         ui.apply_button.connect_clicked(move |_| this.apply());
@@ -678,110 +780,39 @@ impl AppWindow {
             .connect_button_clicked(move |_| this.stop_capture());
 
         let this = Rc::clone(ui);
-        ui.trigger_row.connect_selected_notify(move |row| {
-            if this.loading.get() {
-                return;
-            }
-            let trigger = match row.selected() {
-                1 => Trigger::Double,
-                2 => Trigger::Long,
-                _ => Trigger::Single,
-            };
-            if let Some(model) = this.model.borrow_mut().as_mut() {
-                model.trigger = trigger;
-            }
-            this.refresh_all();
-        });
+        ui.editor.connect_update(move || this.editor_update());
         let this = Rc::clone(ui);
-        ui.type_row.connect_selected_notify(move |row| {
-            if this.loading.get() {
-                return;
-            }
-            let kind = ActionKind::from_index(row.selected());
-            let allow_exec = this
-                .model
-                .borrow()
-                .as_ref()
-                .is_some_and(|model| model.document.allow_exec);
-            this.update_editor_visibility(kind, allow_exec);
-        });
+        ui.editor.connect_reset(move || this.editor_reset());
         let this = Rc::clone(ui);
-        ui.allow_exec_row.connect_active_notify(move |row| {
-            if this.loading.get() {
-                return;
-            }
-            let allow = row.is_active();
-            let already = this
-                .model
-                .borrow()
-                .as_ref()
-                .is_some_and(|model| model.document.allow_exec);
-            if allow == already {
-                return;
-            }
-            if !allow {
-                if let Some(model) = this.model.borrow_mut().as_mut() {
-                    model.set_allow_exec(false);
-                }
-                this.refresh_all();
-                return;
-            }
-            let dialog = adw::AlertDialog::builder()
-                .heading(tr("Allow shell commands?"))
-                .body(tr(
-                    "Exec mappings run shell commands as your user with a 5 s timeout. \
-                     Only enable this for commands you trust.",
-                ))
-                .build();
-            dialog.add_response("cancel", tr("Cancel"));
-            dialog.add_response("enable", tr("Enable"));
-            dialog.set_response_appearance("enable", adw::ResponseAppearance::Destructive);
-            dialog.set_default_response(Some("cancel"));
-            dialog.set_close_response("cancel");
-            let dialog_this = Rc::clone(&this);
-            dialog.connect_response(None, move |_, response| {
-                if response == "enable" {
-                    if let Some(model) = dialog_this.model.borrow_mut().as_mut() {
-                        model.set_allow_exec(true);
-                    }
-                    dialog_this.refresh_all();
-                } else {
-                    dialog_this.loading.set(true);
-                    dialog_this.allow_exec_row.set_active(false);
-                    dialog_this.loading.set(false);
-                }
-            });
-            dialog.present(Some(&this.window));
-        });
+        ui.editor.connect_cancel(move || this.editor.close());
+        let this = Rc::clone(ui);
+        ui.editor
+            .connect_learn_key(move || this.learn_key_for(false));
+        let this = Rc::clone(ui);
+        ui.editor.connect_learn_remote(move || this.learn_remote());
+        let this = Rc::clone(ui);
+        ui.editor
+            .connect_allow_exec(move |allow| this.editor_allow_exec(allow));
 
         let this = Rc::clone(ui);
-        ui.apply_action
-            .connect_clicked(move |_| this.apply_action());
+        ui.voice_editor.connect_update(move || this.voice_update());
         let this = Rc::clone(ui);
-        ui.reset_action
-            .connect_clicked(move |_| this.reset_action());
+        ui.voice_editor.connect_reset(move || this.voice_reset());
         let this = Rc::clone(ui);
-        ui.voice_apply_button
-            .connect_clicked(move |_| this.apply_voice_key());
+        ui.voice_editor
+            .connect_cancel(move || this.voice_editor.close());
         let this = Rc::clone(ui);
-        ui.voice_reset_button
-            .connect_clicked(move |_| this.reset_voice_key());
-        let this = Rc::clone(ui);
-        ui.voice_learn_button
-            .connect_clicked(move |_| this.learn_voice_key());
-        let this = Rc::clone(ui);
-        ui.learn_key_button
-            .connect_clicked(move |_| this.learn_key());
-        let this = Rc::clone(ui);
-        ui.learn_remote_button
-            .connect_clicked(move |_| this.learn_remote());
+        ui.voice_editor
+            .connect_learn_key(move || this.learn_key_for(true));
 
         let this = Rc::clone(ui);
         ui.run_once_button.connect_clicked(move |_| this.run_once());
 
         let this = Rc::clone(ui);
-        ui.retry_button
-            .connect_clicked(move |_| this.backend.load());
+        ui.window.connect_close_request(move |_| {
+            this.stop_capture();
+            glib::Propagation::Proceed
+        });
 
         let this = Rc::clone(ui);
         let revert = gio::SimpleAction::new("revert", None);
@@ -792,10 +823,17 @@ impl AppWindow {
         let voice_key = gio::SimpleAction::new("voice-key", Some(glib::VariantTy::STRING));
         voice_key.connect_activate(move |_, parameter| {
             if let Some(key) = parameter.and_then(|value| value.str()) {
-                this.choose_voice_key(key);
+                this.voice_editor.set_value(key);
             }
         });
         ui.window.add_action(&voice_key);
+
+        let this = Rc::clone(ui);
+        let device_info = gio::SimpleAction::new("device-info", None);
+        device_info.connect_activate(move |_, _| {
+            this.device_dialog.present(&this.window);
+        });
+        ui.window.add_action(&device_info);
 
         let this = Rc::clone(ui);
         let about = gio::SimpleAction::new("about", None);
@@ -804,21 +842,74 @@ impl AppWindow {
             dialog.present(Some(&this.window));
         });
         ui.window.add_action(&about);
+
+        let this = Rc::clone(ui);
+        ui.retry_button
+            .connect_clicked(move |_| this.backend.load());
     }
 
-    fn select_button(&self, button: RemoteButton) {
-        if button == RemoteButton::Voice {
-            self.voice_selected.set(true);
-            self.split.set_show_content(true);
-            self.refresh_all();
+    fn open_slot(&self, button: RemoteButton, trigger: Trigger) {
+        self.voice_selected.set(false);
+        {
+            let mut model = self.model.borrow_mut();
+            let Some(model) = model.as_mut() else {
+                return;
+            };
+            model.selected = button;
+            model.trigger = trigger;
+        }
+        self.refresh_all();
+        self.scroll_to_selection();
+        self.show_editor();
+    }
+
+    fn show_editor(&self) {
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        self.editor.load(model);
+        self.editor.present(&self.window);
+    }
+
+    fn reload_editor(&self) {
+        if !self.editor.is_open() {
             return;
         }
-        self.voice_selected.set(false);
-        if let Some(model) = self.model.borrow_mut().as_mut() {
-            model.selected = button;
-        }
-        self.split.set_show_content(true);
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        self.editor.load(model);
+    }
+
+    fn open_voice(&self) {
+        self.voice_selected.set(true);
         self.refresh_all();
+        self.scroll_to_selection();
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        self.voice_editor.load(model);
+        if self.voice_editor.is_open() {
+            return;
+        }
+        self.voice_editor.present(&self.window);
+    }
+
+    fn scroll_to_selection(&self) {
+        if self.voice_selected.get() {
+            scroll_into_view(&self.board_scroll, self.board.voice_card());
+            return;
+        }
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        if let Some(slot) = self.board.slot(model.selected, model.trigger) {
+            scroll_into_view(&self.board_scroll, slot);
+        }
     }
 
     fn handle_event(&self, event: Event) {
@@ -847,7 +938,8 @@ impl AppWindow {
             Event::Status(Ok(status)) => {
                 *self.status.borrow_mut() = Some(status);
                 self.refresh_title();
-                self.refresh_hardware();
+                self.refresh_device_chip();
+                self.refresh_device_dialog();
                 self.refresh_voice_controls();
             }
             Event::Status(Err(error)) => {
@@ -904,30 +996,45 @@ impl AppWindow {
         match self.capture_mode.get() {
             CaptureMode::Learn => {
                 if event.pressed {
+                    let trigger = trigger_from_name(&event.trigger);
+                    self.stop_capture();
                     if button == RemoteButton::Voice {
                         self.voice_selected.set(true);
-                    } else {
-                        self.voice_selected.set(false);
-                        if let Some(model) = self.model.borrow_mut().as_mut() {
-                            model.selected = button;
-                        }
+                        self.refresh_all();
+                        self.reload_voice_editor();
+                        self.scroll_to_selection();
+                        self.toast(tr("Recording key selected"));
+                        return;
                     }
-                    self.force_capture_off();
-                    self.split.set_show_content(true);
-                    let trigger = match trigger_from_name(&event.trigger) {
-                        Some(trigger) => trigger_label(trigger),
-                        None => event.trigger.as_str(),
-                    };
+                    let trigger = trigger.unwrap_or(Trigger::Single);
+                    self.voice_selected.set(false);
+                    if let Some(model) = self.model.borrow_mut().as_mut() {
+                        model.selected = button;
+                        model.trigger = trigger;
+                    }
+                    self.refresh_all();
+                    self.reload_editor();
+                    self.scroll_to_selection();
                     self.toast(&tr_args(
                         "Selected {button} · {trigger}",
-                        &[("button", button_label(button)), ("trigger", trigger)],
+                        &[
+                            ("button", button_label(button)),
+                            ("trigger", trigger_label(trigger)),
+                        ],
                     ));
-                    self.refresh_all();
                 }
             }
             CaptureMode::Test => {
                 if event.pressed {
-                    self.pressed.set(Some(button));
+                    let trigger = trigger_from_name(&event.trigger);
+                    if let Some(trigger) = trigger
+                        && button != RemoteButton::Voice
+                        && let Some(model) = self.model.borrow_mut().as_mut()
+                    {
+                        model.selected = button;
+                        model.trigger = trigger;
+                    }
+                    self.pressed.set(trigger.map(|trigger| (button, trigger)));
                     let action = if button == RemoteButton::Voice {
                         None
                     } else {
@@ -939,35 +1046,38 @@ impl AppWindow {
                     let shown = if button == RemoteButton::Voice {
                         tr("Microphone key (not remappable)").to_string()
                     } else {
-                        action
-                            .clone()
-                            .unwrap_or_else(|| tr("No action").to_string())
+                        action_label(action.as_deref()).text
                     };
-                    let trigger = match trigger_from_name(&event.trigger) {
-                        Some(trigger) => trigger_label(trigger),
-                        None => event.trigger.as_str(),
-                    };
-                    self.test_result_row.set_subtitle(&tr_args(
-                        "{button} · {trigger} → {action}",
-                        &[
-                            ("button", button_label(button)),
-                            ("trigger", trigger),
-                            ("action", &shown),
-                        ],
-                    ));
-                    let runnable = button != RemoteButton::Voice
-                        && action.as_deref().is_some_and(|value| value != "none");
-                    *self.last_action.borrow_mut() = action;
-                    self.run_once_button.set_sensitive(runnable);
+                    let trigger = trigger.map_or_else(
+                        || event.trigger.clone(),
+                        |trigger| trigger_label(trigger).to_string(),
+                    );
+                    *self.last_test.borrow_mut() = Some(TestResult {
+                        button: button_label(button).to_string(),
+                        trigger,
+                        shown,
+                        action,
+                    });
+                    self.refresh_board();
+                    self.refresh_test_bar();
+                    self.scroll_to_selection();
                 } else {
                     self.pressed.set(None);
-                }
-                if let Some(model) = self.model.borrow().as_ref() {
-                    self.diagram
-                        .refresh(model, self.pressed.get(), self.voice_selected.get());
+                    self.refresh_board();
                 }
             }
             CaptureMode::Off => {}
+        }
+    }
+
+    fn reload_voice_editor(&self) {
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        self.voice_editor.load(model);
+        if !self.voice_editor.is_open() {
+            self.voice_editor.present(&self.window);
         }
     }
 
@@ -984,11 +1094,11 @@ impl AppWindow {
         });
         self.capture_banner.set_revealed(true);
         if mode == CaptureMode::Test {
-            self.test_result_row
-                .set_subtitle(tr("Waiting for a remote key…"));
-            *self.last_action.borrow_mut() = None;
-            self.run_once_button.set_sensitive(false);
+            *self.last_test.borrow_mut() = None;
+            self.pressed.set(None);
+            self.refresh_board();
         }
+        self.refresh_test_bar();
     }
 
     fn stop_capture(&self) {
@@ -1006,9 +1116,8 @@ impl AppWindow {
         self.suppress_test_toggle.set(true);
         self.test_button.set_active(false);
         self.suppress_test_toggle.set(false);
-        if let Some(model) = self.model.borrow().as_ref() {
-            self.diagram.refresh(model, None, self.voice_selected.get());
-        }
+        self.refresh_board();
+        self.refresh_test_bar();
     }
 
     fn apply(&self) {
@@ -1034,15 +1143,15 @@ impl AppWindow {
         }
     }
 
-    fn apply_action(&self) {
-        let draft = self.draft_from_widgets();
+    fn editor_update(&self) {
+        let draft = self.editor.draft();
         let allow_exec = self
             .model
             .borrow()
             .as_ref()
             .is_some_and(|model| model.document.allow_exec);
         if let Err(error) = draft.validate(allow_exec) {
-            self.show_action_error(&error);
+            self.editor.show_error(&error);
             return;
         }
         let raw = draft.to_raw();
@@ -1054,15 +1163,15 @@ impl AppWindow {
             .and_then(|model| model.set_slot_raw(Some(raw)));
         match result {
             Ok(_) => {
-                self.show_action_error("");
+                self.editor.close();
                 self.toast(tr("Mapping updated"));
                 self.refresh_all();
             }
-            Err(error) => self.show_action_error(&error),
+            Err(error) => self.editor.show_error(&error),
         }
     }
 
-    fn reset_action(&self) {
+    fn editor_reset(&self) {
         let result = self
             .model
             .borrow_mut()
@@ -1071,21 +1180,58 @@ impl AppWindow {
             .and_then(|model| model.set_slot_raw(None));
         match result {
             Ok(_) => {
-                self.show_action_error("");
+                self.editor.close();
                 self.toast(tr("Profile default restored"));
                 self.refresh_all();
             }
-            Err(error) => self.show_action_error(&error),
+            Err(error) => self.editor.show_error(&error),
         }
     }
 
-    fn choose_voice_key(&self, key: &str) {
-        self.voice_value_row.set_text(key);
-        self.show_voice_error("");
+    fn editor_allow_exec(self: &Rc<Self>, allow: bool) {
+        let already = self
+            .model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| model.document.allow_exec);
+        if allow == already {
+            self.editor.set_allow_exec(allow);
+            return;
+        }
+        if !allow {
+            if let Some(model) = self.model.borrow_mut().as_mut() {
+                model.set_allow_exec(false);
+            }
+            self.editor.set_allow_exec(false);
+            self.refresh_all();
+            return;
+        }
+        let dialog = adw::AlertDialog::builder()
+            .heading(tr("Allow shell commands?"))
+            .body(tr(
+                "Exec mappings run shell commands as your user with a 5 s timeout. \
+                 Only enable this for commands you trust.",
+            ))
+            .build();
+        dialog.add_response("cancel", tr("Cancel"));
+        dialog.add_response("enable", tr("Enable"));
+        dialog.set_response_appearance("enable", adw::ResponseAppearance::Destructive);
+        dialog.set_default_response(Some("cancel"));
+        dialog.set_close_response("cancel");
+        let this = Rc::clone(self);
+        dialog.connect_response(None, move |_, response| {
+            let enabled = response == "enable";
+            this.editor.set_allow_exec(enabled);
+            if enabled && let Some(model) = this.model.borrow_mut().as_mut() {
+                model.set_allow_exec(true);
+            }
+            this.refresh_all();
+        });
+        dialog.present(Some(&self.window));
     }
 
-    fn apply_voice_key(&self) {
-        let raw = self.voice_value_row.text().to_string();
+    fn voice_update(&self) {
+        let raw = self.voice_editor.value();
         let result = self
             .model
             .borrow_mut()
@@ -1094,15 +1240,15 @@ impl AppWindow {
             .and_then(|model| model.set_trigger_key(Some(raw)));
         match result {
             Ok(_) => {
-                self.show_voice_error("");
+                self.voice_editor.close();
                 self.toast(tr("Recording output key updated"));
                 self.refresh_all();
             }
-            Err(error) => self.show_voice_error(&error),
+            Err(error) => self.voice_editor.show_error(&error),
         }
     }
 
-    fn reset_voice_key(&self) {
+    fn voice_reset(&self) {
         let result = self
             .model
             .borrow_mut()
@@ -1113,67 +1259,12 @@ impl AppWindow {
             });
         match result {
             Ok(_) => {
-                self.show_voice_error("");
+                self.voice_editor.close();
                 self.toast(tr("Recording output key reset"));
                 self.refresh_all();
             }
-            Err(error) => self.show_voice_error(&error),
+            Err(error) => self.voice_editor.show_error(&error),
         }
-    }
-
-    fn show_voice_error(&self, message: &str) {
-        self.voice_error.set_text(message);
-        self.voice_error.set_visible(!message.is_empty());
-    }
-
-    fn draft_from_widgets(&self) -> ActionDraft {
-        let kind = ActionKind::from_index(self.type_row.selected());
-        let text = self.value_row.text().to_string();
-        ActionDraft {
-            kind,
-            key: text.clone(),
-            chord: text,
-            command: self.exec_row.text().to_string(),
-            dictation: DictationChoice::from_index(self.dictation_row.selected()),
-        }
-    }
-
-    fn set_learned_key(&self, learned: &str) {
-        let draft = ActionDraft::from_raw(learned);
-        self.loading.set(true);
-        self.type_row.set_selected(draft.kind.index());
-        if draft.kind == ActionKind::Key {
-            self.value_row.set_text(&draft.key);
-        } else if draft.kind == ActionKind::Combo {
-            self.value_row.set_text(&draft.chord);
-        }
-        self.loading.set(false);
-        let allow_exec = self
-            .model
-            .borrow()
-            .as_ref()
-            .is_some_and(|model| model.document.allow_exec);
-        self.update_editor_visibility(draft.kind, allow_exec);
-        self.show_action_error("");
-    }
-
-    fn set_learned_voice_key(&self, learned: &str) {
-        let draft = ActionDraft::from_raw(learned);
-        let value = match draft.kind {
-            ActionKind::Key => draft.key,
-            ActionKind::Combo => draft.chord,
-            _ => return,
-        };
-        self.voice_value_row.set_text(&value);
-        self.show_voice_error("");
-    }
-
-    fn learn_key(self: &Rc<Self>) {
-        self.learn_key_for(false);
-    }
-
-    fn learn_voice_key(self: &Rc<Self>) {
-        self.learn_key_for(true);
     }
 
     fn learn_key_for(self: &Rc<Self>, voice: bool) {
@@ -1230,9 +1321,9 @@ impl AppWindow {
             match learned {
                 Some(learned) => {
                     if voice {
-                        this.set_learned_voice_key(&learned);
+                        this.voice_editor.set_value(&learned);
                     } else {
-                        this.set_learned_key(&learned);
+                        this.editor.set_learned(&learned);
                     }
                     if let Some(dialog) = dialog_weak.upgrade() {
                         dialog.close();
@@ -1260,7 +1351,11 @@ impl AppWindow {
     }
 
     fn run_once(self: &Rc<Self>) {
-        let action = self.last_action.borrow().clone();
+        let action = self
+            .last_test
+            .borrow()
+            .as_ref()
+            .and_then(|result| result.action.clone());
         let Some(action) = action else {
             return;
         };
@@ -1292,32 +1387,10 @@ impl AppWindow {
         }
     }
 
-    fn update_editor_visibility(&self, kind: ActionKind, allow_exec: bool) {
-        let key_value = matches!(kind, ActionKind::Key | ActionKind::Combo);
-        self.value_row.set_visible(key_value);
-        self.learn_key_button.set_visible(key_value);
-        self.value_row.set_title(if kind == ActionKind::Combo {
-            tr("Chord")
-        } else {
-            tr("Key")
-        });
-        self.exec_row.set_visible(kind == ActionKind::Exec);
-        self.exec_warning.set_visible(kind == ActionKind::Exec);
-        self.exec_row.set_sensitive(allow_exec);
-        self.dictation_row
-            .set_visible(kind == ActionKind::Dictation);
-        self.exec_warning.set_text(if allow_exec {
-            tr("The command runs as your user with a 5 s timeout and closed stdio.")
-        } else {
-            tr("Shell commands are disabled. Turn on “Allow shell commands” below first.")
-        });
-        self.apply_action
-            .set_sensitive(kind != ActionKind::Exec || allow_exec);
-    }
-
     fn refresh_all(&self) {
         self.refresh_title();
-        self.refresh_hardware();
+        self.refresh_device_chip();
+        self.refresh_device_dialog();
         self.refresh_voice_controls();
         let model = self.model.borrow();
         let Some(model) = model.as_ref() else {
@@ -1325,49 +1398,86 @@ impl AppWindow {
             self.revert_button.set_sensitive(false);
             self.dirty_banner.set_revealed(false);
             self.test_button.set_sensitive(false);
+            self.test_bar.set_visible(false);
+            self.stack.set_visible_child_name("unavailable");
             return;
         };
-        self.diagram
+        self.test_bar.set_visible(true);
+        self.stack.set_visible_child_name("config");
+        self.board
             .refresh(model, self.pressed.get(), self.voice_selected.get());
         self.apply_button.set_sensitive(model.dirty);
         self.revert_button.set_sensitive(model.dirty);
         self.dirty_banner.set_revealed(model.dirty);
         self.test_button.set_sensitive(true);
-        let default_hint = if model.selected_raw().is_none() {
-            tr(" · profile default")
-        } else {
-            ""
-        };
-        if self.voice_selected.get() {
-            self.selected_row
-                .set_subtitle(tr("Voice key · output configurable"));
-        } else {
-            self.selected_row.set_subtitle(&tr_args(
-                "{button} · {trigger}{default_hint}",
-                &[
-                    ("button", button_label(model.selected)),
-                    ("trigger", trigger_label(model.trigger)),
-                    ("default_hint", default_hint),
-                ],
-            ));
+        self.refresh_test_bar();
+    }
+
+    fn refresh_board(&self) {
+        let model = self.model.borrow();
+        if let Some(model) = model.as_ref() {
+            self.board
+                .refresh(model, self.pressed.get(), self.voice_selected.get());
         }
-        self.refresh_editor(model);
+    }
+
+    fn refresh_test_bar(&self) {
+        let testing = self.capture_mode.get() == CaptureMode::Test;
+        if testing {
+            self.test_bar.add_css_class("on");
+        } else {
+            self.test_bar.remove_css_class("on");
+        }
+        if !testing {
+            self.test_title.set_text(tr("Test mode off"));
+            self.test_sub
+                .set_text(tr("Turn on Test to see what each key sends."));
+            self.last_action_label.set_visible(false);
+            self.run_once_button.set_sensitive(false);
+            return;
+        }
+        self.test_title.set_text(tr("Test mode on"));
+        let last_test = self.last_test.borrow();
+        let Some(result) = last_test.as_ref() else {
+            self.test_sub.set_text(tr(
+                "Press a remote key — shortcuts, volume, and dictation are suppressed.",
+            ));
+            self.last_action_label.set_visible(false);
+            self.run_once_button.set_sensitive(false);
+            return;
+        };
+        self.test_sub.set_text(&tr_args(
+            "{button} · {trigger}",
+            &[("button", &result.button), ("trigger", &result.trigger)],
+        ));
+        self.last_action_label
+            .set_text(&format!("→ {}", result.shown));
+        self.last_action_label.set_visible(true);
+        let runnable = result
+            .action
+            .as_deref()
+            .is_some_and(|action| action != "none");
+        self.run_once_button.set_sensitive(runnable);
     }
 
     fn refresh_title(&self) {
         let status = self.status.borrow();
         let subtitle = match status.as_ref() {
             None => tr("Connecting…").to_string(),
-            Some(status) if status.connected => {
-                let device = if status.device.name.is_empty() {
-                    status.device.address.clone()
-                } else {
+            Some(status) => {
+                let device = if status.device.address.is_empty() {
                     status.device.name.clone()
+                } else {
+                    status.device.address.clone()
                 };
                 if status.streaming {
                     tr_args("{device} · recording", &[("device", &device)])
                 } else if device.is_empty() {
-                    status.state.clone()
+                    if status.connected {
+                        status.state.clone()
+                    } else {
+                        tr("No remote connected").to_string()
+                    }
                 } else {
                     tr_args(
                         "{device} · {state}",
@@ -1375,39 +1485,69 @@ impl AppWindow {
                     )
                 }
             }
-            Some(status) => tr_args("Disconnected · {state}", &[("state", &status.state)]),
         };
         self.title.set_subtitle(&subtitle);
     }
 
-    fn refresh_hardware(&self) {
+    fn refresh_device_chip(&self) {
         let status = self.status.borrow();
-        let hardware = status.as_ref().map(|status| &status.hardware);
-        let connected = status.as_ref().is_some_and(|status| status.connected);
-        let percent = hardware.and_then(|hardware| hardware.battery_percent);
-        let (subtitle, icon) = match percent {
-            Some(percent) if connected => (format!("{percent} %"), battery_icon(percent)),
-            Some(percent) => {
-                let text = percent.to_string();
-                (
-                    tr_args("{percent} % · last known", &[("percent", &text)]),
-                    battery_icon(percent),
-                )
-            }
-            None => (tr("Unknown").to_string(), "battery-empty-symbolic"),
-        };
-        self.battery_row.set_subtitle(&subtitle);
-        self.battery_icon.set_icon_name(Some(icon));
-        self.battery_icon.set_visible(percent.is_some());
-
-        let mut any = false;
-        for (field, row) in &self.hardware_rows {
-            let value = hardware.and_then(|hardware| field.value(hardware));
-            row.set_subtitle(value.unwrap_or(""));
-            row.set_visible(value.is_some());
-            any |= value.is_some();
+        let status = status.as_ref();
+        let connected = status.is_some_and(|status| status.connected);
+        let name = status
+            .map(|status| {
+                if status.device.name.is_empty() {
+                    status.device.address.as_str()
+                } else {
+                    status.device.name.as_str()
+                }
+            })
+            .unwrap_or_default();
+        // The profile's model is the short, stable name; the BlueZ alias is
+        // the fallback before a document is loaded.
+        let model_name = self
+            .model
+            .borrow()
+            .as_ref()
+            .map(|model| model.profile.model.to_string());
+        let label = model_name
+            .filter(|model| !model.is_empty())
+            .unwrap_or_else(|| {
+                if name.is_empty() {
+                    tr("No remote").to_string()
+                } else {
+                    name.to_string()
+                }
+            });
+        self.device_chip_name.set_text(&label);
+        self.device_chip
+            .set_tooltip_text(Some(if name.is_empty() { &label } else { name }));
+        if connected {
+            self.device_chip_icon.remove_css_class("dim-label");
+        } else {
+            self.device_chip_icon.add_css_class("dim-label");
         }
-        self.hardware_group.set_visible(any);
+        let percent = status.and_then(|status| status.hardware.battery_percent);
+        self.device_chip_battery.set_text(&if percent.is_some() {
+            battery_text(status)
+        } else {
+            String::new()
+        });
+        self.device_chip_battery_icon.set_visible(percent.is_some());
+        if let Some(percent) = percent {
+            self.device_chip_battery_icon
+                .set_icon_name(Some(battery_icon(percent)));
+        }
+        let accessible = tr_args(
+            "Device: {name}",
+            &[("name", if name.is_empty() { "—" } else { name })],
+        );
+        self.device_chip
+            .update_property(&[gtk::accessible::Property::Label(&accessible)]);
+    }
+
+    fn refresh_device_dialog(&self) {
+        let status = self.status.borrow();
+        self.device_dialog.refresh(status.as_ref());
     }
 
     fn refresh_voice_controls(&self) {
@@ -1420,68 +1560,8 @@ impl AppWindow {
             .as_ref()
             .map(|status| status.vinput.mode.as_str())
             .unwrap_or_default();
-
-        if self.voice_keys.borrow().as_slice() != keys {
-            self.voice_keys.borrow_mut().clear();
-            self.voice_keys.borrow_mut().extend_from_slice(keys);
-            if keys.is_empty() {
-                self.voice_key_button.set_visible(false);
-            } else {
-                let menu = declared_key_menu(keys);
-                self.voice_key_button.set_menu_model(Some(&menu));
-                self.voice_key_button.set_visible(true);
-            }
-        }
-        let hint = voice_controls_hint(mode);
-        if self.voice_hint.text().as_str() != hint {
-            self.voice_hint.set_text(&hint);
-        }
-    }
-
-    fn refresh_editor(&self, model: &GuiModel) {
-        if self.voice_selected.get() {
-            self.key_group.set_visible(false);
-            self.action_group.set_visible(false);
-            self.voice_group.set_visible(true);
-            self.loading.set(true);
-            self.voice_value_row
-                .set_text(model.document.trigger_key.as_deref().unwrap_or("none"));
-            self.voice_reset_button.set_sensitive(
-                model.document.trigger_key.as_deref() != Some(atvv_config::DEFAULT_TRIGGER_KEY),
-            );
-            self.loading.set(false);
-            self.show_voice_error("");
-            return;
-        }
-        self.key_group.set_visible(true);
-        self.action_group.set_visible(true);
-        self.voice_group.set_visible(false);
-        self.loading.set(true);
-        self.trigger_row.set_selected(match model.trigger {
-            Trigger::Single => 0,
-            Trigger::Double => 1,
-            Trigger::Long => 2,
-        });
-        let draft = ActionDraft::from_raw(model.selected_effective().as_deref().unwrap_or("none"));
-        self.type_row.set_selected(draft.kind.index());
-        self.value_row.set_text(match draft.kind {
-            ActionKind::Key => &draft.key,
-            ActionKind::Combo => &draft.chord,
-            _ => "",
-        });
-        self.exec_row.set_text(&draft.command);
-        self.dictation_row.set_selected(draft.dictation.index());
-        self.allow_exec_row.set_active(model.document.allow_exec);
-        self.reset_action
-            .set_sensitive(model.selected_raw().is_some());
-        self.update_editor_visibility(draft.kind, model.document.allow_exec);
-        self.show_action_error("");
-        self.loading.set(false);
-    }
-
-    fn show_action_error(&self, message: &str) {
-        self.action_error.set_text(message);
-        self.action_error.set_visible(!message.is_empty());
+        self.voice_editor.refresh_declared_keys(keys);
+        self.voice_editor.set_mode(mode);
     }
 
     fn show_error(&self, message: &str) {
@@ -1521,32 +1601,57 @@ impl AppWindow {
     pub fn set_status(&self, status: DaemonStatus) {
         *self.status.borrow_mut() = Some(status);
         self.refresh_title();
-        self.refresh_hardware();
+        self.refresh_device_chip();
+        self.refresh_device_dialog();
         self.refresh_voice_controls();
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn battery_text(&self) -> String {
-        self.battery_row
-            .subtitle()
-            .map(|subtitle| subtitle.to_string())
-            .unwrap_or_default()
+        self.device_dialog.battery_text()
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn hardware_text(&self, field: HardwareField) -> Option<String> {
-        self.hardware_rows
-            .iter()
-            .find(|(candidate, _)| *candidate == field)
-            .and_then(|(_, row)| row.subtitle().map(|subtitle| subtitle.to_string()))
+        self.device_dialog.hardware_text(field)
     }
 
     #[doc(hidden)]
     #[must_use]
-    pub fn diagram(&self) -> &RemoteDiagram {
-        &self.diagram
+    pub fn chip_device_text(&self) -> String {
+        self.device_chip_name.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn diagram(&self) -> &crate::diagram::RemoteDiagram {
+        self.board.diagram()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn board(&self) -> &MappingBoard {
+        &self.board
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn board_scroll(&self) -> &gtk::ScrolledWindow {
+        &self.board_scroll
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn editor(&self) -> &ActionEditor {
+        &self.editor
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_editor(&self) -> &VoiceEditor {
+        &self.voice_editor
     }
 
     #[doc(hidden)]
@@ -1564,44 +1669,14 @@ impl AppWindow {
 
     #[doc(hidden)]
     #[must_use]
-    pub fn value_text(&self) -> String {
-        self.value_row.text().to_string()
-    }
-
-    #[doc(hidden)]
-    #[must_use]
-    pub fn value_row(&self) -> &adw::EntryRow {
-        &self.value_row
+    pub fn selected_trigger(&self) -> Option<Trigger> {
+        self.model.borrow().as_ref().map(|model| model.trigger)
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn apply_button(&self) -> &gtk::Button {
         &self.apply_button
-    }
-
-    #[doc(hidden)]
-    #[must_use]
-    pub fn action_error(&self) -> &gtk::Label {
-        &self.action_error
-    }
-
-    #[doc(hidden)]
-    #[must_use]
-    pub fn trigger_row(&self) -> &adw::ComboRow {
-        &self.trigger_row
-    }
-
-    #[doc(hidden)]
-    #[must_use]
-    pub fn type_row(&self) -> &adw::ComboRow {
-        &self.type_row
-    }
-
-    #[doc(hidden)]
-    #[must_use]
-    pub fn update_button(&self) -> &gtk::Button {
-        &self.apply_action
     }
 
     #[doc(hidden)]
@@ -1622,25 +1697,25 @@ impl AppWindow {
     #[doc(hidden)]
     #[must_use]
     pub fn voice_value_row(&self) -> &adw::EntryRow {
-        &self.voice_value_row
+        self.voice_editor.value_row()
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn voice_declared_button(&self) -> &gtk::MenuButton {
-        &self.voice_key_button
+        self.voice_editor.declared_button()
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn voice_hint_text(&self) -> String {
-        self.voice_hint.text().to_string()
+        self.voice_editor.hint_text()
     }
 
     #[doc(hidden)]
     #[must_use]
     pub fn voice_update_button(&self) -> &gtk::Button {
-        &self.voice_apply_button
+        self.voice_editor.update_button()
     }
 
     #[doc(hidden)]
@@ -1652,10 +1727,19 @@ impl AppWindow {
     #[doc(hidden)]
     #[must_use]
     pub fn test_result_text(&self) -> String {
-        self.test_result_row
-            .subtitle()
-            .map(|subtitle| subtitle.to_string())
-            .unwrap_or_default()
+        self.test_sub.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn last_action_text(&self) -> String {
+        self.last_action_label.text().to_string()
+    }
+
+    /// Feed a `ButtonEvent` the way the daemon signal listener would.
+    #[doc(hidden)]
+    pub fn simulate_button_event(&self, event: ButtonSignal) {
+        self.on_button_event(event);
     }
 }
 
@@ -1686,76 +1770,10 @@ fn connect_timers(ui: &Rc<AppWindow>) {
     });
 }
 
-/// Menu model for the declared recording keys.
-///
-/// The key names come from the daemon contract; `win.voice-key` fills the
-/// output entry without saving, so the normal Update/Apply path still owns
-/// validation and persistence.
-fn declared_key_menu(keys: &[String]) -> gio::Menu {
-    let menu = gio::Menu::new();
-    let declared = gio::Menu::new();
-    for (index, key) in keys.iter().enumerate() {
-        let label = if index == 0 {
-            format!("{key} ({})", tr("Default"))
-        } else {
-            key.clone()
-        };
-        let item = gio::MenuItem::new(Some(&label), Some("win.voice-key"));
-        item.set_attribute_value("target", Some(&key.to_variant()));
-        declared.append_item(&item);
-    }
-    menu.append_section(None, &declared);
-
-    let extra = gio::Menu::new();
-    let none = gio::MenuItem::new(
-        Some(tr("None (disable synthetic key)")),
-        Some("win.voice-key"),
-    );
-    none.set_attribute_value("target", Some(&"none".to_variant()));
-    extra.append_item(&none);
-    menu.append_section(None, &extra);
-    menu
-}
-
-/// Consumer-side hint for the recording-key page.
-fn voice_controls_hint(mode: &str) -> String {
-    let bind = tr(
-        "Consumers must bind the same key. fcitx5-vinput uses Dictate, \
-         VoiceCommand, Assistant.",
-    );
-    match mode {
-        "dbus" => format!(
-            "{}\n{}",
-            tr("vinput is in D-Bus mode; the output key is not emitted."),
-            bind
-        ),
-        "off" => format!(
-            "{}\n{}",
-            tr("vinput integration is off; the output key is not emitted."),
-            bind
-        ),
-        _ => bind.to_string(),
-    }
-}
-
+/// Recording-key hint for a vinput mode, kept for the window tests.
 #[must_use]
-fn trigger_label(trigger: Trigger) -> &'static str {
-    match trigger {
-        Trigger::Single => tr("Single"),
-        Trigger::Double => tr("Double"),
-        Trigger::Long => tr("Long"),
-    }
-}
-
-/// Parse the protocol name used by `ButtonEvent`.
-#[must_use]
-fn trigger_from_name(name: &str) -> Option<Trigger> {
-    match name {
-        "single" => Some(Trigger::Single),
-        "double" => Some(Trigger::Double),
-        "long" => Some(Trigger::Long),
-        _ => None,
-    }
+pub fn voice_controls_hint(mode: &str) -> String {
+    voice_mode_hint(mode)
 }
 
 /// Build a window for display tests.
@@ -1770,6 +1788,8 @@ mod tests {
 
     #[test]
     fn voice_hint_warns_when_vinput_cannot_emit() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
         let trigger = voice_controls_hint("trigger");
         assert!(trigger.contains("Consumers must bind"));
         assert!(!trigger.contains("not emitted"));
@@ -1781,5 +1801,22 @@ mod tests {
         let off = voice_controls_hint("off");
         assert!(off.contains("integration is off"));
         assert!(off.contains("not emitted"));
+    }
+
+    #[test]
+    fn battery_text_marks_a_stale_value() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
+        let mut status = DaemonStatus {
+            connected: true,
+            ..DaemonStatus::default()
+        };
+        status.hardware.battery_percent = Some(62);
+        assert_eq!(battery_text(Some(&status)), "62 %");
+        status.connected = false;
+        assert_eq!(battery_text(Some(&status)), "62 % · last known");
+        status.hardware.battery_percent = None;
+        assert_eq!(battery_text(Some(&status)), "Unknown");
+        assert_eq!(battery_text(None), "Unknown");
     }
 }

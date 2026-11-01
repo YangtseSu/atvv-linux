@@ -76,7 +76,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | C — Hardware bring-up | 07 | **done**: RC003 pairing state, real CAPS, audio capture, keepalive, reconnect |
 | D — Integration | 08, 10, 11, 12 | 08 **done**; 10 **blocked** on upstream review/merge (issues and PRs are open); 11 **done**: evdevil input backend and `DICTATE` trigger default; 12 **done**: provider contract, browser recipe, generic IM guidance |
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
-| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **planned**: sayall-style mapping board, with a committed interface reference |
+| F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **done**: mapping board with per-button cards, modal action editor, test bar |
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
 | H — Layout profiles | 17–18 | **planned**: named user layouts with a template default (edits save as a new layout), plus built-in presets; layout-selector UI decided (header chip, popover, manager) |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
@@ -85,7 +85,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
-approval/upstream; steps 11–13 are complete.
+approval/upstream; steps 11–16 are complete.
 
 ## Step files
 
@@ -97,7 +97,6 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 15 | F | [mapping-board](15-mapping-board.md) | ⬜ not-started | 14 | the board shows every button/slot and edits the selected one; [interface reference](15-mapping-board.html) |
 | 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a template default whose edits save as a new layout; the active layout is explicit and switches live; selector UI decided |
 | 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 | 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
@@ -119,6 +118,7 @@ verified; they are not reopened. Live work is listed first.
 | 12 | D | [integration-contract](12-integration-contract.md) | ✅ done | 03, 06 (consumer recipe: 10) | contract, status, and the consumer recipe agree and are tested |
 | 13 | F | [keymap-config](13-keymap-config.md) | ✅ done | 12, 06 | `config get/set`, capture, and live apply are atomic |
 | 14 | F | [config-gui](14-config-gui.md) | ✅ done | 13 | the GTK app edits, saves, and tests mappings on the diagram |
+| 15 | F | [mapping-board](15-mapping-board.md) | ✅ done | 14 | the board shows every button/slot and edits the selected one; [interface reference](15-mapping-board.html) |
 | 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
 | 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | ✅ done | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |

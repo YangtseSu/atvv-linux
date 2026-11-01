@@ -8,7 +8,7 @@ the daemon's `GetConfig`/`SetConfig` API and uses `BeginCapture`/`RunAction`
 for test mode. It never writes `daemon.toml`, opens evdev/uinput, or talks to
 BlueZ or PipeWire directly.
 
-![ATVV Remote window](gui.png)
+![ATVV Remote mapping board](gui.png)
 
 ## Install and start
 
@@ -36,70 +36,78 @@ The app follows the desktop locale. English is the default and the fallback;
 any `zh*` locale selects Simplified Chinese. There is no in-app language
 switch. Restart `atvv-config` after changing the desktop language.
 
-## Window
+## Mapping board
 
-- **Remote diagram**: one real button per logical key, drawn as the RC003
-  layout: power and voice at the top, a circular D-pad, back/home/menu on the
-  left, and the volume rocker plus TV on the right. The top-right voice key is
-  fixed; its output key is configurable. Click a key to edit it; the outline
-  shows bound (solid), unbound (dashed), and conflicting (amber) mappings. The
-  selected key uses the system accent color.
-- **Selected key**: shows the current key and gesture. *Learn…* starts the
-  daemon's capture mode and selects the physical remote key that is pressed.
-- **Action**: type, value, and dictation controls for the selected slot.
-  *Learn Key* captures a keyboard key or chord without leaving the window.
-- **Test mode**: press a physical key, see the action that would run, and run
-  it once on request.
-- **Advanced**: the `allow_exec` policy.
+The window is a three-column board around the original RC003 vector diagram:
 
-The layout is an `AdwNavigationSplitView`: at narrow widths the diagram and
-editor become separate pages, and selecting a hotspot opens the editor.
+- Left cards: Power, Up, Left, Back, Home, Menu.
+- Center: the remote diagram and the voice-key card.
+- Right cards: Right, OK, Down, Volume up, Volume down, TV.
 
-## Device status
+Every card shows its three gesture slots, **Single**, **Double**, and
+**Long**, with the resolved action in compact form (`Return`, `F13`,
+`Ctrl+Alt+V`, `Command…`, `Start dictation`, or `None`). The selected card and
+slot use the system accent color. A slot with no action is dimmed, and a card
+whose slot sends the same action as another card in the same gesture is
+outlined in amber.
 
-The sidebar home view starts with a **Battery** row, followed by the remote
-diagram and a **Hardware** group. Both are read-only:
+Click a slot to edit that exact slot. Click a key on the diagram to select the
+card and edit its **Single** slot; the diagram and the card always show the
+same selection. The board scrolls horizontally when the window is narrower
+than the board; the header and the test bar stay visible.
 
-- **Battery** shows the percentage BlueZ caches for the remote, with a level
-  icon. When the remote is disconnected the last known value is marked
-  `last known`; with no value it reads `Unknown`.
-- **Hardware** lists the Device Information Service facts: firmware, hardware
-  and software revisions, serial number, manufacturer, and model. Rows with no
-  value are hidden.
+The voice key in the top-right of the diagram is not an action slot. Clicking
+it, or the **Voice key** card under the diagram, opens the recording-key
+dialog.
 
-The values come from `StatusView.hardware` over the daemon D-Bus API; the
-daemon refreshes the battery every 60 s while connected. The GUI itself never
-talks to BlueZ. The same object is available from `atvvctl status` and
-`atvv-mcp status`, and `atvvctl doctor` prints a one-line summary.
+## Header
+
+- **Menu**: *Device information…*, *Revert changes*, *About ATVV*, and *Quit*.
+- **Device chip**: the profile model (`RC003`) and the battery level. It opens
+  the read-only *Device information* dialog with the battery, the remote
+  address, and the Device Information Service facts (firmware, hardware and
+  software revisions, serial number, manufacturer, model). Rows without a
+  value are hidden; a disconnected battery reads `last known`.
+- **Test**, **Revert**, and **Apply**.
+
+The device chip covers the one active device. Switching between known remotes
+and per-device layouts belongs to step 21, so this step opens device
+information instead of a device list.
 
 ## Edit a mapping
 
-1. Click a key in the diagram.
-2. Choose **Single**, **Double**, or **Long**.
-3. Choose the action type:
+![Action editor](gui-editor.png)
+
+1. Click a card slot, or a key on the diagram for its Single slot. The
+   **Mapping** dialog opens for that button and gesture and shows whether the
+   slot is a custom mapping, a profile default, or unbound.
+2. Choose the action type:
    - *Do nothing* swallows the button (`none`).
    - *Single key* emits one key, for example `KEY_F13`.
    - *Key combination* emits a chord, for example `ctrl+alt+v`.
    - *Run a command* runs `exec:<command>` through the daemon.
    - *Dictation* starts, stops, or toggles the ATVV microphone.
-4. Type the value or use **Learn Key**. Modifiers held while learning become
+3. Type the value or use **Learn Key**. Modifiers held while learning become
    part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
-5. Click **Update**, then **Apply** in the header.
+4. Click **Update**. The dialog closes, the board shows the new action, and
+   **Apply** in the header becomes active.
+
+**Learn remote…** starts the daemon's capture mode; pressing a physical remote
+key retargets the dialog to that button and gesture. **Reset** restores the
+profile default for the slot, and **Cancel** discards the dialog's edits.
 
 **Apply** validates the complete document, applies it to the running daemon,
-and writes the file atomically. Invalid input stays in the editor with an
-inline error, and the previous map remains active. **Reset** restores the
-profile default for the selected slot. **Revert** discards unsaved edits by
-reloading the daemon document.
+and writes the file atomically. Invalid input stays in the dialog with an
+inline error, and the previous map remains active. **Revert** discards unsaved
+edits by reloading the daemon document.
 
 ## Recording key
 
 The top-right microphone key is the physical recording key (`KEY_F5`). It is
-grabbed and fixed: it opens/closes the ATVV microphone and cannot be used as a
-normal action button. Click it to open the recording-key page; the page only
-offers the output key, not gesture/action slots.
+grabbed and fixed: it opens and closes the ATVV microphone and cannot be used
+as a normal action button. The recording-key dialog only edits the output key.
 
-![Recording key settings](gui-recording-key.png)
+![Recording key dialog](gui-recording-key.png)
 
 - **Output key** is the synthetic key emitted while the recording key is held.
   The default is `DICTATE`; use **Learn Key** to capture another key or chord
@@ -110,23 +118,25 @@ offers the output key, not gesture/action slots.
   `StatusView.contract.recording_keys`, not a GUI copy. Choosing an entry fills
   the output field; the normal **Update** and **Apply** path still validates
   and saves it.
-- The page shows the consumer name mapping (`Dictate`, `VoiceCommand`,
+- The dialog shows the consumer name mapping (`Dictate`, `VoiceCommand`,
   `Assistant` for fcitx5-vinput) and warns when `vinput` is `dbus` or `off`,
   because those modes do not emit the synthetic key. Consumers must bind the
   same key; the provider contract's `active_key` reports the current value.
 - **Update** changes the document; **Apply** in the header persists it through
-  `SetConfig`. The physical F5 and the ATVV microphone path are unchanged.
+  `SetConfig`. **Reset to DICTATE** restores the default. The physical F5 and
+  the ATVV microphone path are unchanged.
 
 ## Test mode
 
 Toggle **Test** in the header. The daemon reports logical button events while
-capture is active; the window highlights the pressed key, shows the resolved
-action, and enables **Run once**. Capture suppresses automatic key/chord
-emission, `exec`, dictation, the synthetic voice trigger, and voice-session
-start/stop, so pressing OK or a volume key does not activate the focused app
-or change system volume. The voice key is reported as fixed; it does not start
-the microphone in Test mode. Shell commands require a separate confirmation
-dialog with Cancel as the default response.
+capture is active; the pressed card slot is highlighted, the bottom bar shows
+the button, its gesture, and the resolved action, and **Run once** becomes
+available. Capture suppresses automatic key/chord emission, `exec`, dictation,
+the synthetic voice trigger, and voice-session start/stop, so pressing OK or a
+volume key does not activate the focused app or change system volume. The
+voice key is reported as fixed; it does not start the microphone in Test mode.
+Shell commands require a separate confirmation dialog with Cancel as the
+default response.
 
 Capture ends when Test is toggled off, **Cancel** is clicked in the banner, or
 the GUI's bus connection disappears. The GUI never reads input devices; the
@@ -134,18 +144,20 @@ daemon owns the evdev grab, the action map, and capture state.
 
 ## Script safety
 
-`exec:` is disabled unless `allow_exec = true`. Enabling it in **Advanced**
-requires an explicit confirmation. The daemon runs the command as the user
-with a 5 s timeout, closed stdio, one command at a time, and refuses to run
-when its effective uid is 0. The GUI does not interpret shell syntax; review
-the command before enabling it.
+`exec:` is disabled unless `allow_exec = true`. Enable **Allow shell commands**
+in the action dialog; doing so requires an explicit confirmation. The daemon
+runs the command as the user with a 5 s timeout, closed stdio, one command at a
+time, and refuses to run when its effective uid is 0. The GUI does not
+interpret shell syntax; review the command before enabling it.
 
 ## Keyboard and accessibility
 
-Every hotspot is a focusable `GtkButton` with an accessible name and tooltip.
-Use Tab/Shift+Tab to move between keys and the editor, Enter/Space to select.
-Focus rings, the system light/dark theme, and system accent colors come from
-libadwaita; the diagram asset itself is theme-neutral.
+Every card slot is a focusable `GtkButton` with an accessible name and tooltip.
+Tab order follows the board; Enter or Space opens the focused slot. The action
+dialog traps focus while open and returns it to the slot on close; Enter
+activates **Update** and Escape cancels. Focus rings, the system light/dark
+theme, and the system accent color come from libadwaita; the diagram asset
+itself is theme-neutral.
 
 ## Persistence
 
@@ -158,6 +170,7 @@ is not a second source of truth. The map survives daemon restarts.
 
 - One device profile at a time; the window shows the profile reported by the
   daemon.
+- No layout selection or per-device layouts yet (steps 17 and 21).
 - No per-application layers or automatic shortcut discovery.
 - No ASR or cloud protocol in the app; dictation only drives the ATVV session.
 - The GUI is optional. `atvvd`, `atvvctl`, `atvv-mcp`, and consumers such as

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! The Simplified Chinese window: labels, status text, and page titles come
-//! from the catalog while protocol values stay unchanged.
+//! The Simplified Chinese window: board labels, dialog controls, status text,
+//! and test-bar copy come from the catalog while protocol values stay
+//! unchanged.
 //!
 //! GTK must be initialized and used from one thread, so the scenario runs in
 //! one test. Run under `xvfb-run`.
@@ -10,8 +11,10 @@ use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
 use atvv_gui::client::{Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo};
 use atvv_gui::i18n::{self, Language};
-use atvv_gui::model::GuiModel;
+use atvv_gui::model::{GuiModel, trigger_label};
+use atvv_input::Trigger;
 use atvv_protocol::RC003;
+use atvv_protocol::profile::RemoteButton;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
 
@@ -79,26 +82,66 @@ fn chinese_window() {
     );
     assert_eq!(window.apply_button().label().as_deref(), Some("应用"));
     assert_eq!(window.test_button().label().as_deref(), Some("测试"));
-    assert_eq!(window.update_button().label().as_deref(), Some("更新"));
     assert_eq!(
         window
             .diagram()
-            .button(atvv_protocol::profile::RemoteButton::Power)
+            .button(RemoteButton::Power)
             .and_then(|button| button.tooltip_text())
             .as_deref(),
         Some("电源：点击编辑")
     );
 
-    assert_eq!(combo_text(window.trigger_row(), 0).as_deref(), Some("单击"));
-    assert_eq!(combo_text(window.trigger_row(), 1).as_deref(), Some("双击"));
-    assert_eq!(combo_text(window.trigger_row(), 2).as_deref(), Some("长按"));
-    assert_eq!(combo_text(window.type_row(), 0).as_deref(), Some("无操作"));
-    assert_eq!(combo_text(window.type_row(), 4).as_deref(), Some("听写"));
+    // Board labels: gesture names and the compact action form.
+    assert_eq!(trigger_label(Trigger::Single), "单击");
+    assert_eq!(trigger_label(Trigger::Double), "双击");
+    assert_eq!(trigger_label(Trigger::Long), "长按");
+    assert_eq!(
+        window.board().slot_text(RemoteButton::Ok, Trigger::Single),
+        Some("回车".to_string())
+    );
+    assert_eq!(
+        window
+            .board()
+            .slot_text(RemoteButton::Power, Trigger::Single),
+        Some("无".to_string())
+    );
+
+    // The action dialog keeps the translated controls.
+    assert_eq!(
+        combo_text(window.editor().type_row(), 0).as_deref(),
+        Some("无操作")
+    );
+    assert_eq!(
+        combo_text(window.editor().type_row(), 4).as_deref(),
+        Some("听写")
+    );
+    assert_eq!(
+        window.editor().update_button().label().as_deref(),
+        Some("更新")
+    );
+    assert!(window.voice_hint_text().contains("消费者必须绑定"));
+
+    window
+        .diagram()
+        .button(RemoteButton::Up)
+        .expect("up hotspot")
+        .emit_clicked();
+    assert_eq!(window.editor().title(), "上 · 单击");
+    assert_eq!(window.editor().value_row().text().as_str(), "KEY_UP");
+    window.editor().cancel_button().emit_clicked();
+
+    window
+        .diagram()
+        .button(RemoteButton::Voice)
+        .expect("voice hotspot")
+        .emit_clicked();
+    assert_eq!(window.voice_value_row().text(), "DICTATE");
     assert_eq!(
         window.voice_declared_button().label().as_deref(),
         Some("声明键…")
     );
     assert!(window.voice_hint_text().contains("消费者必须绑定"));
+    window.voice_editor().close();
 
     window.set_status(DaemonStatus {
         state: "disconnected".to_string(),

@@ -137,7 +137,10 @@ const HOTSPOT_CSS: [&str; 13] = [
     "hotspot-volume-down",
 ];
 
-const DIAGRAM_WIDTH: f64 = 200.0;
+/// Smallest width the diagram claims; the board around it sets the height, so
+/// the picture shrinks to fit a 1040x760 window instead of forcing the board
+/// to scroll vertically.
+const DIAGRAM_WIDTH: f64 = 130.0;
 const DIAGRAM_HEIGHT: f64 = DIAGRAM_WIDTH * VIEWBOX_HEIGHT / VIEWBOX_WIDTH;
 
 fn scaled(hotspot: Hotspot, width: f64, height: f64) -> (f64, f64, i32, i32) {

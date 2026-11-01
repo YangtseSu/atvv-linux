@@ -29,3 +29,4 @@ zbus.workspace = true
 
 [dev-dependencies]
 atvv-daemon = { path = "../atvv-daemon" }
+x11rb = { version = "0.14", features = ["xtest"] }

@@ -74,6 +74,7 @@ and must be refreshed when `Cargo.lock` changes.
 | `gdk-pixbuf-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `gdk4` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
 | `gdk4-sys` | 0.11.5 | MIT | https://github.com/gtk-rs/gtk4-rs |
+| `gethostname` | 1.1.0 | Apache-2.0 | https://codeberg.org/swsnr/gethostname.rs.git |
 | `getrandom` | 0.4.3 | MIT OR Apache-2.0 | https://github.com/rust-random/getrandom |
 | `gio` | 0.22.10 | MIT | https://github.com/gtk-rs/gtk-rs-core |
 | `gio-sys` | 0.22.9 | MIT | https://github.com/gtk-rs/gtk-rs-core |
@@ -192,6 +193,8 @@ and must be refreshed when `Cargo.lock` changes.
 | `windows-link` | 0.2.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | `windows-sys` | 0.61.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | `winnow` | 1.0.4 | MIT | https://github.com/winnow-rs/winnow |
+| `x11rb` | 0.14.0 | MIT OR Apache-2.0 | https://github.com/psychon/x11rb |
+| `x11rb-protocol` | 0.14.0 | MIT OR Apache-2.0 | https://github.com/psychon/x11rb |
 | `zbus` | 6.2.0 | MIT | https://github.com/z-galaxy/zbus/ |
 | `zbus_macros` | 6.2.0 | MIT | https://github.com/z-galaxy/zbus/ |
 | `zbus_utils` | 6.1.0 | MIT | https://github.com/z-galaxy/zbus/ |

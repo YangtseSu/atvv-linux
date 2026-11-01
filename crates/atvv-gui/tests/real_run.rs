@@ -57,15 +57,27 @@ fn gui_against_real_daemon() {
         "the daemon did not answer GetConfig"
     );
 
+    // Pick a value different from the live one so the edit is always dirty.
+    let current = window.document().expect("document").buttons["up"]
+        .double
+        .clone();
+    let next = if current.as_deref() == Some("key:KEY_F13") {
+        "key:KEY_F14"
+    } else {
+        "key:KEY_F13"
+    };
     window
-        .diagram()
-        .button(RemoteButton::Up)
-        .expect("up hotspot")
+        .board()
+        .slot(RemoteButton::Up, atvv_input::Trigger::Double)
+        .expect("up double slot")
         .emit_clicked();
-    window.trigger_row().set_selected(1);
-    window.type_row().set_selected(1);
-    window.value_row().set_text("KEY_F13");
-    window.update_button().emit_clicked();
+    window.editor().type_row().set_selected(1);
+    window
+        .editor()
+        .value_row()
+        .set_text(next.strip_prefix("key:").expect("key action"));
+    window.editor().update_button().emit_clicked();
+    pump(&window);
     assert!(window.apply_button().is_sensitive());
     window.apply_button().emit_clicked();
     assert!(
@@ -75,19 +87,16 @@ fn gui_against_real_daemon() {
         "the daemon did not apply the document"
     );
     let document = window.document().expect("document after save");
-    assert_eq!(
-        document.buttons["up"].double.as_deref(),
-        Some("key:KEY_F13")
-    );
+    assert_eq!(document.buttons["up"].double.as_deref(), Some(next));
 
     let client = atvv_daemon::dbus::Client::connect().expect("daemon client");
     let live = client.config().expect("GetConfig from the daemon");
-    assert_eq!(live.buttons["up"].double.as_deref(), Some("key:KEY_F13"));
+    assert_eq!(live.buttons["up"].double.as_deref(), Some(next));
 
     window.test_button().set_active(true);
     assert!(
         wait_until(&window, Duration::from_secs(5), "capture", || {
-            window.test_result_text().contains("Waiting")
+            window.test_result_text().contains("Press a remote key")
         }),
         "capture did not start"
     );

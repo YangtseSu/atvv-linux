@@ -66,6 +66,13 @@ pub fn init() {
     ));
 }
 
+/// Serialize tests that switch the process-wide language.
+#[cfg(test)]
+pub(crate) fn language_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|error| error.into_inner())
+}
+
 /// Translate an English source string.
 #[must_use]
 pub fn tr(text: &'static str) -> &'static str {
@@ -93,6 +100,17 @@ fn zh(text: &str) -> Option<&'static str> {
     Some(match text {
         // Window, header, and menu.
         "ATVV Remote" => "ATVV 遥控器",
+        "Device information…" => "设备信息…",
+        "Device information" => "设备信息",
+        "Bluetooth and GATT facts" => "蓝牙与 GATT 信息",
+        "Address" => "地址",
+        "Close" => "关闭",
+        "No remote" => "无遥控器",
+        "No remote connected" => "未连接遥控器",
+        "Device: {name}" => "设备：{name}",
+        "Passive facts reported by BlueZ and the ATVV GATT session." => {
+            "由 BlueZ 和 ATVV GATT 会话上报的只读信息。"
+        }
         "Connecting…" => "正在连接…",
         "About ATVV" => "关于 ATVV",
         "Revert changes" => "还原更改",
@@ -113,11 +131,6 @@ fn zh(text: &str) -> Option<&'static str> {
         "Battery" => "电池",
         "Unknown" => "未知",
         "Remote" => "遥控器",
-        "Click a key to edit it. Dashed: no action. Amber: conflicting action. \
-         The top-right voice key is fixed; its output key is configurable." => {
-            "点击按键进行编辑。虚线：无操作。琥珀色：操作冲突。\
-             右上角的语音键固定不变；其输出按键可配置。"
-        }
         "Hardware" => "硬件",
         "Firmware" => "固件",
         "Hardware revision" => "硬件版本",
@@ -127,22 +140,17 @@ fn zh(text: &str) -> Option<&'static str> {
         "Model" => "型号",
         "{percent} % · last known" => "{percent} % · 上次值",
 
-        // Selected key and action editor.
-        "Selected key" => "所选按键",
+        // Action editor dialog.
         "Key" => "按键",
-        "Learn…" => "学习…",
-        "Press a physical remote key to select it" => "按下遥控器上的实体按键以选择",
-        "Gesture" => "手势",
-        "Action" => "操作",
         "Type" => "类型",
         "Learn Key" => "学习按键",
         "Capture a keyboard key or chord" => "捕获键盘按键或组合键",
         "Command" => "命令",
         "Dictation" => "听写",
         "Mapping" => "映射",
-        "Update this slot, then use Apply in the header to save." => {
-            "更新此槽位，然后使用顶部的“应用”保存。"
-        }
+        "Custom mapping" => "自定义映射",
+        "Profile default" => "配置文件默认值",
+        "Unbound" => "未绑定",
         "Reset" => "重置",
         "Restore the profile default" => "恢复配置文件默认值",
         "Update" => "更新",
@@ -151,7 +159,17 @@ fn zh(text: &str) -> Option<&'static str> {
             "命令以当前用户身份运行，超时 5 秒，标准输入输出已关闭。"
         }
         "Shell commands are disabled. Turn on “Allow shell commands” below first." => {
-            "Shell 命令已禁用。请先开启下方的“允许 shell 命令”。"
+            "Shell 命令已禁用。请先开启“允许 shell 命令”。"
+        }
+        "Learn remote…" => "学习遥控器…",
+        "Press a physical remote key to select its slot" => "按下遥控器实体按键以选择其槽位",
+        "The button is swallowed; nothing is emitted." => "按键被吞掉，不发出任何操作。",
+        "One key, emitted after the gesture." => "手势识别后发出单个按键。",
+        "A chord, emitted after the gesture. Modifiers follow ctrl, alt, shift, super." => {
+            "手势识别后发出按键组合。修饰键顺序为 ctrl、alt、shift、super。"
+        }
+        "Controls the ATVV microphone: start, stop, or toggle." => {
+            "控制 ATVV 麦克风：开始、停止或切换录音。"
         }
 
         // Recording key.
@@ -162,8 +180,9 @@ fn zh(text: &str) -> Option<&'static str> {
         }
         "Output key" => "输出按键",
         "Capture a key or chord for the output" => "捕获用于输出的按键或组合键",
-        "Emitted while the recording key is held; Apply saves." => "按住录音键时发出；应用后保存。",
         "Restore DICTATE" => "恢复为 DICTATE",
+        "Reset to DICTATE" => "重置为 DICTATE",
+        "Output" => "输出",
         "Declared key…" => "声明键…",
         "Choose a declared recording key" => "选择契约声明的录音键",
         "Default" => "默认",
@@ -180,21 +199,23 @@ fn zh(text: &str) -> Option<&'static str> {
             "vinput 集成已关闭；不会发出输出按键。"
         }
 
-        // Test mode and advanced policy.
-        "Test mode" => "测试模式",
-        "Last test" => "上次测试",
-        "Test mode is off" => "测试模式已关闭",
+        // Test bar and advanced policy.
+        "Test mode off" => "测试模式已关闭",
+        "Test mode on" => "测试模式已开启",
+        "Turn on Test to see what each key sends." => "开启“测试”以查看每个按键发送的内容。",
+        "Press a remote key — shortcuts, volume, and dictation are suppressed." => {
+            "按下遥控器按键——快捷键、音量和听写会被抑制。"
+        }
+        "Last resolved action" => "最近解析的操作",
+        "{button} · {trigger}" => "{button} · {trigger}",
         "Run once" => "运行一次",
         "Run the displayed action once through atvvd" => "通过 atvvd 运行一次显示的操作",
-        "{button} · {trigger} → {action}" => "{button} · {trigger} → {action}",
-        "Advanced" => "高级",
         "Allow shell commands" => "允许 shell 命令",
         "Exec mappings run as your user with a 5 s timeout. Off by default." => {
             "Exec 映射以当前用户身份运行，超时 5 秒。默认关闭。"
         }
 
         // Pages and unavailable state.
-        "Key mapping" => "按键映射",
         "Start the ATVV daemon with “systemctl --user start atvvd”, then retry." => {
             "使用“systemctl --user start atvvd”启动 ATVV 守护进程，然后重试。"
         }
@@ -228,7 +249,7 @@ fn zh(text: &str) -> Option<&'static str> {
         "Action sent" => "操作已发送",
         "Action failed: {error}" => "操作失败：{error}",
         "Selected {button} · {trigger}" => "已选择 {button} · {trigger}",
-        "{button} · {trigger}{default_hint}" => "{button} · {trigger}{default_hint}",
+        "Recording key selected" => "已选择录音键",
         "Microphone key (not remappable)" => "麦克风键（不可重映射）",
         "No action" => "无操作",
         "Waiting for a remote key…" => "等待遥控器按键…",
@@ -237,8 +258,6 @@ fn zh(text: &str) -> Option<&'static str> {
         "Profile default restored" => "已恢复配置文件默认值",
         "Recording output key updated" => "录音输出按键已更新",
         "Recording output key reset" => "录音输出按键已重置",
-        " · profile default" => " · 配置文件默认值",
-        "Voice key · output configurable" => "语音键 · 输出可配置",
 
         // Window subtitle.
         "{device} · recording" => "{device} · 录音中",
@@ -256,6 +275,18 @@ fn zh(text: &str) -> Option<&'static str> {
         "Single" => "单击",
         "Double" => "双击",
         "Long" => "长按",
+        "None" => "无",
+        "Command…" => "命令…",
+        "Start dictation" => "开始听写",
+        "Stop dictation" => "停止听写",
+        "Toggle dictation" => "切换听写",
+        "Return" => "回车",
+        "Backspace" => "退格",
+        "Delete" => "删除",
+        "Escape" => "Esc",
+        "Space" => "空格",
+        "Tab" => "制表",
+        "Play/Pause" => "播放/暂停",
 
         // Remote buttons.
         "Power" => "电源",
@@ -272,8 +303,19 @@ fn zh(text: &str) -> Option<&'static str> {
         "Volume down" => "音量减",
         "Voice" => "语音",
 
-        // Diagram text.
+        // Board and diagram text.
         "Remote diagram unavailable" => "遥控器示意图不可用",
+        "Click a slot to edit it; click a key on the remote to edit its single action." => {
+            "点击槽位进行编辑；点击遥控器上的按键编辑其单击操作。"
+        }
+        "Another key sends the same action in this gesture slot" => {
+            "另一个按键在同一手势槽位发送相同的操作"
+        }
+        "Recording key settings" => "录音键设置",
+        "Voice key" => "语音键",
+        "Fixed KEY_F5 · ATVV microphone" => "固定 KEY_F5 · ATVV 麦克风",
+        "{button} {trigger}: {action}" => "{button} {trigger}：{action}",
+        "{button} · {trigger} · {raw}" => "{button} · {trigger} · {raw}",
         "Voice key: drives the ATVV microphone and is not remappable" => {
             "语音键：控制 ATVV 麦克风，不可重映射"
         }
@@ -313,6 +355,7 @@ mod tests {
 
     #[test]
     fn catalog_translates_and_falls_back() {
+        let _guard = language_guard();
         Language::set(Language::English);
         assert_eq!(tr("Apply"), "Apply");
         assert_eq!(zh("Apply"), Some("应用"));
