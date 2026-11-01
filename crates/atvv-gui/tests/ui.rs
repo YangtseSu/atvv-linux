@@ -104,7 +104,15 @@ fn window_smoke() {
         window.hardware_text(HardwareField::Serial).as_deref(),
         Some("250519")
     );
-    assert!(window.chip_device_text().contains("RC003"));
+    assert_eq!(
+        window.chip_device_text(),
+        "Xiaomi Bluetooth Remote 2 Pro (RC003)"
+    );
+    assert_eq!(window.subtitle_text(), "RC003 · ready");
+    assert_eq!(
+        window.device_name_text(),
+        "Xiaomi Bluetooth Remote 2 Pro (RC003)"
+    );
 
     window.set_status(status(false, 61));
     assert_eq!(window.battery_text(), "61 % · last known");
@@ -289,6 +297,62 @@ fn window_smoke() {
         "F23",
         "the voice card shows the output key"
     );
+
+    // The searchable picker lists canonical names and inserts the chosen key.
+    window
+        .board()
+        .slot(RemoteButton::Menu, Trigger::Long)
+        .expect("menu long")
+        .emit_clicked();
+    window.editor().type_row().set_selected(1);
+    window.editor().choose_key_button().emit_clicked();
+    pump(30);
+    assert!(window.editor().picker().is_open());
+    window.editor().picker().search().set_text("print");
+    pump(30);
+    let visible = window.editor().picker().visible_names();
+    assert!(
+        visible.contains(&"KEY_SYSRQ"),
+        "Print Screen missing from the filtered list: {visible:?}"
+    );
+    assert!(
+        !visible.contains(&"KEY_A"),
+        "filter did not hide unrelated keys: {visible:?}"
+    );
+    assert!(window.editor().picker().select("KEY_SYSRQ"));
+    pump(30);
+    assert!(!window.editor().picker().is_open());
+    assert_eq!(window.editor().value_row().text().as_str(), "KEY_SYSRQ");
+    window.editor().update_button().emit_clicked();
+    pump(30);
+    assert_eq!(
+        window.document().expect("document").buttons["menu"]
+            .long
+            .as_deref(),
+        Some("key:KEY_SYSRQ")
+    );
+    assert_eq!(
+        window.board().slot_text(RemoteButton::Menu, Trigger::Long),
+        Some("Print Screen".to_string())
+    );
+
+    // A pick inside a chord keeps the held modifiers.
+    window
+        .board()
+        .slot(RemoteButton::Menu, Trigger::Long)
+        .expect("menu long")
+        .emit_clicked();
+    window.editor().type_row().set_selected(2);
+    window.editor().value_row().set_text("ctrl+alt+v");
+    window.editor().choose_key_button().emit_clicked();
+    pump(30);
+    assert!(window.editor().picker().select("KEY_SYSRQ"));
+    assert_eq!(
+        window.editor().value_row().text().as_str(),
+        "ctrl+alt+KEY_SYSRQ"
+    );
+    window.editor().cancel_button().emit_clicked();
+    pump(30);
 
     // exec stays opt-in: the dialog rejects it while the policy is off.
     window

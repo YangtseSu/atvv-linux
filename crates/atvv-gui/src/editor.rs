@@ -19,6 +19,7 @@ use adw::prelude::*;
 
 use crate::actions::{ActionDraft, ActionKind, DictationChoice};
 use crate::i18n::{tr, tr_args};
+use crate::keypicker::KeyPicker;
 use crate::model::{GuiModel, button_label, trigger_label};
 
 /// Hint shown under the action fields.
@@ -102,6 +103,7 @@ fn error_label() -> gtk::Label {
 struct EditorRows {
     type_row: adw::ComboRow,
     value_row: adw::EntryRow,
+    choose_key: gtk::Button,
     learn_key: gtk::Button,
     exec_row: adw::EntryRow,
     allow_row: adw::SwitchRow,
@@ -118,6 +120,7 @@ impl EditorRows {
         let allow = self.allow_exec.get();
         let key_value = matches!(kind, ActionKind::Key | ActionKind::Combo);
         self.value_row.set_visible(key_value);
+        self.choose_key.set_visible(key_value);
         self.learn_key.set_visible(key_value);
         self.value_row.set_title(if kind == ActionKind::Combo {
             tr("Chord")
@@ -131,6 +134,22 @@ impl EditorRows {
         self.hint.set_text(action_hint(kind, allow));
         self.update.set_sensitive(kind != ActionKind::Exec || allow);
     }
+
+    /// Insert a picked key, preserving chord modifiers.
+    fn set_chosen_key(&self, name: &str) {
+        match ActionKind::from_index(self.type_row.selected()) {
+            ActionKind::Key => self.value_row.set_text(name),
+            ActionKind::Combo => {
+                let current = self.value_row.text().to_string();
+                let prefix = current
+                    .rsplit_once('+')
+                    .map(|(prefix, _)| format!("{prefix}+"))
+                    .unwrap_or_default();
+                self.value_row.set_text(&format!("{prefix}{name}"));
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Editor for one button/gesture slot.
@@ -143,6 +162,7 @@ pub struct ActionEditor {
     reset: gtk::Button,
     cancel: gtk::Button,
     learn_remote: gtk::Button,
+    picker: Rc<KeyPicker>,
     open: Rc<Cell<bool>>,
 }
 
@@ -160,9 +180,13 @@ impl ActionEditor {
             .selected(0)
             .build();
         let value_row = adw::EntryRow::builder().title(tr("Key")).build();
+        let choose_key = gtk::Button::with_label(tr("Choose…"));
+        choose_key.add_css_class("flat");
+        choose_key.set_tooltip_text(Some(tr("Choose a key by name")));
         let learn_key = gtk::Button::with_label(tr("Learn Key"));
         learn_key.add_css_class("flat");
         learn_key.set_tooltip_text(Some(tr("Capture a keyboard key or chord")));
+        value_row.add_suffix(&choose_key);
         value_row.add_suffix(&learn_key);
         let exec_row = adw::EntryRow::builder().title(tr("Command")).build();
         let allow_row = adw::SwitchRow::builder()
@@ -229,6 +253,7 @@ impl ActionEditor {
         let rows = Rc::new(EditorRows {
             type_row,
             value_row,
+            choose_key,
             learn_key,
             exec_row,
             allow_row,
@@ -242,6 +267,18 @@ impl ActionEditor {
         rows.type_row
             .connect_selected_notify(move |_| refresh.refresh());
 
+        let picker_rows = Rc::clone(&rows);
+        let picker_error = error.clone();
+        let picker = Rc::new(KeyPicker::new(move |name| {
+            picker_rows.set_chosen_key(name);
+            picker_error.set_text("");
+            picker_error.set_visible(false);
+        }));
+        let picker_for_button = Rc::clone(&picker);
+        let dialog_for_button = dialog.clone();
+        rows.choose_key
+            .connect_clicked(move |_| picker_for_button.present(&dialog_for_button));
+
         let editor = Self {
             dialog,
             title,
@@ -251,6 +288,7 @@ impl ActionEditor {
             reset,
             cancel,
             learn_remote,
+            picker,
             open: Rc::new(Cell::new(false)),
         };
         let open = Rc::clone(&editor.open);
@@ -414,6 +452,17 @@ impl ActionEditor {
     #[must_use]
     pub fn learn_key_button(&self) -> &gtk::Button {
         &self.rows.learn_key
+    }
+
+    #[must_use]
+    pub fn choose_key_button(&self) -> &gtk::Button {
+        &self.rows.choose_key
+    }
+
+    /// The searchable key picker, exposed for tests.
+    #[must_use]
+    pub fn picker(&self) -> &KeyPicker {
+        &self.picker
     }
 
     #[must_use]

@@ -104,6 +104,7 @@ fn zh(text: &str) -> Option<&'static str> {
         "Device information" => "设备信息",
         "Bluetooth and GATT facts" => "蓝牙与 GATT 信息",
         "Address" => "地址",
+        "Name" => "名称",
         "Close" => "关闭",
         "No remote" => "无遥控器",
         "No remote connected" => "未连接遥控器",
@@ -155,6 +156,10 @@ fn zh(text: &str) -> Option<&'static str> {
         "Restore the profile default" => "恢复配置文件默认值",
         "Update" => "更新",
         "Chord" => "组合键",
+        "Choose…" => "选择…",
+        "Choose a key by name" => "按键名选择按键",
+        "Choose key" => "选择按键",
+        "Search keys" => "搜索按键",
         "The command runs as your user with a 5 s timeout and closed stdio." => {
             "命令以当前用户身份运行，超时 5 秒，标准输入输出已关闭。"
         }
@@ -287,6 +292,7 @@ fn zh(text: &str) -> Option<&'static str> {
         "Space" => "空格",
         "Tab" => "制表",
         "Play/Pause" => "播放/暂停",
+        "Print Screen" => "打印屏幕",
 
         // Remote buttons.
         "Power" => "电源",

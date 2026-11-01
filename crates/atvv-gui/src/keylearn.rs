@@ -36,7 +36,12 @@ fn canonical_key(name: &str) -> Option<String> {
     if name.is_empty() || is_modifier_name(name) {
         return None;
     }
-    let candidate = if name.chars().count() == 1
+    // GDK reports the Print Screen keysym as `Print` (and Alt+Print as
+    // `Sys_Req`); the kernel code for that physical key is `KEY_SYSRQ`.
+    // Synthesizing `KEY_PRINT` would emit the legacy print key instead.
+    let candidate = if matches!(name, "Print" | "Sys_Req") {
+        "KEY_SYSRQ".to_string()
+    } else if name.chars().count() == 1
         && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
     {
         name.to_ascii_lowercase()
@@ -105,6 +110,22 @@ mod tests {
         assert_eq!(
             learn_action("slash", false, false, false, false).as_deref(),
             Some("key:slash")
+        );
+    }
+
+    #[test]
+    fn print_screen_learns_the_sysrq_key() {
+        assert_eq!(
+            learn_action("Print", false, false, false, false).as_deref(),
+            Some("key:KEY_SYSRQ")
+        );
+        assert_eq!(
+            learn_action("Sys_Req", false, false, false, false).as_deref(),
+            Some("key:KEY_SYSRQ")
+        );
+        assert_eq!(
+            learn_action("Print", true, false, false, false).as_deref(),
+            Some("combo:ctrl+KEY_SYSRQ")
         );
     }
 

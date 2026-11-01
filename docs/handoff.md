@@ -7,7 +7,7 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 199 passed, 5 ignored tests (two
+- Tests: `cargo test --workspace` → 202 passed, 5 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, the real-device
   GUI test, and a locale-detection test; the first three pass with
   `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
@@ -177,8 +177,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   editor with inline validation, Reset/Cancel/Update, keyboard learning,
   `Learn remote…`, and the `allow_exec` confirmation. Test mode selects and
   highlights the pressed slot; the bottom bar shows the resolved action and an
-  explicit Run once. The header device chip shows the profile model and opens
-  a read-only device-information dialog, replacing the old sidebar. The
+  explicit Run once. The header device chip shows the BlueZ alias (falling
+  back to the profile display name/model) and opens a read-only
+  device-information dialog, replacing the old sidebar. The
   diagram minimum width dropped to 130 px so the board fits 1040×760 without
   scrolling. 36 card slots and 13 hotspots were clicked through XTest under
   Xvfb. Real-daemon save/persistence: the workspace GUI saved
@@ -199,6 +200,23 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `namcap` reports only the expected implicit-library/runtime notes; the
   packaged `atvv-config` rendered the board under Xvfb. The installed r8 pair
   remains active. The published `arch-pkgs` recipe is unchanged.
+- **Key-name picker and BlueZ alias (2026-11-01)**: the action editor's key
+  row gained **Choose…**, a searchable picker over
+  `atvv_input::KEY_NAMES` (curated canonical names; friendly labels from the
+  catalog). It inserts the canonical name and, in a chord, replaces only the
+  final key and keeps the modifiers. Learn Key maps the GDK `Print`/`Sys_Req`
+  keysyms to `KEY_SYSRQ` instead of the legacy `KEY_PRINT`;
+  `printscreen`/`prtsc`/`sysrq` aliases resolve to `KEY_SYSRQ`, and the board
+  shows `Print Screen`. The daemon now stores the BlueZ alias/name from
+  `Connected` and reports it as `StatusView.device.name` (falling back to the
+  profile display name); the GUI chip uses it, the subtitle shows
+  `{model} · {state}`, and the device dialog has a Name row. Live check with
+  the workspace daemon and the connected RC003: `atvvd` logged
+  `connected to 小米蓝牙语音遥控器` and `atvvctl status` reported
+  `device.name = 小米蓝牙语音遥控器`, `state ready`; `bluetoothctl` shows the
+  same alias. Tests: keymap alias/curated-name tests, the Print Screen learn
+  test, picker/chip/subtitle assertions in the UI and i18n suites, and the
+  daemon ready-status assertion. Screenshots refreshed.
 - **Recording-key declared chooser (2026-11-01)**: the recording-key page
   offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`) plus `None (disable synthetic key)` through **Declared key…**.

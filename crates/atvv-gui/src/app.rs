@@ -344,6 +344,7 @@ fn battery_text(status: Option<&DaemonStatus>) -> String {
 /// Passive device facts, shown from the menu and the header chip.
 struct DeviceDialog {
     dialog: adw::Dialog,
+    name_row: adw::ActionRow,
     battery_row: adw::ActionRow,
     address_row: adw::ActionRow,
     hardware_group: adw::PreferencesGroup,
@@ -353,11 +354,16 @@ struct DeviceDialog {
 impl DeviceDialog {
     fn new() -> Self {
         let remote_group = adw::PreferencesGroup::builder().title(tr("Remote")).build();
+        let name_row = adw::ActionRow::builder()
+            .title(tr("Name"))
+            .subtitle("—")
+            .build();
         let battery_row = adw::ActionRow::builder().title(tr("Battery")).build();
         let address_row = adw::ActionRow::builder()
             .title(tr("Address"))
             .subtitle("—")
             .build();
+        remote_group.add(&name_row);
         remote_group.add(&battery_row);
         remote_group.add(&address_row);
 
@@ -421,6 +427,7 @@ impl DeviceDialog {
 
         Self {
             dialog,
+            name_row,
             battery_row,
             address_row,
             hardware_group,
@@ -433,6 +440,11 @@ impl DeviceDialog {
     }
 
     fn refresh(&self, status: Option<&DaemonStatus>) {
+        let name = status
+            .map(|status| status.device.name.as_str())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("—");
+        self.name_row.set_subtitle(name);
         self.battery_row.set_subtitle(&battery_text(status));
         let address = status
             .map(|status| status.device.address.as_str())
@@ -449,6 +461,13 @@ impl DeviceDialog {
             any |= value.is_some();
         }
         self.hardware_group.set_visible(any);
+    }
+
+    fn name_text(&self) -> String {
+        self.name_row
+            .subtitle()
+            .map(|subtitle| subtitle.to_string())
+            .unwrap_or_default()
     }
 
     fn battery_text(&self) -> String {
@@ -1462,27 +1481,34 @@ impl AppWindow {
 
     fn refresh_title(&self) {
         let status = self.status.borrow();
+        let model = self
+            .model
+            .borrow()
+            .as_ref()
+            .map(|model| model.profile.model.to_string())
+            .filter(|model| !model.is_empty());
         let subtitle = match status.as_ref() {
             None => tr("Connecting…").to_string(),
             Some(status) => {
-                let device = if status.device.address.is_empty() {
-                    status.device.name.clone()
-                } else {
-                    status.device.address.clone()
-                };
-                if status.streaming {
-                    tr_args("{device} · recording", &[("device", &device)])
-                } else if device.is_empty() {
-                    if status.connected {
-                        status.state.clone()
+                let identity = model.clone().or_else(|| {
+                    if !status.device.name.is_empty() {
+                        Some(status.device.name.clone())
+                    } else if !status.device.address.is_empty() {
+                        Some(status.device.address.clone())
                     } else {
-                        tr("No remote connected").to_string()
+                        None
                     }
-                } else {
-                    tr_args(
+                });
+                match identity {
+                    Some(identity) if status.streaming => {
+                        tr_args("{device} · recording", &[("device", &identity)])
+                    }
+                    Some(identity) => tr_args(
                         "{device} · {state}",
-                        &[("device", &device), ("state", &status.state)],
-                    )
+                        &[("device", &identity), ("state", &status.state)],
+                    ),
+                    None if status.connected => status.state.clone(),
+                    None => tr("No remote connected").to_string(),
                 }
             }
         };
@@ -1493,34 +1519,45 @@ impl AppWindow {
         let status = self.status.borrow();
         let status = status.as_ref();
         let connected = status.is_some_and(|status| status.connected);
-        let name = status
-            .map(|status| {
-                if status.device.name.is_empty() {
-                    status.device.address.as_str()
-                } else {
-                    status.device.name.as_str()
-                }
-            })
+        let device_name = status
+            .map(|status| status.device.name.trim())
+            .filter(|name| !name.is_empty());
+        let address = status
+            .map(|status| status.device.address.as_str())
             .unwrap_or_default();
-        // The profile's model is the short, stable name; the BlueZ alias is
-        // the fallback before a document is loaded.
-        let model_name = self
+        // BlueZ's alias is the name the user recognizes and can edit; the
+        // profile's display name and model are the static fallbacks.
+        let profile = self
             .model
             .borrow()
             .as_ref()
-            .map(|model| model.profile.model.to_string());
-        let label = model_name
-            .filter(|model| !model.is_empty())
+            .map(|model| (model.profile.display_name, model.profile.model));
+        let label = device_name
+            .map(str::to_string)
+            .or_else(|| {
+                profile
+                    .map(|(display, _)| display.to_string())
+                    .filter(|display| !display.is_empty())
+            })
+            .or_else(|| {
+                profile
+                    .map(|(_, model)| model.to_string())
+                    .filter(|model| !model.is_empty())
+            })
             .unwrap_or_else(|| {
-                if name.is_empty() {
+                if address.is_empty() {
                     tr("No remote").to_string()
                 } else {
-                    name.to_string()
+                    address.to_string()
                 }
             });
         self.device_chip_name.set_text(&label);
-        self.device_chip
-            .set_tooltip_text(Some(if name.is_empty() { &label } else { name }));
+        let tooltip = if address.is_empty() {
+            label.clone()
+        } else {
+            address.to_string()
+        };
+        self.device_chip.set_tooltip_text(Some(&tooltip));
         if connected {
             self.device_chip_icon.remove_css_class("dim-label");
         } else {
@@ -1537,10 +1574,7 @@ impl AppWindow {
             self.device_chip_battery_icon
                 .set_icon_name(Some(battery_icon(percent)));
         }
-        let accessible = tr_args(
-            "Device: {name}",
-            &[("name", if name.is_empty() { "—" } else { name })],
-        );
+        let accessible = tr_args("Device: {name}", &[("name", &label)]);
         self.device_chip
             .update_property(&[gtk::accessible::Property::Label(&accessible)]);
     }
@@ -1610,6 +1644,18 @@ impl AppWindow {
     #[must_use]
     pub fn battery_text(&self) -> String {
         self.device_dialog.battery_text()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn device_name_text(&self) -> String {
+        self.device_dialog.name_text()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn subtitle_text(&self) -> String {
+        self.title.subtitle().to_string()
     }
 
     #[doc(hidden)]

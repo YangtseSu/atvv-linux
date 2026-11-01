@@ -159,6 +159,7 @@ pub fn friendly_key(name: &str) -> String {
         "KEY_VOLUMEUP" => Some(tr("Volume up")),
         "KEY_VOLUMEDOWN" => Some(tr("Volume down")),
         "KEY_POWER" => Some(tr("Power")),
+        "KEY_SYSRQ" => Some(tr("Print Screen")),
         "KEY_ESC" => Some(tr("Escape")),
         "KEY_SPACE" => Some(tr("Space")),
         "KEY_TAB" => Some(tr("Tab")),

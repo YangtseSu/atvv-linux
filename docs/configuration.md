@@ -73,9 +73,11 @@ dictation:start|stop|toggle
 ```
 
 Key names use the same resolver as the input runtime: kernel names
-(`KEY_F13`), aliases (`ctrl`, `alt`, `super`, `enter`, `esc`, `dictate`), and
-synthesized `KEY_<NAME>` forms are accepted. Chords press modifiers first and
-release them in reverse. A key may appear only once in a chord.
+(`KEY_F13`, `KEY_SYSRQ` for Print Screen), aliases (`ctrl`, `alt`, `super`,
+`enter`, `esc`, `dictate`, `printscreen`), and synthesized `KEY_<NAME>` forms
+are accepted. `print` is the legacy `KEY_PRINT`, not the screenshot key.
+`KEY_SYSRQ` can also be written as `sysrq` or `prtsc`. Chords press modifiers
+first and release them in reverse. A key may appear only once in a chord.
 
 `none` swallows the button. `dictation:start|stop|toggle` drives the ATVV
 session only; it does not emit a key.

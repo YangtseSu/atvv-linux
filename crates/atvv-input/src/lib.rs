@@ -26,7 +26,9 @@ pub use device::{
 };
 pub use fake::{FAKE_REMOTE, FakeRemote, FakeRemoteError};
 pub use gesture::{Gesture, GestureEngine, Policy, Timing};
-pub use keymap::{KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program, resolve_key};
+pub use keymap::{
+    KEY_NAMES, KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program, resolve_key,
+};
 pub use runtime::{InputError, InputOptions, InputRuntime, RemoteEvent};
 pub use vkbd::{
     KeyStep, KeyboardError, VirtualKeyboard, hold_frame, key_events, release_frame, tap_frames,

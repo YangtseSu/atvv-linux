@@ -63,11 +63,15 @@ dialog.
 ## Header
 
 - **Menu**: *Device information…*, *Revert changes*, *About ATVV*, and *Quit*.
-- **Device chip**: the profile model (`RC003`) and the battery level. It opens
-  the read-only *Device information* dialog with the battery, the remote
-  address, and the Device Information Service facts (firmware, hardware and
-  software revisions, serial number, manufacturer, model). Rows without a
-  value are hidden; a disconnected battery reads `last known`.
+- **Device chip**: the name BlueZ reports for the remote (the user-editable
+  alias, for example the remote's own name) and the battery level. Without a
+  BlueZ name it falls back to the profile display name and model. It opens the
+  read-only *Device information* dialog with the name, battery, remote address,
+  and the Device Information Service facts (firmware, hardware and software
+  revisions, serial number, manufacturer, model). Rows without a value are
+  hidden; a disconnected battery reads `last known`.
+- **Subtitle**: the profile model (`RC003`) and the session state. The
+  Bluetooth address lives in the device information dialog.
 - **Test**, **Revert**, and **Apply**.
 
 The device chip covers the one active device. Switching between known remotes
@@ -87,8 +91,11 @@ information instead of a device list.
    - *Key combination* emits a chord, for example `ctrl+alt+v`.
    - *Run a command* runs `exec:<command>` through the daemon.
    - *Dictation* starts, stops, or toggles the ATVV microphone.
-3. Type the value or use **Learn Key**. Modifiers held while learning become
-   part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
+3. Type the value, use **Learn Key**, or use **Choose…** for a searchable
+   list of kernel key names with their friendly labels. The picker inserts the
+   chosen key; in a chord it replaces only the final key and keeps the
+   modifiers. Print Screen is `KEY_SYSRQ`. Modifiers held while learning
+   become part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
 4. Click **Update**. The dialog closes, the board shows the new action, and
    **Apply** in the header becomes active.
 

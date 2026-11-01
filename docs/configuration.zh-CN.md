@@ -70,9 +70,11 @@ exec:<command>
 dictation:start|stop|toggle
 ```
 
-按键名称使用与输入运行时相同的解析器：内核名称（`KEY_F13`）、别名（`ctrl`、
-`alt`、`super`、`enter`、`esc`、`dictate`）以及合成的 `KEY_<NAME>` 形式都可接受。
-组合键先按下修饰键，再按相反顺序释放。一个按键在组合键中只能出现一次。
+按键名称使用与输入运行时相同的解析器：内核名称（`KEY_F13`、截屏键
+`KEY_SYSRQ`）、别名（`ctrl`、`alt`、`super`、`enter`、`esc`、`dictate`、
+`printscreen`）以及合成的 `KEY_<NAME>` 形式都可接受。`print` 是旧的
+`KEY_PRINT`，不是截屏键；`KEY_SYSRQ` 也可写作 `sysrq` 或 `prtsc`。组合键先按下
+修饰键，再按相反顺序释放。一个按键在组合键中只能出现一次。
 
 `none` 会吞掉按键。`dictation:start|stop|toggle` 只驱动 ATVV 会话，不发出按键。
 

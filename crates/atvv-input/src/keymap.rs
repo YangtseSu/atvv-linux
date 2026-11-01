@@ -154,9 +154,120 @@ const ALIASES: &[(&str, Key)] = &[
     ("nextsong", Key::KEY_NEXTSONG),
     ("prevsong", Key::KEY_PREVIOUSSONG),
     ("power", Key::KEY_POWER),
+    ("printscreen", Key::KEY_SYSRQ),
+    ("prtsc", Key::KEY_SYSRQ),
+    ("sysrq", Key::KEY_SYSRQ),
     ("homepage", Key::KEY_HOMEPAGE),
     ("brightnessup", Key::KEY_BRIGHTNESSUP),
     ("brightnessdown", Key::KEY_BRIGHTNESSDOWN),
+];
+
+/// Key names offered by pickers and key-name diagnostics.
+///
+/// The list is curated for binding: system and media keys, function keys,
+/// navigation and editing, punctuation, letters, and digits. Every entry
+/// resolves through [`resolve_key`]; a test enforces it. Free-form input still
+/// accepts any kernel name that is not listed here.
+pub const KEY_NAMES: &[&str] = &[
+    "KEY_SYSRQ",
+    "KEY_POWER",
+    "KEY_MUTE",
+    "KEY_VOLUMEUP",
+    "KEY_VOLUMEDOWN",
+    "KEY_MICMUTE",
+    "KEY_PLAYPAUSE",
+    "KEY_NEXTSONG",
+    "KEY_PREVIOUSSONG",
+    "KEY_BRIGHTNESSUP",
+    "KEY_BRIGHTNESSDOWN",
+    "KEY_HOMEPAGE",
+    "KEY_COMPOSE",
+    "KEY_F1",
+    "KEY_F2",
+    "KEY_F3",
+    "KEY_F4",
+    "KEY_F5",
+    "KEY_F6",
+    "KEY_F7",
+    "KEY_F8",
+    "KEY_F9",
+    "KEY_F10",
+    "KEY_F11",
+    "KEY_F12",
+    "KEY_F13",
+    "KEY_F14",
+    "KEY_F15",
+    "KEY_F16",
+    "KEY_F17",
+    "KEY_F18",
+    "KEY_F19",
+    "KEY_F20",
+    "KEY_F21",
+    "KEY_F22",
+    "KEY_F23",
+    "KEY_F24",
+    "KEY_ESC",
+    "KEY_TAB",
+    "KEY_SPACE",
+    "KEY_ENTER",
+    "KEY_BACKSPACE",
+    "KEY_DELETE",
+    "KEY_INSERT",
+    "KEY_HOME",
+    "KEY_END",
+    "KEY_PAGEUP",
+    "KEY_PAGEDOWN",
+    "KEY_UP",
+    "KEY_DOWN",
+    "KEY_LEFT",
+    "KEY_RIGHT",
+    "KEY_GRAVE",
+    "KEY_MINUS",
+    "KEY_EQUAL",
+    "KEY_LEFTBRACE",
+    "KEY_RIGHTBRACE",
+    "KEY_BACKSLASH",
+    "KEY_SEMICOLON",
+    "KEY_APOSTROPHE",
+    "KEY_COMMA",
+    "KEY_DOT",
+    "KEY_SLASH",
+    "KEY_A",
+    "KEY_B",
+    "KEY_C",
+    "KEY_D",
+    "KEY_E",
+    "KEY_F",
+    "KEY_G",
+    "KEY_H",
+    "KEY_I",
+    "KEY_J",
+    "KEY_K",
+    "KEY_L",
+    "KEY_M",
+    "KEY_N",
+    "KEY_O",
+    "KEY_P",
+    "KEY_Q",
+    "KEY_R",
+    "KEY_S",
+    "KEY_T",
+    "KEY_U",
+    "KEY_V",
+    "KEY_W",
+    "KEY_X",
+    "KEY_Y",
+    "KEY_Z",
+    "KEY_0",
+    "KEY_1",
+    "KEY_2",
+    "KEY_3",
+    "KEY_4",
+    "KEY_5",
+    "KEY_6",
+    "KEY_7",
+    "KEY_8",
+    "KEY_9",
 ];
 
 fn normalize(name: &str) -> String {
@@ -307,6 +418,28 @@ mod tests {
         assert_eq!(resolve_key("7"), Some(Key::KEY_7));
         assert_eq!(resolve_key("context-menu"), Some(Key::KEY_CONTEXT_MENU));
         assert_eq!(resolve_key("no-such-key"), None);
+    }
+
+    #[test]
+    fn print_screen_names_resolve_to_sysrq() {
+        assert_eq!(resolve_key("KEY_SYSRQ"), Some(Key::KEY_SYSRQ));
+        assert_eq!(resolve_key("sysrq"), Some(Key::KEY_SYSRQ));
+        assert_eq!(resolve_key("printscreen"), Some(Key::KEY_SYSRQ));
+        assert_eq!(resolve_key("PrintScreen"), Some(Key::KEY_SYSRQ));
+        assert_eq!(resolve_key("prtsc"), Some(Key::KEY_SYSRQ));
+        // `print` stays the legacy kernel key, not the screenshot key.
+        assert_eq!(resolve_key("print"), Some(Key::KEY_PRINT));
+        assert_ne!(Key::KEY_PRINT, Key::KEY_SYSRQ);
+    }
+
+    #[test]
+    fn curated_key_names_all_resolve() {
+        for name in KEY_NAMES {
+            assert!(name.starts_with("KEY_"), "{name}");
+            assert!(resolve_key(name).is_some(), "{name}");
+        }
+        assert!(KEY_NAMES.contains(&"KEY_SYSRQ"));
+        assert!(KEY_NAMES.contains(&"KEY_F24"));
     }
 
     #[test]

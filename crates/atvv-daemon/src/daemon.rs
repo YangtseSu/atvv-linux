@@ -241,6 +241,8 @@ pub struct Daemon {
     input_retry_at: Option<Instant>,
 
     connected: bool,
+    /// BlueZ alias/name of the last connected remote.
+    device_alias: Option<String>,
     hardware: HardwareView,
     next_hardware_at: Option<Instant>,
     last_status_at: Instant,
@@ -390,6 +392,7 @@ impl Daemon {
             config_loaded: config.config_loaded,
             input_retry_at: None,
             connected: false,
+            device_alias: None,
             hardware: HardwareView::default(),
             next_hardware_at: None,
             last_status_at: Instant::now(),
@@ -536,6 +539,7 @@ impl Daemon {
             self.execute(actions);
         }
         self.connected = true;
+        self.device_alias = Some(name.clone());
         self.session = Session::new(self.profile);
         self.accumulator = None;
         self.caps_deadline = Some(Instant::now() + self.caps_timeout);
@@ -1337,7 +1341,10 @@ impl Daemon {
             streaming: self.session.state() == SessionState::Streaming,
             device: DeviceView {
                 id: self.profile.id.to_string(),
-                name: self.profile.display_name.to_string(),
+                name: self
+                    .device_alias
+                    .clone()
+                    .unwrap_or_else(|| self.profile.display_name.to_string()),
                 model: self.profile.model.to_string(),
                 address: self.address.clone(),
                 transport: self.transport.kind().to_string(),
@@ -1673,6 +1680,9 @@ mod tests {
 
         let status = wait_for(&handle, |status| status.state == "ready");
         assert!(status.connected);
+        // The BlueZ alias/name from the link replaces the static profile name.
+        assert_eq!(status.device.name, "ATVV mock remote");
+        assert_eq!(status.device.model, "RC003");
         handle.send(Command::Shutdown).unwrap();
     }
 

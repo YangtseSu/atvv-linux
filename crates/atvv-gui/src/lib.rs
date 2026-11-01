@@ -16,4 +16,5 @@ pub mod diagram;
 pub mod editor;
 pub mod i18n;
 pub mod keylearn;
+pub mod keypicker;
 pub mod model;

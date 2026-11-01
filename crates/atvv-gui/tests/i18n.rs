@@ -44,7 +44,7 @@ fn chinese_window() {
         streaming: false,
         last_error: None,
         device: DeviceInfo {
-            name: "Xiaomi Bluetooth Remote 2 Pro (RC003)".to_string(),
+            name: "小米蓝牙语音遥控器".to_string(),
             address: "C0:5D:39:F8:2D:4C".to_string(),
         },
         hardware: HardwareInfo {
@@ -71,6 +71,9 @@ fn chinese_window() {
     gtk::test_widget_wait_for_draw(window.window());
 
     assert_eq!(window.window().title().as_deref(), Some("ATVV 遥控器"));
+    assert_eq!(window.chip_device_text(), "小米蓝牙语音遥控器");
+    assert_eq!(window.subtitle_text(), "RC003 · ready");
+    assert_eq!(window.device_name_text(), "小米蓝牙语音遥控器");
     assert_eq!(window.battery_text(), "62 %");
     assert_eq!(
         window.hardware_text(HardwareField::Firmware).as_deref(),
@@ -128,6 +131,33 @@ fn chinese_window() {
         .emit_clicked();
     assert_eq!(window.editor().title(), "上 · 单击");
     assert_eq!(window.editor().value_row().text().as_str(), "KEY_UP");
+    assert_eq!(
+        window.editor().choose_key_button().label().as_deref(),
+        Some("选择…")
+    );
+    window.editor().choose_key_button().emit_clicked();
+    assert!(window.editor().picker().is_open());
+    assert_eq!(
+        window.editor().picker().dialog().title().as_str(),
+        "选择按键"
+    );
+    assert_eq!(
+        window
+            .editor()
+            .picker()
+            .search()
+            .placeholder_text()
+            .as_deref(),
+        Some("搜索按键")
+    );
+    window.editor().picker().search().set_text("打印");
+    let visible = window.editor().picker().visible_names();
+    assert!(
+        visible.contains(&"KEY_SYSRQ"),
+        "Print Screen missing from the Chinese list: {visible:?}"
+    );
+    assert!(window.editor().picker().select("KEY_SYSRQ"));
+    assert_eq!(window.editor().value_row().text().as_str(), "KEY_SYSRQ");
     window.editor().cancel_button().emit_clicked();
 
     window
