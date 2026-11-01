@@ -97,6 +97,9 @@ device-information dialog opened by the header chip and the menu.
     invalid input leaves the old map, and test mode selects the pressed slot.
   - XTest pointer clicks on every card slot (36) and hotspot (13) under
     `xvfb-run`; each click asserts the model selection and dialog target.
+  - A narrow-window test builds the board at 700×560, checks that both
+    scrollbars overflow, and asserts that selecting TV or Power scrolls the
+    slot into the visible viewport.
   - [hardware] Real RC003-profile save/persistence check after the layout
     change: the workspace GUI saved `up/double = key:KEY_F13` through the board
     and dialog to the live `atvvd`, and `atvvctl config get --json` returned the
@@ -133,9 +136,11 @@ Run from the repository root on 2026-11-01:
 ```text
 cargo fmt --all -- --check                              # clean
 cargo clippy --workspace --all-targets -- -D warnings   # clean
-cargo test --workspace                                  # 198 passed, 5 ignored
+cargo test --workspace                                  # 199 passed, 5 ignored
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
   cargo test -p atvv-gui --test ui                      # 1 passed (36+13 clicks)
+GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
+  cargo test -p atvv-gui --test narrow                  # 1 passed
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
   cargo test -p atvv-gui --test i18n                    # 1 passed, 1 ignored
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
@@ -173,7 +178,8 @@ Manual:
   (step 21), and the editor omits the reference's raw-value preview line.
 - ✅ Apply/Revert remain atomic; invalid input leaves the old map active.
 - ✅ No SayAll/Open Voice Bridge code, photo, or screenshot is copied.
-- ✅ The board is usable at 1040×760 and at a narrow window via scrolling.
+- ✅ The board is usable at 1040×760 and at a narrow window via scrolling;
+  the narrow-window test proves the overflow and scroll-into-view behavior.
 - ✅ The current `-git` packages contain the new GUI and keep GTK out of
   `atvv-git`.
 
