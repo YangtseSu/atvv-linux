@@ -276,6 +276,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   UID trigger and only test a rewrite after a verified dump and restore. NFC
   stays out of the daemon core. Needs an NFC reader; see
   `docs/plans/B02-nfc-tag.md`.
+- **Known defects (unfixed)**: README `## Known defects` lists four open
+  correctness issues found on 2026-11-01 and none of them needs a plan step:
+  `output_frame` panics on `i16::MIN` under `--verbose`; the PipeWire source
+  and `atvvctl record` take the sample rate from the profile instead of
+  `CAPS_RESP` and nothing resamples; a sub-7-byte `AUDIO_SYNC` becomes
+  `CtlEvent::Unknown` and floods the verbose log at one line per packet;
+  `DeviceProfile::stop_echo` and `direct_audio_start` are read by no control
+  flow. Fix them as `fix:` commits; the sample-rate one needs an ADR first.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
 power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07

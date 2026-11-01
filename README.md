@@ -128,6 +128,48 @@ Device support and the real-device record are in
 [`docs/device-support.md`](docs/device-support.md) and
 [`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md).
 
+## Known defects
+
+Open correctness issues found during real-device testing on 2026-11-01. Each
+is independent of the device that exposed it.
+
+- **`output_frame` panics on `i16::MIN`.** `crates/atvv-daemon/src/daemon.rs`
+  takes `sample.abs()` for the verbose first-frame peak. `i16::abs()` panics on
+  `-32768`, so `atvvd --verbose` aborts the moment a clipped frame arrives.
+  Reproduced with `atvvd --device <MAC> --verbose` plus `atvvctl mic start`;
+  the process dies with `attempt to negate with overflow` at `daemon.rs:613`.
+  In release builds the same expression wraps silently and returns `-32768`,
+  so the reported peak is negative instead of panicking; both behaviours were
+  confirmed with a standalone `i16::MIN.abs()` check. The fix is to widen to
+  `i32` before `abs` (or use `unsigned_abs`), and to keep the diagnostic path
+  free of arithmetic that can panic.
+- **`CAPS_RESP` is not authoritative for the sample rate.**
+  `crates/atvv-daemon/src/main.rs` builds the PipeWire source from
+  `profile.sample_rate`, and `crates/atvv-cli/src/main.rs` `record` writes the
+  WAV at `RC003.sample_rate`. The daemon parses `caps.codec` and reports
+  `adpcm-8k` in `atvvctl status`, but the audio graph stays at 16 kHz. A remote
+  that negotiates 8 kHz therefore plays at double speed with underrun gaps;
+  measured fill ratio was 43.9 % against the 52.2 % that a 268-sample frame
+  implies. ADR-worthy follow-up: derive the source rate from the negotiated
+  codec and resample when it disagrees with the profile, or renegotiate the
+  PipeWire node when `CAPS_RESP` arrives. `atvv-audio` has no resampling path
+  today.
+- **`AUDIO_SYNC` shorter than 7 bytes is dropped without a bounded-rate
+  diagnostic.** `crates/atvv-protocol/src/events.rs` requires
+  `data.len() >= 7` for opcode `0x0A` and otherwise returns
+  `CtlEvent::Unknown`. The daemon then prints one `unknown control
+  notification` line per packet under `--verbose` (151 lines in ~2 s observed),
+  which violates the "log protocol anomalies at a bounded rate" rule in
+  `AGENTS.md`. A malformed or firmware-truncated sync also leaves the decoder
+  permanently stale, because `0x0A` is the only resynchronization mechanism in
+  v1.0. The fix is a dedicated error variant plus a rate-limited warning.
+- **`DeviceProfile::stop_echo` and `direct_audio_start` are never read by the
+  daemon.** Both fields are printed by `atvvctl profile show` and set by the
+  RC003 profile and the fake remote, but no control-flow branch consumes them;
+  the stop-echo behavior is unconditional in `Session::on_audio_stop`. Either
+  wire them into the session state machine or delete them, so the profile
+  stays the single source of device facts.
+
 ## Build and test
 
 ```sh
