@@ -44,13 +44,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
-- **v0.2.0 release (tagged)**: workspace version 0.2.0. The annotated tag
-  runs the tag-triggered release workflow for x86_64/aarch64 binaries, the
-  source archive, checksums, and generated notes. Highlights since v0.1.0:
-  named layouts (17), app-verified presets (18), pointer actions (22), the
-  key picker and BlueZ alias, and the CAPS-rate fix. AUR/VCS recipes are
+- **v0.2.0 release (published 2026-11-02)**: workspace version 0.2.0; the
+  annotated tag `v0.2.0` (`073fa93`) published
+  [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0)
+  with x86_64 (9.1 MB) and aarch64 (8.6 MB) binaries, the 2.24 MB source
+  archive, checksums, and generated notes. The tag CI passed; the
+  main-branch CI failed on a language-test race, fixed in the follow-up
+  commit without changing the binaries. Highlights since v0.1.0: named
+  layouts (17), app-verified presets (18), pointer actions (22), the key
+  picker and BlueZ alias, and the CAPS-rate fix. AUR/VCS recipes are
   external; the stable AUR `atvv` needs its `pkgver` and checksum updated
-  after the tag assets exist.
+  from the published source archive.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -711,7 +715,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**v0.2.0 is tagged.** The tag push runs the release workflow; the external
+**v0.2.0 is published.** The tag `v0.2.0` (`073fa93`) has the x86_64/aarch64
+binaries, source archive, checksums, and generated notes at
+<https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0>. The external
 AUR `atvv` recipe update follows the published source archive. `Cargo.toml`
 and `Cargo.lock` carry 0.2.0.
 

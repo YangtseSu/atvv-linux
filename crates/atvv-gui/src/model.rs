@@ -940,6 +940,8 @@ mod tests {
 
     #[test]
     fn switching_layouts_is_blocked_while_dirty() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
         let mut model = model();
         let id = model.create_layout("mpv", None, None).unwrap();
         assert_eq!(id, "mpv-layout");
@@ -1011,6 +1013,8 @@ mod tests {
 
     #[test]
     fn duplicate_names_and_reserved_names_are_rejected() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::English);
         let mut model = model();
         model.create_layout("Media", None, None).unwrap();
         let error = model.create_layout("media", None, None).unwrap_err();
