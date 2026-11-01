@@ -41,6 +41,8 @@ pub struct StatusView {
     pub connected: bool,
     pub streaming: bool,
     pub device: DeviceView,
+    /// Active key layout driving the input runtime.
+    pub layout: LayoutView,
     pub hardware: HardwareView,
     pub caps: Option<CapsView>,
     pub audio: AudioView,
@@ -52,6 +54,13 @@ pub struct StatusView {
     pub contract: ContractView,
     pub config: ConfigView,
     pub last_error: Option<String>,
+}
+
+/// Active layout; `id` is `default` for the synthesized template.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LayoutView {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

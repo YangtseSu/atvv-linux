@@ -13,7 +13,7 @@ Location: `$XDG_CONFIG_HOME/atvv/daemon.toml`, or `~/.config/atvv/daemon.toml`.
 ## Schema
 
 ```toml
-schema_version = 1
+schema_version = 2
 profile = "miremote-rc003"          # must match the build's profile
 device = "C0:5D:39:F8:2D:4C"        # written by `atvvctl pair`
 adapter = "hci0"                    # optional BlueZ adapter
@@ -22,26 +22,25 @@ input = true                        # evdev/uinput path
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # key or chord; none disables
 allow_exec = false                  # opt in to exec: actions
+active_layout = "editor"            # default or a user layout id
 
-[gesture]
-double_click_ms = 300
-long_press_ms = 550
-repeat_start_ms = 350
-stable_release_ms = 600
-suppression_ms = 180
-repeat_interval_ms = 100
-back_repeat_interval_ms = 50
+[layouts.editor]
+name = "Editor"
+description = "Editor and browser shortcuts"
 
-[buttons.up]
+[layouts.editor.gesture]
+long_press_ms = 700
+
+[layouts.editor.buttons.up]
 single = "key:KEY_F13"
 
-[buttons.ok]
+[layouts.editor.buttons.ok]
 long = "combo:ctrl+alt+v"
 ```
 
 | Field | Default | Notes |
 |---|---|---|
-| `schema_version` | `1` | Unknown versions are rejected. |
+| `schema_version` | `2` | Version 1 migrates on load; higher versions are rejected. |
 | `profile` | active profile | A different id is rejected; the keymap is local to one profile. |
 | `device` | none | Bluetooth address; `atvvctl pair` writes it. Changes apply on the next start. |
 | `adapter` | BlueZ default | Adapter name such as `hci0`. |
@@ -50,8 +49,8 @@ long = "combo:ctrl+alt+v"
 | `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
 | `allow_exec` | `false` | Required for any `exec:` action. |
-| `[gesture]` | profile timing | Each field overrides one profile value; bounds are validated. |
-| `[buttons.<button>]` | profile defaults | Per-slot action overrides. |
+| `active_layout` | `default` | The layout that drives the input runtime. |
+| `[layouts.<id>]` | none | User layouts: `name`, optional `description`, `[gesture]`, and `[buttons.<button>]`. |
 
 The twelve mappable buttons are `power`, `ok`, `back`, `up`, `down`, `left`,
 `right`, `home`, `menu`, `tv`, `volume_up`, and `volume_down`. The voice key is
@@ -62,7 +61,39 @@ default", not "unmapped". The default map re-emits the original key for every
 logical button except `power`, which defaults to `none` so it does not race
 logind.
 
-## Action grammar
+## Layouts
+
+A layout is a named map of button actions plus gesture-timing overrides. The
+device profile stays the hardware/firmware identity; layouts are the user's key
+maps. `default` is synthesized from the profile, is never stored, and is a
+**template**: edit it on the board and Apply saves the edits as a new user
+layout, leaving the template unchanged.
+
+A layout has a required name (unique case-insensitively), an optional
+description, optional per-button overrides, and optional gesture overrides. Ids
+match `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the preset ids `media`,
+`coding`, and `slides` are reserved. At most 32 user layouts are allowed; a name
+is 1–40 characters and a description at most 120.
+
+Global fields (`profile`, `device`, `adapter`, `gain_db`, `input`, `vinput`,
+`trigger_key`, `allow_exec`) are not part of a layout. Switching a layout never
+changes the exec policy, the device, or the recording key. `default` cannot be
+stored, renamed, deleted, or reset, and it is not listed in `layouts`.
+
+Gesture overrides apply to the whole active layout, so switching a layout can
+change double/long behavior. `atvvctl layout show` prints the effective timing.
+
+### Migration
+
+A version 1 file with top-level `[buttons]` or `[gesture]` tables is migrated
+on load to a user layout `custom` named "Custom" with
+`active_layout = "custom"`. A version 1 file without overrides becomes
+`active_layout = "default"`. The next save writes version 2 and drops the old
+tables. A version 2 file must not contain the top-level tables, and `SetConfig`
+accepts only version 2, so a stale client fails loudly instead of dropping
+layouts.
+
+## Action grammar## Action grammar
 
 ```text
 none
@@ -131,18 +162,21 @@ dispatched remote button runs it, and only when `allow_exec` is on.
 ## Applying changes
 
 `atvvctl config set` sends the whole document through D-Bus. The daemon
-validates every field before applying anything, then:
+validates every field before applying anything, including every stored layout,
+then:
 
 1. applies gain, input, vinput mode, trigger key, gesture timing, and the
-   action map;
+   active layout's action map;
 2. restarts the input runtime when the map, timing, trigger, or vinput mode
    changes, because the uinput key registration depends on the map. A failed
    restart restores the previous runtime and reports the error;
 3. writes the file atomically. A failed write rolls the runtime back.
 
 An invalid document leaves the active map, the runtime, and the file
-untouched. `atvvctl reload` re-reads the file through the same path and
-returns the validation or apply error instead of reporting success.
+untouched. `atvvctl layout use` applies the selected layout through the same
+path and persists `active_layout`; a failed runtime apply or write leaves the
+previous layout active. `atvvctl reload` re-reads the file through the same
+path and returns the validation or apply error instead of reporting success.
 
 The keymap is local configuration. It is not part of the provider contract
 advertised on the PipeWire source; consumers bind the declared recording keys,
@@ -157,6 +191,14 @@ atvvctl config set --gain-db 6
 atvvctl config set --input false
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
+atvvctl layout list
+atvvctl layout show editor
+atvvctl layout use editor
+atvvctl layout new editor --name Editor --from default
+atvvctl layout rename editor "Editor layout"
+atvvctl layout delete editor
+atvvctl layout reset editor
+atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
 atvvctl config set --button ok --trigger single --action pointer:click:left
@@ -167,13 +209,22 @@ atvvctl config set --button up --trigger single --action none
 atvvctl config set --button up --trigger single --action default
 atvvctl reload
 atvvctl map test --button up --trigger single
+atvvctl map test --layout editor --button up --trigger single
 atvvctl map test --action "combo:ctrl+alt+v"
 atvvctl map test --action "pointer:click:left"
 atvvctl capture --timeout 30    # one press; prints the logical button and slot
 ```
 
-`atvvctl map test` resolves the active document or a single action string. It
-never executes `exec:`; it only validates and prints the key program. A
+`atvvctl layout use` sends `SetLayout`. `layout new` and `layout rename` do not
+switch the active layout. `layout delete` refuses the active layout, and
+`layout delete`, `layout rename`, and `layout reset` refuse `default`. When the
+active layout is `default`, `config set --button` refuses and points at
+`atvvctl layout new <id> --from default`; pass `--layout <id>` to edit another
+user layout.
+
+`atvvctl map test` resolves the active layout by default, or `--layout <id>`,
+or a single action string. It never executes `exec:`; it only validates and
+prints the key program. A
 pointer action reports `kind: pointer` and no key program. `atvvctl status`
 reports whether the pointer device is active in `input.pointer`; it is false
 for keyboard-only maps.
@@ -189,11 +240,14 @@ input runtime. It does not grab evdev itself and does not expose raw key codes.
 | Member | Signature | Notes |
 |---|---|---|
 | `GetConfig` | `() -> s` | JSON `ConfigDocument`. |
-| `SetConfig` | `(s) -> ()` | Validates, applies, and persists. Invalid input returns `org.freedesktop.DBus.Error.InvalidArgs` with the field error. |
+| `SetConfig` | `(s) -> ()` | Validates version 2, applies, and persists. Invalid input returns `org.freedesktop.DBus.Error.InvalidArgs` with the field error. |
+| `SetLayout` | `(s) -> ()` | Switches the active layout by id, applies it, and persists. |
 | `BeginCapture` | `() -> ()` | Starts capture for the calling connection. |
 | `EndCapture` | `() -> ()` | Stops capture. |
+| `LayoutChanged` | signal `(s)` | New active layout id. |
 | `ButtonEvent` | signal `(s, s, b)` | `button`, `trigger`, `pressed` while capture is active. |
 
-Capture mode ends automatically when the connection that called
-`BeginCapture` leaves the bus. The payload is versioned by `schema_version`;
-clients must send the complete document back to `SetConfig`.
+`GetStatus` reports the active layout as `layout.id` and `layout.name`.
+Capture mode ends automatically when the connection that called `BeginCapture`
+leaves the bus. The payload is versioned by `schema_version`; clients must send
+the complete version 2 document back to `SetConfig`, including every layout.

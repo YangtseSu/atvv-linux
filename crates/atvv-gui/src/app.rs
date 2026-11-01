@@ -7,12 +7,14 @@
 //! writes the configuration file, grabs input devices, or talks to BlueZ.
 
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::collections::BTreeMap;
+use std::rc::{Rc, Weak};
 use std::time::Duration;
 
-use atvv_config::ConfigDocument;
+use atvv_config::{ConfigDocument, LayoutSummary, unique_layout_name};
 use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
+use gtk::glib::variant::ToVariant;
 use gtk::{gio, glib};
 use libadwaita as adw;
 
@@ -176,6 +178,30 @@ const CSS: &str = r#"
 
 .device-chip {
   padding: 2px 10px;
+}
+.layout-chip {
+  padding: 2px 10px;
+}
+.layout-row {
+  padding: 0;
+}
+.layout-row-name {
+  font-weight: 600;
+}
+.layout-tag {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: alpha(currentColor, 0.10);
+}
+.layout-tag-template {
+  color: alpha(currentColor, 0.55);
+}
+.layout-tag-active {
+  color: @accent_color;
+}
+.layout-manage {
+  margin-top: 2px;
 }
 .test-bar {
   padding: 8px 16px;
@@ -485,10 +511,142 @@ impl DeviceDialog {
     }
 }
 
+fn layout_tag(text: &str, css: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.add_css_class("caption");
+    label.add_css_class("layout-tag");
+    label.add_css_class(css);
+    label
+}
+
+fn layout_display_name(summary: &LayoutSummary) -> &str {
+    if summary.template {
+        tr("Default")
+    } else {
+        summary.name.as_str()
+    }
+}
+
+fn layout_popover_row(summary: &LayoutSummary, active: &str) -> gtk::Button {
+    let row = gtk::Button::new();
+    row.add_css_class("flat");
+    row.add_css_class("layout-row");
+    row.set_widget_name(&format!("layout-row-{}", summary.id));
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    content.set_margin_top(6);
+    content.set_margin_bottom(6);
+    content.set_margin_start(8);
+    content.set_margin_end(8);
+    let check = gtk::Image::from_icon_name("object-select-symbolic");
+    check.set_pixel_size(14);
+    check.set_visible(summary.id == active);
+    let copy = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    copy.set_hexpand(true);
+    let name = gtk::Label::new(Some(layout_display_name(summary)));
+    name.set_xalign(0.0);
+    name.add_css_class("layout-row-name");
+    copy.append(&name);
+    if let Some(description) = summary
+        .description
+        .as_deref()
+        .filter(|description| !description.is_empty())
+    {
+        let label = gtk::Label::new(Some(description));
+        label.set_xalign(0.0);
+        label.add_css_class("caption");
+        label.add_css_class("dim-label");
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        copy.append(&label);
+    }
+    content.append(&check);
+    content.append(&copy);
+    if summary.template {
+        content.append(&layout_tag(tr("Template"), "layout-tag-template"));
+    }
+    row.set_child(Some(&content));
+    row.update_property(&[gtk::accessible::Property::Label(layout_display_name(
+        summary,
+    ))]);
+    row
+}
+
+fn layout_manager_row(
+    summary: &LayoutSummary,
+    active: &str,
+    weak: Weak<AppWindow>,
+) -> (adw::ActionRow, Vec<(String, gtk::Button)>) {
+    let row = adw::ActionRow::builder()
+        .title(layout_display_name(summary))
+        .subtitle(summary.description.as_deref().unwrap_or(""))
+        .activatable(true)
+        .build();
+    row.set_widget_name(&format!("layout-manager-row-{}", summary.id));
+    let check = gtk::Image::from_icon_name("object-select-symbolic");
+    check.set_pixel_size(14);
+    check.set_visible(summary.id == active);
+    row.add_prefix(&check);
+    let tags = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    if summary.id == active {
+        tags.append(&layout_tag(tr("Active"), "layout-tag-active"));
+    }
+    if summary.template {
+        tags.append(&layout_tag(tr("Template"), "layout-tag-template"));
+    }
+    row.add_suffix(&tags);
+    let more = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text(tr_args(
+            "Actions for {name}",
+            &[("name", layout_display_name(summary))],
+        ))
+        .build();
+    more.add_css_class("flat");
+    let popover = gtk::Popover::new();
+    let menu = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let mut buttons = Vec::new();
+    for (action, label) in [
+        ("duplicate", "Duplicate"),
+        ("rename", "Rename"),
+        ("delete", "Delete"),
+        ("reset", "Reset"),
+    ] {
+        let button = gtk::Button::with_label(tr(label));
+        button.add_css_class("flat");
+        let disabled = (summary.template && action != "duplicate")
+            || (action == "delete" && summary.id == active);
+        if !disabled {
+            button.set_action_name(Some(&format!("win.layout-{action}")));
+            button.set_action_target_value(Some(&summary.id.to_variant()));
+        }
+        button.set_sensitive(!disabled);
+        buttons.push((format!("{}:{action}", summary.id), button.clone()));
+        menu.append(&button);
+    }
+    popover.set_child(Some(&menu));
+    more.set_popover(Some(&popover));
+    row.add_suffix(&more);
+    let is_active = summary.id == active;
+    let id = summary.id.clone();
+    row.connect_activated(move |_| {
+        if !is_active && let Some(this) = weak.upgrade() {
+            this.switch_layout(&id);
+        }
+    });
+    (row, buttons)
+}
+
 fn spacer() -> gtk::Box {
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
     spacer
+}
+
+/// Which inline layout form the manager shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LayoutFormMode {
+    New,
+    Rename,
+    Save,
 }
 
 #[derive(Debug, Clone)]
@@ -510,6 +668,32 @@ pub struct AppWindow {
     device_chip_icon: gtk::Image,
     device_chip_battery: gtk::Label,
     device_chip_battery_icon: gtk::Image,
+    layout_chip: gtk::MenuButton,
+    layout_chip_name: gtk::Label,
+    layout_popover: gtk::Popover,
+    layout_list: gtk::Box,
+    layout_manage: gtk::Button,
+    layout_rows: RefCell<BTreeMap<String, gtk::Button>>,
+    layout_dialog: adw::Dialog,
+    layout_dialog_title: adw::WindowTitle,
+    layout_manager_list: gtk::ListBox,
+    layout_manager_rows: RefCell<BTreeMap<String, adw::ActionRow>>,
+    layout_actions: RefCell<BTreeMap<String, gtk::Button>>,
+    layout_manager_hint: gtk::Label,
+    layout_form: gtk::Box,
+    layout_form_hint: gtk::Label,
+    layout_name_row: adw::EntryRow,
+    layout_desc_row: adw::EntryRow,
+    layout_form_error: gtk::Label,
+    layout_form_submit: gtk::Button,
+    layout_form_cancel: gtk::Button,
+    layout_manager_new: gtk::Button,
+    layout_manager_apply: gtk::Button,
+    layout_manager_revert: gtk::Button,
+    layout_manager_close: gtk::Button,
+    layout_form_mode: Cell<LayoutFormMode>,
+    layout_form_target: RefCell<Option<String>>,
+    this: RefCell<Weak<AppWindow>>,
     board: MappingBoard,
     board_scroll: gtk::ScrolledWindow,
     test_bar: gtk::Box,
@@ -580,6 +764,44 @@ impl AppWindow {
         chip_row.append(&device_chip_battery);
         device_chip.set_child(Some(&chip_row));
         header.pack_start(&device_chip);
+
+        // Layout chip: the active layout, a direct switcher, and the manager.
+        let layout_pop_content = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        layout_pop_content.set_margin_top(10);
+        layout_pop_content.set_margin_bottom(10);
+        layout_pop_content.set_margin_start(10);
+        layout_pop_content.set_margin_end(10);
+        let layout_pop_title = gtk::Label::new(Some(tr("Layouts")));
+        layout_pop_title.add_css_class("heading");
+        layout_pop_title.set_xalign(0.0);
+        let layout_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let layout_manage = gtk::Button::with_label(tr("Manage layouts…"));
+        layout_manage.add_css_class("flat");
+        layout_manage.add_css_class("layout-manage");
+        layout_pop_content.append(&layout_pop_title);
+        layout_pop_content.append(&layout_list);
+        layout_pop_content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        layout_pop_content.append(&layout_manage);
+        let layout_popover = gtk::Popover::new();
+        layout_popover.set_has_arrow(true);
+        layout_popover.set_child(Some(&layout_pop_content));
+        let layout_chip = gtk::MenuButton::builder()
+            .tooltip_text(tr("Switch layout"))
+            .always_show_arrow(false)
+            .popover(&layout_popover)
+            .build();
+        layout_chip.add_css_class("flat");
+        layout_chip.add_css_class("layout-chip");
+        let layout_chip_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let layout_chip_icon = gtk::Image::from_icon_name("view-list-symbolic");
+        layout_chip_icon.set_pixel_size(13);
+        let layout_chip_name = gtk::Label::new(Some(tr("Default")));
+        layout_chip_name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        layout_chip_name.set_max_width_chars(16);
+        layout_chip_row.append(&layout_chip_icon);
+        layout_chip_row.append(&layout_chip_name);
+        layout_chip.set_child(Some(&layout_chip_row));
+        header.pack_start(&layout_chip);
 
         let test_button = gtk::ToggleButton::builder()
             .label(tr("Test"))
@@ -652,6 +874,91 @@ impl AppWindow {
         test_bar.append(&run_once_button);
         test_bar.set_visible(false);
 
+        // Layout manager dialog.
+        let layout_dialog_title = adw::WindowTitle::new(tr("Layouts"), "");
+        let layout_dialog_header = adw::HeaderBar::new();
+        layout_dialog_header.set_title_widget(Some(&layout_dialog_title));
+        let layout_dialog_toolbar = adw::ToolbarView::new();
+        layout_dialog_toolbar.add_top_bar(&layout_dialog_header);
+        let layout_manager_list = gtk::ListBox::new();
+        layout_manager_list.add_css_class("boxed-list");
+        layout_manager_list.set_selection_mode(gtk::SelectionMode::None);
+        let layout_name_row = adw::EntryRow::builder().title(tr("Name")).build();
+        let layout_desc_row = adw::EntryRow::builder().title(tr("Description")).build();
+        let layout_form_error = gtk::Label::new(None);
+        layout_form_error.add_css_class("error");
+        layout_form_error.set_xalign(0.0);
+        layout_form_error.set_wrap(true);
+        layout_form_error.set_visible(false);
+        let layout_form_hint = gtk::Label::new(None);
+        layout_form_hint.add_css_class("dim-label");
+        layout_form_hint.add_css_class("caption");
+        layout_form_hint.set_xalign(0.0);
+        layout_form_hint.set_wrap(true);
+        layout_form_hint.set_visible(false);
+        let layout_form_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        layout_form_buttons.set_halign(gtk::Align::End);
+        let layout_form_cancel = gtk::Button::with_label(tr("Cancel"));
+        layout_form_cancel.add_css_class("flat");
+        let layout_form_submit = gtk::Button::with_label(tr("Create"));
+        layout_form_submit.add_css_class("suggested-action");
+        layout_form_buttons.append(&layout_form_cancel);
+        layout_form_buttons.append(&layout_form_submit);
+        let layout_form_fields = gtk::ListBox::new();
+        layout_form_fields.add_css_class("boxed-list");
+        layout_form_fields.set_selection_mode(gtk::SelectionMode::None);
+        layout_form_fields.append(&layout_name_row);
+        layout_form_fields.append(&layout_desc_row);
+        let layout_form = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        layout_form.set_visible(false);
+        layout_form.append(&layout_form_fields);
+        layout_form.append(&layout_form_hint);
+        layout_form.append(&layout_form_error);
+        layout_form.append(&layout_form_buttons);
+        let layout_manager_hint = gtk::Label::new(Some(tr(
+            "The active layout drives the board and the input runtime. Default is a template: edit it and Apply saves the changes as a new layout.",
+        )));
+        layout_manager_hint.add_css_class("dim-label");
+        layout_manager_hint.add_css_class("caption");
+        layout_manager_hint.set_xalign(0.0);
+        layout_manager_hint.set_wrap(true);
+        let layout_dialog_body = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        layout_dialog_body.set_margin_top(18);
+        layout_dialog_body.set_margin_bottom(18);
+        layout_dialog_body.set_margin_start(18);
+        layout_dialog_body.set_margin_end(18);
+        layout_dialog_body.append(&layout_manager_list);
+        layout_dialog_body.append(&layout_form);
+        layout_dialog_body.append(&layout_manager_hint);
+        layout_dialog_toolbar.set_content(Some(&layout_dialog_body));
+        let layout_manager_footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        layout_manager_footer.set_margin_top(8);
+        layout_manager_footer.set_margin_bottom(8);
+        layout_manager_footer.set_margin_start(12);
+        layout_manager_footer.set_margin_end(12);
+        let layout_manager_new = gtk::Button::with_label(tr("New layout…"));
+        layout_manager_new.add_css_class("flat");
+        let footer_spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        footer_spacer.set_hexpand(true);
+        let layout_manager_revert = gtk::Button::with_label(tr("Revert"));
+        layout_manager_revert.add_css_class("flat");
+        layout_manager_revert.set_visible(false);
+        let layout_manager_apply = gtk::Button::with_label(tr("Apply"));
+        layout_manager_apply.add_css_class("suggested-action");
+        layout_manager_apply.set_visible(false);
+        let layout_manager_close = gtk::Button::with_label(tr("Close"));
+        layout_manager_close.add_css_class("flat");
+        layout_manager_footer.append(&layout_manager_new);
+        layout_manager_footer.append(&footer_spacer);
+        layout_manager_footer.append(&layout_manager_revert);
+        layout_manager_footer.append(&layout_manager_apply);
+        layout_manager_footer.append(&layout_manager_close);
+        layout_dialog_toolbar.add_bottom_bar(&layout_manager_footer);
+        let layout_dialog = adw::Dialog::new();
+        layout_dialog.set_content_width(520);
+        layout_dialog.set_content_height(560);
+        layout_dialog.set_child(Some(&layout_dialog_toolbar));
+
         let unavailable = adw::StatusPage::builder()
             .icon_name("network-offline-symbolic")
             .title(tr("Daemon unavailable"))
@@ -704,6 +1011,32 @@ impl AppWindow {
             device_chip_icon,
             device_chip_battery,
             device_chip_battery_icon,
+            layout_chip,
+            layout_chip_name,
+            layout_popover,
+            layout_list,
+            layout_manage,
+            layout_rows: RefCell::new(BTreeMap::new()),
+            layout_dialog,
+            layout_dialog_title,
+            layout_manager_list,
+            layout_manager_rows: RefCell::new(BTreeMap::new()),
+            layout_actions: RefCell::new(BTreeMap::new()),
+            layout_manager_hint,
+            layout_form,
+            layout_form_hint,
+            layout_name_row,
+            layout_desc_row,
+            layout_form_error,
+            layout_form_submit,
+            layout_form_cancel,
+            layout_manager_new,
+            layout_manager_apply,
+            layout_manager_revert,
+            layout_manager_close,
+            layout_form_mode: Cell::new(LayoutFormMode::New),
+            layout_form_target: RefCell::new(None),
+            this: RefCell::new(Weak::new()),
             board,
             board_scroll,
             test_bar,
@@ -729,6 +1062,7 @@ impl AppWindow {
             pressed: Cell::new(None),
             last_test: RefCell::new(None),
         });
+        *ui.this.borrow_mut() = Rc::downgrade(&ui);
         Self::connect_events(&ui);
         connect_timers(&ui);
         ui.refresh_all();
@@ -766,6 +1100,59 @@ impl AppWindow {
         let this = Rc::clone(ui);
         ui.device_chip
             .connect_clicked(move |_| this.device_dialog.present(&this.window));
+
+        let this = Rc::clone(ui);
+        ui.layout_manage.connect_clicked(move |_| {
+            this.layout_popover.popdown();
+            this.open_layout_manager();
+        });
+        let this = Rc::clone(ui);
+        ui.layout_manager_new
+            .connect_clicked(move |_| this.show_layout_form(LayoutFormMode::New, None));
+        let this = Rc::clone(ui);
+        ui.layout_form_cancel
+            .connect_clicked(move |_| this.hide_layout_form());
+        let this = Rc::clone(ui);
+        ui.layout_form_submit
+            .connect_clicked(move |_| this.submit_layout_form());
+        let this = Rc::clone(ui);
+        ui.layout_manager_apply
+            .connect_clicked(move |_| this.apply());
+        let this = Rc::clone(ui);
+        ui.layout_manager_revert
+            .connect_clicked(move |_| this.revert());
+        let this = Rc::clone(ui);
+        ui.layout_manager_close.connect_clicked(move |_| {
+            this.layout_dialog.close();
+        });
+
+        for name in [
+            "layout-switch",
+            "layout-duplicate",
+            "layout-rename",
+            "layout-delete",
+            "layout-reset",
+        ] {
+            let action = gio::SimpleAction::new(name, Some(glib::VariantTy::STRING));
+            let this = Rc::clone(ui);
+            action.connect_activate(move |_, parameter| {
+                let Some(id) = parameter.and_then(|value| value.str()) else {
+                    return;
+                };
+                match name {
+                    "layout-switch" => this.switch_layout(id),
+                    "layout-duplicate" => this.duplicate_layout(id),
+                    "layout-rename" => {
+                        this.open_layout_manager();
+                        this.show_layout_form(LayoutFormMode::Rename, Some(id.to_string()));
+                    }
+                    "layout-delete" => this.delete_layout(id),
+                    "layout-reset" => this.reset_layout(id),
+                    _ => {}
+                }
+            });
+            ui.window.add_action(&action);
+        }
 
         let this = Rc::clone(ui);
         ui.apply_button.connect_clicked(move |_| this.apply());
@@ -940,6 +1327,7 @@ impl AppWindow {
                     self.stack.set_visible_child_name("config");
                     self.error_banner.set_revealed(false);
                     self.refresh_all();
+                    self.reload_editor();
                 }
                 Err(error) => self.show_error(&error),
             },
@@ -983,6 +1371,29 @@ impl AppWindow {
                     &[("error", &error)],
                 ));
                 self.refresh_all();
+            }
+            Event::LayoutSwitched(Ok(())) => {
+                *self.last_test.borrow_mut() = None;
+                self.pressed.set(None);
+                self.toast(tr("Layout switched"));
+                self.backend.load();
+            }
+            Event::LayoutChanged(id) => {
+                let reload = self
+                    .model
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|model| !model.dirty && model.active_layout() != id);
+                if reload {
+                    self.backend.load();
+                }
+            }
+            Event::LayoutSwitched(Err(error)) => {
+                self.show_error(&tr_args(
+                    "Cannot switch layouts: {error}",
+                    &[("error", &error)],
+                ));
+                self.backend.load();
             }
             Event::CaptureStarted(Ok(())) => {
                 self.error_banner.set_revealed(false);
@@ -1140,7 +1551,7 @@ impl AppWindow {
     }
 
     fn apply(&self) {
-        let document = {
+        let (template_changed, document) = {
             let model = self.model.borrow();
             let Some(model) = model.as_ref() else {
                 return;
@@ -1149,11 +1560,317 @@ impl AppWindow {
                 self.show_error(&error);
                 return;
             }
-            model.document.clone()
+            (model.template_changed(), model.document.clone())
         };
+        if template_changed {
+            // The template's changes become a new layout instead of being
+            // written into the document.
+            self.open_layout_manager();
+            self.show_layout_form(LayoutFormMode::Save, None);
+            return;
+        }
         self.apply_button.set_sensitive(false);
         self.error_banner.set_revealed(false);
         self.backend.save(document);
+    }
+
+    /// Switch the active layout; a dirty document is refused by the model.
+    fn switch_layout(&self, id: &str) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .map(|model| model.switch_layout(id));
+        match result {
+            None => {}
+            Some(Err(error)) => self.toast(&error),
+            Some(Ok(false)) => self.layout_popover.popdown(),
+            Some(Ok(true)) => {
+                self.layout_popover.popdown();
+                *self.last_test.borrow_mut() = None;
+                self.pressed.set(None);
+                self.refresh_all();
+                self.reload_editor();
+                self.backend.set_layout(id.to_string());
+            }
+        }
+    }
+
+    fn duplicate_layout(&self, id: &str) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .map(|model| model.duplicate_layout(id));
+        match result {
+            Some(Ok(_)) => {
+                self.toast(tr("Layout duplicated"));
+                self.refresh_all();
+            }
+            Some(Err(error)) => self.toast(&error),
+            None => {}
+        }
+    }
+
+    fn delete_layout(&self, id: &str) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .map(|model| model.delete_layout(id));
+        match result {
+            Some(Ok(())) => {
+                self.toast(tr("Layout deleted"));
+                self.refresh_all();
+            }
+            Some(Err(error)) => self.toast(&error),
+            None => {}
+        }
+    }
+
+    fn reset_layout(&self, id: &str) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .map(|model| model.reset_layout(id));
+        match result {
+            Some(Ok(())) => {
+                self.toast(tr("Layout reset"));
+                self.refresh_all();
+            }
+            Some(Err(error)) => self.toast(&error),
+            None => {}
+        }
+    }
+
+    fn open_layout_manager(&self) {
+        self.layout_popover.popdown();
+        self.layout_dialog.present(Some(&self.window));
+    }
+
+    fn hide_layout_form(&self) {
+        self.layout_form.set_visible(false);
+        self.layout_manager_list.set_visible(true);
+        self.layout_manager_new.set_visible(true);
+        self.layout_manager_hint.set_visible(true);
+        self.layout_form_error.set_visible(false);
+        self.layout_form_hint.set_visible(false);
+        self.layout_dialog_title.set_title(tr("Layouts"));
+        if let Some(model) = self.model.borrow().as_ref() {
+            self.refresh_layout_footer(model);
+        }
+    }
+
+    fn show_layout_form(&self, mode: LayoutFormMode, target: Option<String>) {
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        self.layout_form_mode.set(mode);
+        *self.layout_form_target.borrow_mut() = target.clone();
+        self.layout_manager_list.set_visible(false);
+        self.layout_form.set_visible(true);
+        self.layout_manager_new.set_visible(false);
+        self.layout_manager_hint.set_visible(false);
+        self.layout_form_error.set_visible(false);
+        self.layout_form_error.set_text("");
+        self.layout_form_hint
+            .set_visible(mode == LayoutFormMode::Save);
+        self.layout_dialog_title.set_title(match mode {
+            LayoutFormMode::New => tr("New layout"),
+            LayoutFormMode::Rename => tr("Rename layout"),
+            LayoutFormMode::Save => tr("Save as layout"),
+        });
+        self.layout_form_submit.set_label(match mode {
+            LayoutFormMode::New => tr("Create"),
+            LayoutFormMode::Rename | LayoutFormMode::Save => tr("Save"),
+        });
+        let (name, description) = match mode {
+            LayoutFormMode::New => (String::new(), None),
+            LayoutFormMode::Rename => target
+                .as_deref()
+                .and_then(|id| model.document.layouts.get(id))
+                .map_or_else(Default::default, |layout| {
+                    (layout.name.clone(), layout.description.clone())
+                }),
+            LayoutFormMode::Save => {
+                let existing: Vec<String> = model
+                    .document
+                    .layouts
+                    .values()
+                    .map(|layout| layout.name.clone())
+                    .collect();
+                (
+                    unique_layout_name(tr("My layout"), existing.iter().map(String::as_str)),
+                    None,
+                )
+            }
+        };
+        self.layout_name_row.set_text(&name);
+        self.layout_desc_row
+            .set_text(description.as_deref().unwrap_or(""));
+        self.layout_form_hint
+            .set_text(if mode == LayoutFormMode::Save {
+                tr("Default is a template. These edits become a new layout.")
+            } else {
+                ""
+            });
+        self.refresh_layout_footer(model);
+    }
+
+    fn submit_layout_form(&self) {
+        let name = self.layout_name_row.text().to_string();
+        let description = self.layout_desc_row.text().to_string();
+        let description = (!description.trim().is_empty()).then_some(description.as_str());
+        let mode = self.layout_form_mode.get();
+        let target = self.layout_form_target.borrow().clone();
+        let result = {
+            let mut model = self.model.borrow_mut();
+            let Some(model) = model.as_mut() else {
+                return;
+            };
+            match mode {
+                LayoutFormMode::New => model.create_layout(&name, description, None).map(|_| false),
+                LayoutFormMode::Rename => target
+                    .as_deref()
+                    .ok_or_else(|| tr("no layout selected").to_string())
+                    .and_then(|id| model.rename_layout(id, &name, description).map(|()| false)),
+                LayoutFormMode::Save => model.save_as_layout(&name, description).map(|_| true),
+            }
+        };
+        match result {
+            Err(error) => {
+                self.layout_form_error.set_text(&error);
+                self.layout_form_error.set_visible(true);
+            }
+            Ok(saved) => {
+                self.hide_layout_form();
+                self.refresh_all();
+                if saved {
+                    let document = self
+                        .model
+                        .borrow()
+                        .as_ref()
+                        .map(|model| model.document.clone());
+                    if let Some(document) = document {
+                        self.toast(tr("Saved as a new layout"));
+                        self.backend.save(document);
+                    }
+                } else {
+                    self.toast(match mode {
+                        LayoutFormMode::New => tr("Layout created"),
+                        _ => tr("Layout renamed"),
+                    });
+                }
+            }
+        }
+    }
+
+    fn refresh_layout_ui(&self, model: &GuiModel) {
+        let active = model.active_layout().to_string();
+        let active_name = model.layout_name(&active);
+        self.layout_chip_name.set_text(&active_name);
+        self.layout_chip
+            .update_property(&[gtk::accessible::Property::Label(&tr_args(
+                "Layout: {name}",
+                &[("name", &active_name)],
+            ))]);
+        self.layout_chip.set_tooltip_text(Some(&tr_args(
+            "Switch layout · {name}",
+            &[("name", &active_name)],
+        )));
+
+        while let Some(child) = self.layout_list.first_child() {
+            self.layout_list.remove(&child);
+        }
+        self.layout_rows.borrow_mut().clear();
+        for summary in model.summaries() {
+            let row = layout_popover_row(&summary, &active);
+            let weak = self.this.borrow().clone();
+            let id = summary.id.clone();
+            row.connect_clicked(move |_| {
+                if let Some(this) = weak.upgrade() {
+                    this.switch_layout(&id);
+                }
+            });
+            self.layout_rows
+                .borrow_mut()
+                .insert(summary.id.clone(), row.clone());
+            self.layout_list.append(&row);
+        }
+
+        while let Some(child) = self.layout_manager_list.first_child() {
+            self.layout_manager_list.remove(&child);
+        }
+        self.layout_manager_rows.borrow_mut().clear();
+        self.layout_actions.borrow_mut().clear();
+        for summary in model.summaries() {
+            let (row, actions) = layout_manager_row(&summary, &active, self.this.borrow().clone());
+            for (key, button) in actions {
+                self.layout_actions.borrow_mut().insert(key, button);
+            }
+            self.layout_manager_rows
+                .borrow_mut()
+                .insert(summary.id.clone(), row.clone());
+            self.layout_manager_list.append(&row);
+        }
+        self.layout_dialog_title
+            .set_subtitle(&format!("{} · {}", active_name, model.profile.id));
+        self.refresh_layout_footer(model);
+    }
+
+    fn refresh_layout_footer(&self, model: &GuiModel) {
+        let visible = model.dirty && !self.layout_form.is_visible();
+        self.layout_manager_apply.set_visible(visible);
+        self.layout_manager_revert.set_visible(visible);
+    }
+
+    /// Test hook: open the manager without a pointer press.
+    #[doc(hidden)]
+    pub fn present_layout_manager(&self) {
+        self.open_layout_manager();
+    }
+
+    /// Test hook: scroll a board slot into the visible viewport.
+    #[doc(hidden)]
+    pub fn scroll_slot_into_view(&self, button: RemoteButton, trigger: Trigger) {
+        if let Some(slot) = self.board.slot(button, trigger) {
+            scroll_into_view(&self.board_scroll, slot);
+        }
+    }
+
+    /// Test hook: scroll any board child into the visible viewport.
+    #[doc(hidden)]
+    pub fn scroll_board_to(&self, widget: &impl IsA<gtk::Widget>) {
+        scroll_into_view(&self.board_scroll, widget);
+    }
+
+    /// Test hook: treat the model as persisted without a daemon.
+    #[doc(hidden)]
+    pub fn mark_saved_for_test(&self) {
+        if let Some(model) = self.model.borrow_mut().as_mut() {
+            model.mark_saved();
+        }
+        self.refresh_all();
+    }
+
+    /// Test hook: close the layout manager dialog.
+    #[doc(hidden)]
+    pub fn close_layout_manager(&self) {
+        self.layout_dialog.close();
+    }
+
+    /// Test hook: open one inline form.
+    #[doc(hidden)]
+    pub fn present_layout_form(&self, mode: &str, target: Option<&str>) {
+        let mode = match mode {
+            "new" => LayoutFormMode::New,
+            "rename" => LayoutFormMode::Rename,
+            "save" => LayoutFormMode::Save,
+            _ => return,
+        };
+        self.show_layout_form(mode, target.map(str::to_string));
     }
 
     fn revert(&self) {
@@ -1425,8 +2142,14 @@ impl AppWindow {
         self.stack.set_visible_child_name("config");
         self.board
             .refresh(model, self.pressed.get(), self.voice_selected.get());
+        self.refresh_layout_ui(model);
         self.apply_button.set_sensitive(model.dirty);
         self.revert_button.set_sensitive(model.dirty);
+        self.dirty_banner.set_title(if model.template_changed() {
+            tr("Unsaved changes on Default — Apply saves them as a new layout.")
+        } else {
+            tr("Unsaved changes")
+        });
         self.dirty_banner.set_revealed(model.dirty);
         self.test_button.set_sensitive(true);
         self.refresh_test_bar();
@@ -1632,6 +2355,87 @@ impl AppWindow {
     }
 
     #[doc(hidden)]
+    #[must_use]
+    pub fn layout_chip_text(&self) -> String {
+        self.layout_chip_name.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_row(&self, id: &str) -> Option<gtk::Button> {
+        self.layout_rows.borrow().get(id).cloned()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_row(&self, id: &str) -> Option<adw::ActionRow> {
+        self.layout_manager_rows.borrow().get(id).cloned()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_action(&self, id: &str, action: &str) -> Option<gtk::Button> {
+        self.layout_actions
+            .borrow()
+            .get(&format!("{id}:{action}"))
+            .cloned()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_is_open(&self) -> bool {
+        self.layout_dialog.is_visible()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_name_row(&self) -> &adw::EntryRow {
+        &self.layout_name_row
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_desc_row(&self) -> &adw::EntryRow {
+        &self.layout_desc_row
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_form_submit(&self) -> &gtk::Button {
+        &self.layout_form_submit
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_form_is_visible(&self) -> bool {
+        self.layout_form.is_visible()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_form_error_text(&self) -> String {
+        self.layout_form_error.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_new_button(&self) -> &gtk::Button {
+        &self.layout_manager_new
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_apply_button(&self) -> &gtk::Button {
+        &self.layout_manager_apply
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn dirty_banner_text(&self) -> String {
+        self.dirty_banner.title().to_string()
+    }
+
+    #[doc(hidden)]
     pub fn set_status(&self, status: DaemonStatus) {
         *self.status.borrow_mut() = Some(status);
         self.refresh_title();
@@ -1705,6 +2509,39 @@ impl AppWindow {
         *self.model.borrow_mut() = Some(model);
         self.stack.set_visible_child_name("config");
         self.refresh_all();
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn active_layout_id(&self) -> Option<String> {
+        self.model
+            .borrow()
+            .as_ref()
+            .map(|model| model.active_layout().to_string())
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn template_active(&self) -> bool {
+        self.model.borrow().as_ref().is_some_and(GuiModel::template)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn staged_slot(&self, button: RemoteButton, trigger: Trigger) -> Option<String> {
+        self.model
+            .borrow()
+            .as_ref()
+            .and_then(|model| model.slot(button, trigger).map(str::to_string))
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn effective_slot(&self, button: RemoteButton, trigger: Trigger) -> Option<String> {
+        self.model
+            .borrow()
+            .as_ref()
+            .and_then(|model| model.effective_slot(button, trigger))
     }
 
     #[doc(hidden)]

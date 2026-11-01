@@ -11,7 +11,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use atvv_config::ConfigDocument;
+use atvv_config::{ConfigDocument, LayoutDocument};
 use atvv_daemon::Transport;
 use atvv_daemon::audio::PcmSink;
 use atvv_daemon::daemon::{Command as DaemonCommand, Daemon, DaemonConfig, EventSink};
@@ -19,7 +19,8 @@ use atvv_daemon::dbus::{self, Client, DaemonInterface, DbusSink};
 use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport};
 use atvv_gui::client::{Backend, Event};
-use atvv_protocol::profile::RC003;
+use atvv_input::Trigger;
+use atvv_protocol::profile::{RC003, RemoteButton};
 use zbus::connection::Builder;
 
 const ADDRESS: &str = "02:00:00:00:00:01";
@@ -182,14 +183,29 @@ fn worker_loads_saves_captures_and_uses_run_action() {
     assert_eq!(document.profile, "miremote-rc003");
     assert_eq!(document.schema_version, atvv_config::SCHEMA_VERSION);
     assert!(status.connected);
-    assert_eq!(
-        document.buttons["ok"].single.as_deref(),
-        Some("key:KEY_ENTER")
-    );
+    assert_eq!(document.active_layout, atvv_config::DEFAULT_LAYOUT);
+    assert!(document.layouts.is_empty());
 
     let mut changed = document.clone();
     changed.gain_db = 3;
-    changed.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
+    let mut layout = LayoutDocument {
+        name: "Worker test".to_string(),
+        ..LayoutDocument::default()
+    };
+    layout.set_slot(
+        RemoteButton::Up,
+        Trigger::Single,
+        Some("key:KEY_F13".into()),
+    );
+    changed.layouts.insert("worker-test".to_string(), layout);
+    changed.layouts.insert(
+        "worker-test-2".to_string(),
+        LayoutDocument {
+            name: "Worker test 2".to_string(),
+            ..LayoutDocument::default()
+        },
+    );
+    changed.active_layout = "worker-test".to_string();
     backend.save(changed.clone());
     match next_event(&backend) {
         Event::Saved(Ok(())) => {}
@@ -198,6 +214,31 @@ fn worker_loads_saves_captures_and_uses_run_action() {
     let text = std::fs::read_to_string(&fixture.path).expect("config file");
     assert!(text.contains("gain_db = 3"), "{text}");
     assert!(text.contains("KEY_F13"), "{text}");
+
+    // SetLayout through the worker and from another client both arrive.
+    backend.set_layout("worker-test-2".to_string());
+    let (mut switched, mut changed_signal) = (false, false);
+    while !(switched && changed_signal) {
+        match next_event(&backend) {
+            Event::LayoutSwitched(Ok(())) => switched = true,
+            Event::LayoutSwitched(Err(error)) => panic!("SetLayout failed: {error}"),
+            Event::LayoutChanged(id) => {
+                assert_eq!(id, "worker-test-2");
+                changed_signal = true;
+            }
+            other => panic!("unexpected event for SetLayout: {other:?}"),
+        }
+    }
+    Client::with_connection(bus.connect())
+        .set_layout("worker-test")
+        .expect("SetLayout from the other client");
+    loop {
+        match next_event(&backend) {
+            Event::LayoutChanged(id) if id == "worker-test" => break,
+            Event::LayoutChanged(_) => {}
+            other => panic!("unexpected event for the layout signal: {other:?}"),
+        }
+    }
 
     // The service-side sink emits while the GUI's capture listener is active.
     let sink = DbusSink::new(&fixture.server).expect("signal sink");

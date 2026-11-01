@@ -6,8 +6,13 @@
 //! CLI, and the GUI use [`FileConfig`] for TOML and [`ConfigDocument`] for the
 //! JSON document exchanged over D-Bus.
 //!
-//! Action strings use the existing grammar from [`atvv_input`]. The file stores
-//! per-button overrides; the profile supplies the defaults. `None` in a slot
+//! A **layout** is a named map of button actions plus gesture-timing
+//! overrides. The device profile stays the hardware identity; layouts are the
+//! user-facing key maps. `default` is synthesized from the profile, is never
+//! stored, and acts as a template: editing it in the GUI stages a copy that a
+//! save turns into a new user layout.
+//!
+//! Action strings use the existing grammar from [`atvv_input`]. A missing slot
 //! means "use the profile default", not "unmapped": use the action `none` to
 //! swallow a button without an action.
 //!
@@ -16,7 +21,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -29,13 +34,31 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Current schema version written by this crate.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
+/// Flat button map schema; loaded once and migrated to [`SCHEMA_VERSION`].
+pub const LEGACY_SCHEMA_VERSION: u32 = 1;
 /// Gain clamp from the research notes: ±24 dB, no AGC.
 pub const MAX_GAIN_DB: i8 = 24;
 /// fcitx5-vinput trigger key used while the voice key is held.
 pub const DEFAULT_TRIGGER_KEY: &str = "DICTATE";
 /// Upper bound for an `exec:` command line. The command stays opaque.
 pub const MAX_EXEC_COMMAND: usize = 4096;
+/// Synthesized, read-only template layout derived from the device profile.
+pub const DEFAULT_LAYOUT: &str = "default";
+/// Display name of [`DEFAULT_LAYOUT`]; the GUI localizes it.
+pub const DEFAULT_LAYOUT_NAME: &str = "Default";
+/// Layout id created by the v1 migration.
+pub const MIGRATED_LAYOUT: &str = "custom";
+/// Display name of [`MIGRATED_LAYOUT`].
+pub const MIGRATED_LAYOUT_NAME: &str = "Custom";
+/// At most this many user layouts (the template is not counted).
+pub const MAX_LAYOUTS: usize = 32;
+/// Longest layout name in characters.
+pub const MAX_LAYOUT_NAME: usize = 40;
+/// Longest layout description in characters.
+pub const MAX_LAYOUT_DESCRIPTION: usize = 120;
+/// Ids that user layouts may not take: the template and the step 18 presets.
+pub const RESERVED_LAYOUT_IDS: [&str; 4] = [DEFAULT_LAYOUT, "media", "coding", "slides"];
 
 /// How the daemon reaches fcitx5-vinput.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -76,7 +99,9 @@ pub struct GestureOverrides {
 }
 
 impl GestureOverrides {
-    fn is_empty(&self) -> bool {
+    /// Whether every field keeps the profile value.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.double_click_ms.is_none()
             && self.long_press_ms.is_none()
             && self.repeat_start_ms.is_none()
@@ -186,18 +211,6 @@ impl GestureSettings {
         })
     }
 
-    fn validate_effective(self) -> Result<Self, ConfigError> {
-        self.with_overrides(Some(&GestureOverrides {
-            double_click_ms: Some(self.double_click_ms),
-            long_press_ms: Some(self.long_press_ms),
-            repeat_start_ms: Some(self.repeat_start_ms),
-            stable_release_ms: Some(self.stable_release_ms),
-            suppression_ms: Some(self.suppression_ms),
-            repeat_interval_ms: Some(self.repeat_interval_ms),
-            back_repeat_interval_ms: Some(self.back_repeat_interval_ms),
-        }))
-    }
-
     fn overrides_from(self, defaults: GestureTiming) -> GestureOverrides {
         GestureOverrides {
             double_click_ms: (self.double_click_ms != defaults.double_click_ms)
@@ -263,6 +276,161 @@ impl ButtonToml {
     }
 }
 
+/// One optional action per gesture slot in the JSON document.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ButtonDocument {
+    pub single: Option<String>,
+    pub double: Option<String>,
+    pub long: Option<String>,
+}
+
+impl ButtonDocument {
+    fn slots(&self) -> [(Trigger, Option<&String>); 3] {
+        [
+            (Trigger::Single, self.single.as_ref()),
+            (Trigger::Double, self.double.as_ref()),
+            (Trigger::Long, self.long.as_ref()),
+        ]
+    }
+
+    /// One slot value; `None` means the profile default.
+    #[must_use]
+    pub fn slot(&self, trigger: Trigger) -> Option<&str> {
+        match trigger {
+            Trigger::Single => self.single.as_deref(),
+            Trigger::Double => self.double.as_deref(),
+            Trigger::Long => self.long.as_deref(),
+        }
+    }
+
+    /// Replace one slot; `None` restores the profile default.
+    pub fn set_slot(&mut self, trigger: Trigger, value: Option<String>) {
+        match trigger {
+            Trigger::Single => self.single = value,
+            Trigger::Double => self.double = value,
+            Trigger::Long => self.long = value,
+        }
+    }
+
+    /// No slot carries an override.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.single.is_none() && self.double.is_none() && self.long.is_none()
+    }
+}
+
+impl From<&ButtonToml> for ButtonDocument {
+    fn from(value: &ButtonToml) -> Self {
+        Self {
+            single: value.single.clone(),
+            double: value.double.clone(),
+            long: value.long.clone(),
+        }
+    }
+}
+
+impl From<&ButtonDocument> for ButtonToml {
+    fn from(value: &ButtonDocument) -> Self {
+        Self {
+            single: value.single.clone(),
+            double: value.double.clone(),
+            long: value.long.clone(),
+        }
+    }
+}
+
+/// One stored user layout in the TOML file.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LayoutToml {
+    pub name: String,
+    pub description: Option<String>,
+    pub gesture: Option<GestureOverrides>,
+    #[serde(default)]
+    pub buttons: BTreeMap<String, ButtonToml>,
+}
+
+impl LayoutToml {
+    fn pointer(&self) -> LayoutDocument {
+        LayoutDocument {
+            name: self.name.clone(),
+            description: self.description.clone(),
+            gesture: self.gesture.clone(),
+            buttons: self
+                .buttons
+                .iter()
+                .filter(|(_, slots)| !slots.is_empty())
+                .map(|(name, slots)| (name.clone(), slots.into()))
+                .collect(),
+        }
+    }
+}
+
+/// A validated layout as exchanged over D-Bus and edited by the GUI.
+///
+/// Slots hold raw overrides: an absent slot means "profile default", and the
+/// action `none` swallows the button. The `default` template is synthesized by
+/// [`ConfigDocument::layout_summaries`] and never appears in `layouts`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LayoutDocument {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub gesture: Option<GestureOverrides>,
+    #[serde(default)]
+    pub buttons: BTreeMap<String, ButtonDocument>,
+}
+
+impl LayoutDocument {
+    /// One raw slot value; `None` means the profile default.
+    #[must_use]
+    pub fn slot(&self, button: RemoteButton, trigger: Trigger) -> Option<&str> {
+        self.buttons.get(button.name())?.slot(trigger)
+    }
+
+    /// Replace one raw slot; `None` restores the profile default.
+    pub fn set_slot(&mut self, button: RemoteButton, trigger: Trigger, value: Option<String>) {
+        if value.is_none() {
+            if let Some(slots) = self.buttons.get_mut(button.name()) {
+                slots.set_slot(trigger, None);
+                if slots.is_empty() {
+                    self.buttons.remove(button.name());
+                }
+            }
+            return;
+        }
+        self.buttons
+            .entry(button.name().to_string())
+            .or_default()
+            .set_slot(trigger, value);
+    }
+
+    /// No slot or gesture override is stored.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.buttons.values().all(ButtonDocument::is_empty)
+            && self.gesture.as_ref().is_none_or(GestureOverrides::is_empty)
+    }
+
+    fn to_toml(&self) -> LayoutToml {
+        LayoutToml {
+            name: self.name.clone(),
+            description: self.description.clone(),
+            gesture: self.gesture.clone(),
+            buttons: self
+                .buttons
+                .iter()
+                .filter(|(_, slots)| !slots.is_empty())
+                .map(|(name, slots)| (name.clone(), slots.into()))
+                .collect(),
+        }
+    }
+}
+
 /// Raw `daemon.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -284,14 +452,19 @@ pub struct FileConfig {
     pub trigger_key: Option<String>,
     /// Allow `exec:` actions. Disabled by default.
     pub allow_exec: Option<bool>,
-    /// Gesture timing overrides; absent fields keep the profile value.
+    /// The layout that drives the input runtime.
+    pub active_layout: Option<String>,
+    /// Named user layouts; `default` is synthesized and never stored.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub layouts: BTreeMap<String, LayoutToml>,
+    /// Schema v1 gesture timing; migrated into [`MIGRATED_LAYOUT`].
     pub gesture: Option<GestureOverrides>,
-    /// Per-button action overrides.
-    #[serde(default)]
+    /// Schema v1 per-button overrides; migrated into [`MIGRATED_LAYOUT`].
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub buttons: BTreeMap<String, ButtonToml>,
 }
 
-/// Validated configuration with profile defaults applied.
+/// Validated configuration with the active layout resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub profile: String,
@@ -303,7 +476,13 @@ pub struct Config {
     /// Key name; `None` disables synthetic trigger emission.
     pub trigger_key: Option<String>,
     pub allow_exec: bool,
+    /// Id of the layout that drives the runtime: `default` or a user layout.
+    pub active_layout: String,
+    /// Validated user layouts; the `default` template is not stored here.
+    pub layouts: BTreeMap<String, LayoutDocument>,
+    /// Effective gesture timing of [`Self::active_layout`].
     pub gesture: GestureTiming,
+    /// Effective action map of [`Self::active_layout`].
     pub map: ActionMap,
 }
 
@@ -320,10 +499,42 @@ impl Config {
             vinput: VinputMode::Trigger,
             trigger_key: Some(DEFAULT_TRIGGER_KEY.to_string()),
             allow_exec: false,
+            active_layout: DEFAULT_LAYOUT.to_string(),
+            layouts: BTreeMap::new(),
             gesture: profile.gesture_timing,
             map: ActionMap::defaults(),
         }
     }
+
+    /// Display name of the active layout; the template uses its fixed name.
+    #[must_use]
+    pub fn active_layout_name(&self) -> &str {
+        if self.active_layout == DEFAULT_LAYOUT {
+            return DEFAULT_LAYOUT_NAME;
+        }
+        self.layouts
+            .get(&self.active_layout)
+            .map_or(self.active_layout.as_str(), |layout| layout.name.as_str())
+    }
+
+    /// Switch the active layout and resolve its map and gesture timing.
+    pub fn select_layout(&mut self, id: &str, profile: &DeviceProfile) -> Result<(), ConfigError> {
+        let (map, gesture) = resolve_layout(profile, id, &self.layouts, self.allow_exec)?;
+        self.active_layout = id.to_string();
+        self.map = map;
+        self.gesture = gesture;
+        Ok(())
+    }
+}
+
+/// A layout entry for selectors and CLI listings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutSummary {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    /// The synthesized `default` template rather than a stored layout.
+    pub template: bool,
 }
 
 /// A loaded configuration file.
@@ -344,11 +555,103 @@ pub fn default_path() -> PathBuf {
     base.join("atvv").join("daemon.toml")
 }
 
-fn check_schema(version: u32) -> Result<(), ConfigError> {
-    if version == SCHEMA_VERSION {
-        Ok(())
+/// Whether `id` matches `[a-z0-9][a-z0-9_-]{0,31}`.
+#[must_use]
+pub fn layout_id_is_valid(id: &str) -> bool {
+    if id.is_empty() || id.len() > 32 {
+        return false;
+    }
+    let bytes = id.as_bytes();
+    (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit())
+        && bytes.iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_' || *byte == b'-'
+        })
+}
+
+/// Whether `id` is the template or a reserved preset id.
+#[must_use]
+pub fn layout_id_is_reserved(id: &str) -> bool {
+    RESERVED_LAYOUT_IDS.contains(&id)
+}
+
+/// Derive a valid layout id from a display name.
+#[must_use]
+pub fn slug_layout_id(name: &str) -> String {
+    let mut id = String::new();
+    for ch in name.chars() {
+        let ch = ch.to_ascii_lowercase();
+        if ch.is_ascii_alphanumeric() {
+            if id.len() == 32 {
+                break;
+            }
+            id.push(ch);
+        } else if !id.is_empty() && !id.ends_with('-') && id.len() < 32 {
+            id.push('-');
+        }
+    }
+    while id.ends_with('-') {
+        id.pop();
+    }
+    if id.is_empty() {
+        "layout".to_string()
     } else {
-        Err(ConfigError::SchemaVersion { found: version })
+        id
+    }
+}
+
+/// Return `base` or a suffixed id that no existing layout uses.
+///
+/// A reserved base gains `-layout`, so duplicating `Default` cannot produce
+/// the template id.
+#[must_use]
+pub fn unique_layout_id<'a>(base: &str, existing: impl IntoIterator<Item = &'a str>) -> String {
+    let existing: BTreeSet<&str> = existing.into_iter().collect();
+    let mut base = base.to_string();
+    if layout_id_is_reserved(&base) {
+        base.push_str("-layout");
+    }
+    if base.len() > 32 {
+        base.truncate(32);
+        while base.ends_with('-') {
+            base.pop();
+        }
+    }
+    if !existing.contains(base.as_str()) {
+        return base;
+    }
+    let mut suffix = 2;
+    loop {
+        let tail = format!("-{suffix}");
+        let keep = 32usize.saturating_sub(tail.len());
+        let mut candidate = base[..base.len().min(keep)].to_string();
+        while candidate.ends_with('-') {
+            candidate.pop();
+        }
+        candidate.push_str(&tail);
+        if !existing.contains(candidate.as_str()) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
+/// Return `base` or a suffixed name that no existing layout uses.
+///
+/// `Default` is reserved as a display name because it denotes the template.
+#[must_use]
+pub fn unique_layout_name<'a>(base: &str, existing: impl IntoIterator<Item = &'a str>) -> String {
+    let existing: BTreeSet<String> = existing.into_iter().map(str::to_ascii_lowercase).collect();
+    let reserved = base.eq_ignore_ascii_case(DEFAULT_LAYOUT_NAME);
+    if !reserved && !existing.contains(&base.to_ascii_lowercase()) {
+        return base.to_string();
+    }
+    let mut suffix = 2;
+    loop {
+        let candidate = format!("{base} {suffix}");
+        if !existing.contains(&candidate.to_ascii_lowercase()) {
+            return candidate;
+        }
+        suffix += 1;
     }
 }
 
@@ -411,11 +714,131 @@ fn duplicate_chord_key(action: &Action) -> Option<String> {
     None
 }
 
+fn validate_layout(
+    id: &str,
+    layout: &LayoutToml,
+    allow_exec: bool,
+    profile: &DeviceProfile,
+    names: &mut BTreeSet<String>,
+) -> Result<LayoutDocument, ConfigError> {
+    if !layout_id_is_valid(id) {
+        return Err(ConfigError::LayoutId(id.to_string()));
+    }
+    if layout_id_is_reserved(id) {
+        return Err(ConfigError::LayoutReserved(id.to_string()));
+    }
+    let name = layout.name.trim();
+    if name.is_empty() || name.chars().count() > MAX_LAYOUT_NAME {
+        return Err(ConfigError::LayoutName(id.to_string()));
+    }
+    if name.eq_ignore_ascii_case(DEFAULT_LAYOUT_NAME) {
+        return Err(ConfigError::LayoutNameReserved(id.to_string()));
+    }
+    if !names.insert(name.to_ascii_lowercase()) {
+        return Err(ConfigError::LayoutNameTaken {
+            id: id.to_string(),
+            name: name.to_string(),
+        });
+    }
+    let description = layout
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|description| !description.is_empty());
+    if description.is_some_and(|description| description.chars().count() > MAX_LAYOUT_DESCRIPTION) {
+        return Err(ConfigError::LayoutDescription(id.to_string()));
+    }
+
+    let mut document = layout.pointer();
+    document.name = name.to_string();
+    document.description = description.map(str::to_string);
+    for (button_name, slots) in &layout.buttons {
+        let button = button_by_name(button_name)
+            .ok_or_else(|| ConfigError::UnknownButton(button_name.clone()))?;
+        if button == RemoteButton::Voice {
+            return Err(ConfigError::VoiceMapped);
+        }
+        for (trigger, value) in slots.slots() {
+            let Some(raw) = value else {
+                continue;
+            };
+            parse_checked_action(raw, allow_exec).map_err(|source| ConfigError::LayoutAction {
+                layout: id.to_string(),
+                button: button_name.clone(),
+                trigger: trigger.name(),
+                value: raw.clone(),
+                source,
+            })?;
+        }
+    }
+    GestureSettings::from(profile.gesture_timing)
+        .with_overrides(layout.gesture.as_ref())
+        .map_err(|error| ConfigError::LayoutGesture {
+            layout: id.to_string(),
+            source: Box::new(error),
+        })?;
+    Ok(document)
+}
+
+fn resolve_layout(
+    profile: &DeviceProfile,
+    id: &str,
+    layouts: &BTreeMap<String, LayoutDocument>,
+    allow_exec: bool,
+) -> Result<(ActionMap, GestureTiming), ConfigError> {
+    let mut map = ActionMap::defaults();
+    let mut gesture = profile.gesture_timing;
+    if id == DEFAULT_LAYOUT {
+        return Ok((map, gesture));
+    }
+    let layout = layouts
+        .get(id)
+        .ok_or_else(|| ConfigError::UnknownLayout(id.to_string()))?;
+    for (button_name, slots) in &layout.buttons {
+        let button = button_by_name(button_name)
+            .ok_or_else(|| ConfigError::UnknownButton(button_name.clone()))?;
+        if button == RemoteButton::Voice {
+            return Err(ConfigError::VoiceMapped);
+        }
+        for (trigger, value) in slots.slots() {
+            let Some(raw) = value else {
+                continue;
+            };
+            let action = parse_checked_action(raw, allow_exec).map_err(|source| {
+                ConfigError::LayoutAction {
+                    layout: id.to_string(),
+                    button: button_name.clone(),
+                    trigger: trigger.name(),
+                    value: raw.clone(),
+                    source,
+                }
+            })?;
+            map.set(button, trigger, action)
+                .map_err(|error| ConfigError::LayoutAction {
+                    layout: id.to_string(),
+                    button: button_name.clone(),
+                    trigger: trigger.name(),
+                    value: raw.clone(),
+                    source: ActionCheckError::Grammar(error),
+                })?;
+        }
+    }
+    gesture = GestureSettings::from(profile.gesture_timing)
+        .with_overrides(layout.gesture.as_ref())
+        .map_err(|error| ConfigError::LayoutGesture {
+            layout: id.to_string(),
+            source: Box::new(error),
+        })?
+        .into();
+    Ok((map, gesture))
+}
+
 impl FileConfig {
-    /// Validate every field and merge the overrides into the profile defaults.
+    /// Validate every field, migrate a flat v1 map, and resolve the active
+    /// layout against the profile defaults.
     pub fn validate(&self, profile: &DeviceProfile) -> Result<Config, ConfigError> {
-        check_schema(self.schema_version.unwrap_or(SCHEMA_VERSION))?;
-        if let Some(profile_id) = &self.profile
+        let file = self.migrated()?;
+        if let Some(profile_id) = &file.profile
             && profile_id != profile.id
         {
             return Err(ConfigError::Profile {
@@ -423,59 +846,101 @@ impl FileConfig {
                 expected: profile.id.to_string(),
             });
         }
-        let gain_db = self.gain_db.unwrap_or(profile.gain_db);
+        let gain_db = file.gain_db.unwrap_or(profile.gain_db);
         if !(-MAX_GAIN_DB..=MAX_GAIN_DB).contains(&gain_db) {
             return Err(ConfigError::GainRange(gain_db));
         }
-        let trigger_key = match self.trigger_key.as_deref() {
+        let trigger_key = match file.trigger_key.as_deref() {
             Some(name) => parse_trigger_key(name)?,
             None => Some(DEFAULT_TRIGGER_KEY.to_string()),
         };
-        let allow_exec = self.allow_exec.unwrap_or(false);
-        let gesture =
-            GestureSettings::from(profile.gesture_timing).with_overrides(self.gesture.as_ref())?;
-
-        let mut map = ActionMap::defaults();
-        for (name, slots) in &self.buttons {
-            let button =
-                button_by_name(name).ok_or_else(|| ConfigError::UnknownButton(name.clone()))?;
-            if button == RemoteButton::Voice {
-                return Err(ConfigError::VoiceMapped);
-            }
-            for (trigger, value) in slots.slots() {
-                let Some(raw) = value else {
-                    continue;
-                };
-                let action = parse_checked_action(raw, allow_exec).map_err(|source| {
-                    ConfigError::Action {
-                        button: name.clone(),
-                        trigger: trigger.name(),
-                        value: raw.clone(),
-                        source,
-                    }
-                })?;
-                map.set(button, trigger, action)
-                    .map_err(|error| ConfigError::Action {
-                        button: name.clone(),
-                        trigger: trigger.name(),
-                        value: raw.clone(),
-                        source: ActionCheckError::Grammar(error),
-                    })?;
-            }
+        let allow_exec = file.allow_exec.unwrap_or(false);
+        if file.layouts.len() > MAX_LAYOUTS {
+            return Err(ConfigError::TooManyLayouts);
         }
+        let mut names = BTreeSet::new();
+        let mut layouts = BTreeMap::new();
+        for (id, layout) in &file.layouts {
+            layouts.insert(
+                id.clone(),
+                validate_layout(id, layout, allow_exec, profile, &mut names)?,
+            );
+        }
+        let active_layout = file
+            .active_layout
+            .clone()
+            .unwrap_or_else(|| DEFAULT_LAYOUT.to_string());
+        if active_layout != DEFAULT_LAYOUT && !layouts.contains_key(&active_layout) {
+            return Err(ConfigError::ActiveLayout(active_layout));
+        }
+        let (map, gesture) = resolve_layout(profile, &active_layout, &layouts, allow_exec)?;
 
         Ok(Config {
             profile: profile.id.to_string(),
-            device: self.device.clone(),
-            adapter: self.adapter.clone(),
+            device: file.device.clone(),
+            adapter: file.adapter.clone(),
             gain_db,
-            input: self.input.unwrap_or(true),
-            vinput: self.vinput.unwrap_or_default(),
+            input: file.input.unwrap_or(true),
+            vinput: file.vinput.unwrap_or_default(),
             trigger_key,
             allow_exec,
-            gesture: gesture.into(),
+            active_layout,
+            layouts,
+            gesture,
             map,
         })
+    }
+
+    /// Move a flat v1 button map into the `custom` layout.
+    ///
+    /// A v2 file must not carry the top-level `[buttons]` or `[gesture]`
+    /// tables, and a v1 file must not carry layouts. The returned file is
+    /// always schema version 2.
+    fn migrated(&self) -> Result<FileConfig, ConfigError> {
+        let mut file = self.clone();
+        match file.schema_version {
+            None | Some(LEGACY_SCHEMA_VERSION) => {
+                if !file.layouts.is_empty() || file.active_layout.is_some() {
+                    return Err(ConfigError::MixedSchema);
+                }
+                file.schema_version = Some(SCHEMA_VERSION);
+                let has_overrides = file.buttons.values().any(|slots| !slots.is_empty())
+                    || file
+                        .gesture
+                        .as_ref()
+                        .is_some_and(|gesture| !gesture.is_empty());
+                if has_overrides {
+                    let mut buttons = BTreeMap::new();
+                    for (name, slots) in std::mem::take(&mut file.buttons) {
+                        if !slots.is_empty() {
+                            buttons.insert(name, slots);
+                        }
+                    }
+                    file.layouts.insert(
+                        MIGRATED_LAYOUT.to_string(),
+                        LayoutToml {
+                            name: MIGRATED_LAYOUT_NAME.to_string(),
+                            description: None,
+                            gesture: file.gesture.take(),
+                            buttons,
+                        },
+                    );
+                    file.active_layout = Some(MIGRATED_LAYOUT.to_string());
+                } else {
+                    file.buttons.clear();
+                    file.gesture = None;
+                    file.active_layout = Some(DEFAULT_LAYOUT.to_string());
+                }
+                Ok(file)
+            }
+            Some(SCHEMA_VERSION) => {
+                if !file.buttons.is_empty() || file.gesture.is_some() {
+                    return Err(ConfigError::LegacyTables);
+                }
+                Ok(file)
+            }
+            Some(found) => Err(ConfigError::SchemaVersion { found }),
+        }
     }
 }
 
@@ -505,10 +970,11 @@ pub fn load(path: &Path, profile: &DeviceProfile) -> Result<LoadedConfig, Config
     })
 }
 
-/// Record the paired device and adapter without discarding other settings.
+/// Record the paired device and adapter without discarding layouts.
 ///
-/// A malformed existing file is an error: the daemon should not silently
-/// replace a typo with defaults.
+/// The file is migrated to the current schema in the same write. A malformed
+/// existing file is an error: the daemon should not silently replace a typo
+/// with defaults.
 pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(), ConfigError> {
     let mut file = if path.exists() {
         let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
@@ -519,12 +985,13 @@ pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(
             path: path.to_path_buf(),
             source,
         })?;
-        check_schema(file.schema_version.unwrap_or(SCHEMA_VERSION))?;
-        file
+        file.migrated()?
     } else {
-        FileConfig::default()
+        FileConfig {
+            schema_version: Some(SCHEMA_VERSION),
+            ..FileConfig::default()
+        }
     };
-    file.schema_version = Some(SCHEMA_VERSION);
     file.device = Some(device.to_string());
     if let Some(adapter) = adapter {
         file.adapter = Some(adapter.to_string());
@@ -532,49 +999,12 @@ pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(
     write_file(path, &file)
 }
 
-/// One optional action per gesture slot in the JSON document.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ButtonDocument {
-    pub single: Option<String>,
-    pub double: Option<String>,
-    pub long: Option<String>,
-}
-
-impl ButtonDocument {
-    fn slots(&self) -> [(Trigger, Option<&String>); 3] {
-        [
-            (Trigger::Single, self.single.as_ref()),
-            (Trigger::Double, self.double.as_ref()),
-            (Trigger::Long, self.long.as_ref()),
-        ]
-    }
-}
-
-impl From<&ButtonToml> for ButtonDocument {
-    fn from(value: &ButtonToml) -> Self {
-        Self {
-            single: value.single.clone(),
-            double: value.double.clone(),
-            long: value.long.clone(),
-        }
-    }
-}
-
-impl From<&ButtonDocument> for ButtonToml {
-    fn from(value: &ButtonDocument) -> Self {
-        Self {
-            single: value.single.clone(),
-            double: value.double.clone(),
-            long: value.long.clone(),
-        }
-    }
-}
-
 /// Stable JSON view of the editable configuration.
 ///
-/// `schema_version` versions this payload. A missing slot means "profile
-/// default"; the action `none` means "swallow the button".
+/// `schema_version` versions this payload. `layouts` holds raw overrides for
+/// every user layout; the `default` template is synthesized and never stored.
+/// A missing slot means "profile default"; the action `none` means "swallow
+/// the button".
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigDocument {
@@ -587,35 +1017,16 @@ pub struct ConfigDocument {
     pub vinput: VinputMode,
     pub trigger_key: Option<String>,
     pub allow_exec: bool,
-    pub gesture: GestureSettings,
+    /// Id of the active layout: `default` or a key in [`Self::layouts`].
+    pub active_layout: String,
     #[serde(default)]
-    pub buttons: BTreeMap<String, ButtonDocument>,
+    pub layouts: BTreeMap<String, LayoutDocument>,
 }
 
 impl ConfigDocument {
-    /// Build the effective document from a validated configuration.
+    /// Build the editable document from a validated configuration.
     #[must_use]
     pub fn from_config(config: &Config) -> Self {
-        let mut buttons = BTreeMap::new();
-        for button in RemoteButton::LOGICAL {
-            buttons.insert(
-                button.name().to_string(),
-                ButtonDocument {
-                    single: config
-                        .map
-                        .resolve(button, Trigger::Single)
-                        .map(ToString::to_string),
-                    double: config
-                        .map
-                        .resolve(button, Trigger::Double)
-                        .map(ToString::to_string),
-                    long: config
-                        .map
-                        .resolve(button, Trigger::Long)
-                        .map(ToString::to_string),
-                },
-            );
-        }
         Self {
             schema_version: SCHEMA_VERSION,
             profile: config.profile.clone(),
@@ -626,95 +1037,58 @@ impl ConfigDocument {
             vinput: config.vinput,
             trigger_key: config.trigger_key.clone(),
             allow_exec: config.allow_exec,
-            gesture: config.gesture.into(),
-            buttons,
+            active_layout: config.active_layout.clone(),
+            layouts: config.layouts.clone(),
         }
+    }
+
+    /// Layouts for a selector: the template first, then user layouts by id.
+    #[must_use]
+    pub fn layout_summaries(&self) -> Vec<LayoutSummary> {
+        let mut summaries = vec![LayoutSummary {
+            id: DEFAULT_LAYOUT.to_string(),
+            name: DEFAULT_LAYOUT_NAME.to_string(),
+            description: None,
+            template: true,
+        }];
+        summaries.extend(self.layouts.iter().map(|(id, layout)| LayoutSummary {
+            id: id.clone(),
+            name: layout.name.clone(),
+            description: layout.description.clone(),
+            template: false,
+        }));
+        summaries
+    }
+
+    /// Resolve any layout id to its effective map and gesture timing.
+    pub fn resolved_layout(
+        &self,
+        id: &str,
+        profile: &DeviceProfile,
+    ) -> Result<(ActionMap, GestureTiming), ConfigError> {
+        let mut document = self.clone();
+        document.active_layout = id.to_string();
+        let config = document.validate(profile)?;
+        Ok((config.map, config.gesture))
     }
 
     /// Validate the document and produce the effective configuration.
     pub fn validate(&self, profile: &DeviceProfile) -> Result<Config, ConfigError> {
-        check_schema(self.schema_version)?;
-        if self.profile != profile.id {
-            return Err(ConfigError::Profile {
-                found: self.profile.clone(),
-                expected: profile.id.to_string(),
+        if self.schema_version != SCHEMA_VERSION {
+            return Err(ConfigError::SchemaVersion {
+                found: self.schema_version,
             });
         }
-        if !(-MAX_GAIN_DB..=MAX_GAIN_DB).contains(&self.gain_db) {
-            return Err(ConfigError::GainRange(self.gain_db));
-        }
-        let trigger_key = match self.trigger_key.as_deref() {
-            Some(name) => parse_trigger_key(name)?,
-            None => None,
-        };
-        let gesture = self.gesture.validate_effective()?;
-
-        let mut map = ActionMap::defaults();
-        for (name, slots) in &self.buttons {
-            let button =
-                button_by_name(name).ok_or_else(|| ConfigError::UnknownButton(name.clone()))?;
-            if button == RemoteButton::Voice {
-                return Err(ConfigError::VoiceMapped);
-            }
-            for (trigger, value) in slots.slots() {
-                let Some(raw) = value else {
-                    continue;
-                };
-                let action = parse_checked_action(raw, self.allow_exec).map_err(|source| {
-                    ConfigError::Action {
-                        button: name.clone(),
-                        trigger: trigger.name(),
-                        value: raw.clone(),
-                        source,
-                    }
-                })?;
-                map.set(button, trigger, action)
-                    .map_err(|error| ConfigError::Action {
-                        button: name.clone(),
-                        trigger: trigger.name(),
-                        value: raw.clone(),
-                        source: ActionCheckError::Grammar(error),
-                    })?;
-            }
-        }
-
-        Ok(Config {
-            profile: profile.id.to_string(),
-            device: self.device.clone(),
-            adapter: self.adapter.clone(),
-            gain_db: self.gain_db,
-            input: self.input,
-            vinput: self.vinput,
-            trigger_key,
-            allow_exec: self.allow_exec,
-            gesture: gesture.into(),
-            map,
-        })
+        self.to_file_config().validate(profile)
     }
 
     /// Minimal TOML representation relative to the profile defaults.
     #[must_use]
     pub fn to_file(&self, profile: &DeviceProfile) -> FileConfig {
-        let defaults = ActionMap::defaults();
-        let mut buttons = BTreeMap::new();
-        for (name, slots) in &self.buttons {
-            let Some(button) = button_by_name(name) else {
-                continue;
-            };
-            if button == RemoteButton::Voice {
-                continue;
-            }
-            let table = ButtonToml {
-                single: override_slot(slots.single.as_ref(), &defaults, button, Trigger::Single),
-                double: override_slot(slots.double.as_ref(), &defaults, button, Trigger::Double),
-                long: override_slot(slots.long.as_ref(), &defaults, button, Trigger::Long),
-            };
-            if !table.is_empty() {
-                buttons.insert(name.clone(), table);
-            }
+        let mut layouts = BTreeMap::new();
+        for (id, layout) in &self.layouts {
+            layouts.insert(id.clone(), layout_to_toml(layout, profile));
         }
-
-        let gesture = self.gesture.overrides_from(profile.gesture_timing);
         let trigger_key = match self.trigger_key.as_deref() {
             Some(DEFAULT_TRIGGER_KEY) => None,
             Some(key) => Some(key.to_string()),
@@ -730,9 +1104,70 @@ impl ConfigDocument {
             vinput: (self.vinput != VinputMode::Trigger).then_some(self.vinput),
             trigger_key,
             allow_exec: self.allow_exec.then_some(true),
-            gesture: (!gesture.is_empty()).then_some(gesture),
-            buttons,
+            active_layout: Some(self.active_layout.clone()),
+            layouts,
+            gesture: None,
+            buttons: BTreeMap::new(),
         }
+    }
+
+    fn to_file_config(&self) -> FileConfig {
+        FileConfig {
+            schema_version: Some(self.schema_version),
+            profile: Some(self.profile.clone()),
+            device: self.device.clone(),
+            adapter: self.adapter.clone(),
+            gain_db: Some(self.gain_db),
+            input: Some(self.input),
+            vinput: Some(self.vinput),
+            trigger_key: self.trigger_key.clone(),
+            allow_exec: Some(self.allow_exec),
+            active_layout: Some(self.active_layout.clone()),
+            layouts: self
+                .layouts
+                .iter()
+                .map(|(id, layout)| (id.clone(), layout.to_toml()))
+                .collect(),
+            gesture: None,
+            buttons: BTreeMap::new(),
+        }
+    }
+}
+
+fn layout_to_toml(layout: &LayoutDocument, profile: &DeviceProfile) -> LayoutToml {
+    let defaults = ActionMap::defaults();
+    let mut buttons = BTreeMap::new();
+    for (name, slots) in &layout.buttons {
+        let Some(button) = button_by_name(name) else {
+            continue;
+        };
+        if button == RemoteButton::Voice {
+            continue;
+        }
+        let table = ButtonToml {
+            single: override_slot(slots.single.as_ref(), &defaults, button, Trigger::Single),
+            double: override_slot(slots.double.as_ref(), &defaults, button, Trigger::Double),
+            long: override_slot(slots.long.as_ref(), &defaults, button, Trigger::Long),
+        };
+        if !table.is_empty() {
+            buttons.insert(name.clone(), table);
+        }
+    }
+    let gesture = layout.gesture.as_ref().and_then(|overrides| {
+        let effective = GestureSettings::from(profile.gesture_timing)
+            .with_overrides(Some(overrides))
+            .ok()?;
+        let normalized = effective.overrides_from(profile.gesture_timing);
+        (!normalized.is_empty()).then_some(normalized)
+    });
+    LayoutToml {
+        name: layout.name.clone(),
+        description: layout
+            .description
+            .clone()
+            .filter(|description| !description.trim().is_empty()),
+        gesture,
+        buttons,
     }
 }
 
@@ -756,13 +1191,14 @@ pub fn save_document(
     document: &ConfigDocument,
     profile: &DeviceProfile,
 ) -> Result<(), ConfigError> {
-    let config = document.validate(profile)?;
-    let normalized = ConfigDocument::from_config(&config);
-    write_file(path, &normalized.to_file(profile))
+    document.validate(profile)?;
+    write_file(path, &document.to_file(profile))
 }
 
 fn write_file(path: &Path, file: &FileConfig) -> Result<(), ConfigError> {
-    let text = toml::to_string_pretty(file).map_err(|source| ConfigError::Serialize {
+    let mut file = file.clone();
+    file.schema_version = Some(SCHEMA_VERSION);
+    let text = toml::to_string_pretty(&file).map_err(|source| ConfigError::Serialize {
         path: path.to_path_buf(),
         source,
     })?;
@@ -825,8 +1261,14 @@ pub enum ConfigError {
         #[source]
         source: io::Error,
     },
-    #[error("schema_version {found} is not supported (expected {SCHEMA_VERSION})")]
+    #[error(
+        "schema_version {found} is not supported (expected {LEGACY_SCHEMA_VERSION} or {SCHEMA_VERSION})"
+    )]
     SchemaVersion { found: u32 },
+    #[error("a v1 button map and v2 layouts cannot share one document")]
+    MixedSchema,
+    #[error("the top-level [buttons] and [gesture] tables moved into a layout")]
+    LegacyTables,
     #[error("gain_db {0} is outside -{MAX_GAIN_DB}..={MAX_GAIN_DB}")]
     GainRange(i8),
     #[error("trigger_key {0:?} is not a known input key name (use `none` to disable)")]
@@ -852,6 +1294,39 @@ pub enum ConfigError {
         #[source]
         source: ActionCheckError,
     },
+    #[error("layout id {0:?} must match [a-z0-9][a-z0-9_-]{{0,31}}")]
+    LayoutId(String),
+    #[error("layout id {0:?} is reserved")]
+    LayoutReserved(String),
+    #[error("layout {0:?}: the name must be 1-{MAX_LAYOUT_NAME} characters")]
+    LayoutName(String),
+    #[error("layout {0:?}: the name Default is reserved for the template")]
+    LayoutNameReserved(String),
+    #[error("layout {id:?}: the name {name:?} is already used")]
+    LayoutNameTaken { id: String, name: String },
+    #[error("layout {0:?}: the description is longer than {MAX_LAYOUT_DESCRIPTION} characters")]
+    LayoutDescription(String),
+    #[error("at most {MAX_LAYOUTS} layouts are allowed")]
+    TooManyLayouts,
+    #[error("active_layout {0:?} does not exist")]
+    ActiveLayout(String),
+    #[error("layout {0:?} does not exist")]
+    UnknownLayout(String),
+    #[error("layouts.{layout}.buttons.{button}.{trigger} = {value:?}: {source}")]
+    LayoutAction {
+        layout: String,
+        button: String,
+        trigger: &'static str,
+        value: String,
+        #[source]
+        source: ActionCheckError,
+    },
+    #[error("layouts.{layout}.gesture: {source}")]
+    LayoutGesture {
+        layout: String,
+        #[source]
+        source: Box<ConfigError>,
+    },
 }
 
 #[cfg(test)]
@@ -871,6 +1346,31 @@ mod tests {
         ConfigDocument::from_config(&Config::defaults(&RC003))
     }
 
+    fn layout_mut<'a>(document: &'a mut ConfigDocument, id: &str) -> &'a mut LayoutDocument {
+        document.layouts.get_mut(id).expect("test layout")
+    }
+
+    fn custom_document() -> ConfigDocument {
+        let mut document = defaults();
+        let mut layout = LayoutDocument {
+            name: "Coding".to_string(),
+            description: Some("Editor shortcuts".to_string()),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Up,
+            Trigger::Single,
+            Some("key:KEY_F13".to_string()),
+        );
+        layout.gesture = Some(GestureOverrides {
+            long_press_ms: Some(700),
+            ..GestureOverrides::default()
+        });
+        document.layouts.insert("editor".to_string(), layout);
+        document.active_layout = "editor".to_string();
+        document
+    }
+
     #[test]
     fn missing_file_uses_profile_defaults() {
         let path = path("missing");
@@ -885,6 +1385,8 @@ mod tests {
             Some(DEFAULT_TRIGGER_KEY)
         );
         assert!(!loaded.config.allow_exec);
+        assert_eq!(loaded.config.active_layout, DEFAULT_LAYOUT);
+        assert!(loaded.config.layouts.is_empty());
         assert_eq!(loaded.config.gesture, RC003.gesture_timing);
         assert_eq!(
             loaded.config.map.resolve(RemoteButton::Ok, Trigger::Single),
@@ -895,271 +1397,235 @@ mod tests {
     }
 
     #[test]
-    fn schema_version_round_trips_and_mismatches_are_rejected() {
-        let mut document = defaults();
-        assert_eq!(document.schema_version, SCHEMA_VERSION);
-        let json = serde_json::to_string(&document).unwrap();
-        assert_eq!(
-            serde_json::from_str::<ConfigDocument>(&json).unwrap(),
-            document
-        );
-
-        document.schema_version = 2;
-        assert!(matches!(
-            document.validate(&RC003),
-            Err(ConfigError::SchemaVersion { found: 2 })
-        ));
-
-        let file = FileConfig {
-            schema_version: Some(2),
-            ..FileConfig::default()
-        };
-        assert!(matches!(
-            file.validate(&RC003),
-            Err(ConfigError::SchemaVersion { found: 2 })
-        ));
-    }
-
-    #[test]
-    fn button_overrides_merge_with_profile_defaults() {
-        let path = path("buttons");
+    fn v1_button_map_migrates_to_the_custom_layout() {
+        let path = path("migrate");
         std::fs::write(
             &path,
-            "[buttons.up]\nsingle = \"key:KEY_F13\"\n[buttons.ok]\nlong = \"key:KEY_M\"\n",
+            "schema_version = 1\ngain_db = 6\n\n[gesture]\nlong_press_ms = 700\n\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
         )
         .unwrap();
         let loaded = load(&path, &RC003).unwrap();
+        assert_eq!(loaded.config.active_layout, MIGRATED_LAYOUT);
+        assert_eq!(loaded.config.active_layout_name(), MIGRATED_LAYOUT_NAME);
+        let layout = &loaded.config.layouts[MIGRATED_LAYOUT];
+        assert_eq!(layout.name, MIGRATED_LAYOUT_NAME);
+        assert_eq!(
+            layout.slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_F13")
+        );
         assert_eq!(
             loaded.config.map.resolve(RemoteButton::Up, Trigger::Single),
             Some(&Action::Key {
                 name: "KEY_F13".into()
             })
         );
-        assert_eq!(
-            loaded.config.map.resolve(RemoteButton::Ok, Trigger::Long),
-            Some(&Action::Key {
-                name: "KEY_M".into()
-            })
-        );
-        // Untouched slots and buttons keep the profile defaults.
-        assert_eq!(
-            loaded.config.map.resolve(RemoteButton::Ok, Trigger::Single),
-            Some(&Action::Key {
-                name: "KEY_ENTER".into()
-            })
-        );
-        assert_eq!(
-            loaded
-                .config
-                .map
-                .resolve(RemoteButton::Home, Trigger::Single),
-            Some(&Action::Key {
-                name: "KEY_HOMEPAGE".into()
-            })
-        );
-        assert!(
-            loaded
-                .config
-                .map
-                .resolve(RemoteButton::Ok, Trigger::Double)
-                .is_none()
-        );
+        assert_eq!(loaded.config.gesture.long_press_ms, 700);
+
+        let document = ConfigDocument::from_config(&loaded.config);
+        save_document(&path, &document, &RC003).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("active_layout = \"custom\""), "{text}");
+        assert!(text.contains("[layouts.custom]"), "{text}");
+        assert!(text.contains("[layouts.custom.buttons.up]"), "{text}");
+        assert!(!text.contains("\n[buttons.up]"), "{text}");
+        assert!(text.contains("gain_db = 6"), "{text}");
+
+        let reloaded = load(&path, &RC003).unwrap().config;
+        assert_eq!(reloaded, loaded.config);
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
-    fn invalid_actions_name_the_button_trigger_and_value() {
-        let file = FileConfig {
-            buttons: BTreeMap::from([(
-                "up".to_string(),
-                ButtonToml {
-                    single: Some("key:not-a-key".to_string()),
-                    ..ButtonToml::default()
-                },
-            )]),
-            ..FileConfig::default()
+    fn v1_without_overrides_migrates_to_the_default_template() {
+        let path = path("empty-migrate");
+        std::fs::write(&path, "schema_version = 1\ninput = false\n").unwrap();
+        let loaded = load(&path, &RC003).unwrap();
+        assert_eq!(loaded.config.active_layout, DEFAULT_LAYOUT);
+        assert!(loaded.config.layouts.is_empty());
+        assert!(!loaded.config.input);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn schema_versions_and_mixed_tables_are_rejected() {
+        for text in [
+            "schema_version = 3\n",
+            "schema_version = 1\n[layouts.editor]\nname = \"Editor\"\n",
+            "schema_version = 2\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
+            "schema_version = 2\n[gesture]\nlong_press_ms = 700\n",
+        ] {
+            let file: FileConfig = toml::from_str(text).unwrap();
+            assert!(file.validate(&RC003).is_err(), "{text}");
+        }
+        let mut document = defaults();
+        document.schema_version = 1;
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::SchemaVersion { found: 1 })
+        ));
+    }
+
+    #[test]
+    fn layout_ids_names_and_limits_are_validated() {
+        let invalid = |mutate: &dyn Fn(&mut ConfigDocument)| {
+            let mut document = custom_document();
+            mutate(&mut document);
+            document.validate(&RC003).map(|_| ())
         };
-        let error = file.validate(&RC003).unwrap_err();
+        assert!(matches!(
+            invalid(&|document| {
+                document.layouts.insert(
+                    "default".to_string(),
+                    LayoutDocument {
+                        name: "Mine".to_string(),
+                        ..LayoutDocument::default()
+                    },
+                );
+            }),
+            Err(ConfigError::LayoutReserved(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| {
+                document.layouts.insert(
+                    "Coding".to_string(),
+                    LayoutDocument {
+                        name: "Other".to_string(),
+                        ..LayoutDocument::default()
+                    },
+                );
+            }),
+            Err(ConfigError::LayoutId(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| layout_mut(document, "editor").name = String::new()),
+            Err(ConfigError::LayoutName(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| layout_mut(document, "editor").name = "default".to_string()),
+            Err(ConfigError::LayoutNameReserved(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| {
+                document.layouts.insert(
+                    "media".to_string(),
+                    LayoutDocument {
+                        name: "Media".to_string(),
+                        ..LayoutDocument::default()
+                    },
+                );
+            }),
+            Err(ConfigError::LayoutReserved(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| {
+                document.layouts.insert(
+                    "other".to_string(),
+                    LayoutDocument {
+                        name: "CODING".to_string(),
+                        ..LayoutDocument::default()
+                    },
+                );
+            }),
+            Err(ConfigError::LayoutNameTaken { .. })
+        ));
+        assert!(matches!(
+            invalid(&|document| layout_mut(document, "editor").name = "x".repeat(41)),
+            Err(ConfigError::LayoutName(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| {
+                layout_mut(document, "editor").description = Some("x".repeat(121));
+            }),
+            Err(ConfigError::LayoutDescription(_))
+        ));
+        assert!(matches!(
+            invalid(&|document| document.active_layout = "missing".to_string()),
+            Err(ConfigError::ActiveLayout(id)) if id == "missing"
+        ));
+        assert!(matches!(
+            invalid(&|document| {
+                for index in 0..MAX_LAYOUTS {
+                    document.layouts.insert(
+                        format!("layout-{index}"),
+                        LayoutDocument {
+                            name: format!("Layout {index}"),
+                            ..LayoutDocument::default()
+                        },
+                    );
+                }
+            }),
+            Err(ConfigError::TooManyLayouts)
+        ));
+    }
+
+    #[test]
+    fn malformed_actions_are_rejected_in_every_layout() {
+        let mut document = custom_document();
+        document.layouts.insert(
+            "broken".to_string(),
+            LayoutDocument {
+                name: "Broken".to_string(),
+                ..LayoutDocument::default()
+            },
+        );
+        layout_mut(&mut document, "broken").set_slot(
+            RemoteButton::Ok,
+            Trigger::Long,
+            Some("key:not-a-key".to_string()),
+        );
+        let error = document.validate(&RC003).unwrap_err();
         let message = error.to_string();
-        assert!(message.contains("buttons.up.single"), "{message}");
+        assert!(
+            message.contains("layouts.broken.buttons.ok.long"),
+            "{message}"
+        );
         assert!(message.contains("not-a-key"), "{message}");
     }
 
     #[test]
-    fn unknown_button_and_voice_key_are_rejected() {
-        let unknown = FileConfig {
-            buttons: BTreeMap::from([("sideways".to_string(), ButtonToml::default())]),
-            ..FileConfig::default()
-        };
-        assert!(matches!(
-            unknown.validate(&RC003),
-            Err(ConfigError::UnknownButton(name)) if name == "sideways"
-        ));
-
-        let voice = FileConfig {
-            buttons: BTreeMap::from([(
-                "voice".to_string(),
-                ButtonToml {
-                    single: Some("key:KEY_F5".to_string()),
-                    ..ButtonToml::default()
-                },
-            )]),
-            ..FileConfig::default()
-        };
-        assert!(matches!(
-            voice.validate(&RC003),
-            Err(ConfigError::VoiceMapped)
-        ));
-    }
-
-    #[test]
-    fn duplicate_chord_keys_are_rejected() {
-        for action in ["combo:ctrl+ctrl+a", "combo:ctrl+shift+leftctrl"] {
-            let file = FileConfig {
-                buttons: BTreeMap::from([(
-                    "ok".to_string(),
-                    ButtonToml {
-                        single: Some(action.to_string()),
-                        ..ButtonToml::default()
-                    },
-                )]),
-                ..FileConfig::default()
-            };
-            let error = file.validate(&RC003).unwrap_err();
-            assert!(
-                matches!(
-                    error,
-                    ConfigError::Action {
-                        source: ActionCheckError::DuplicateChordKey(_),
-                        ..
-                    }
-                ),
-                "{action}: {error}"
-            );
-        }
-    }
-
-    #[test]
-    fn exec_is_disabled_until_enabled_and_bounded() {
-        let exec = FileConfig {
-            buttons: BTreeMap::from([(
-                "ok".to_string(),
-                ButtonToml {
-                    single: Some("exec:notify-send hello".to_string()),
-                    ..ButtonToml::default()
-                },
-            )]),
-            ..FileConfig::default()
-        };
-        assert!(matches!(
-            exec.validate(&RC003),
-            Err(ConfigError::Action {
-                source: ActionCheckError::ExecDisabled,
-                ..
-            })
-        ));
-
-        let allowed = FileConfig {
-            allow_exec: Some(true),
-            ..exec
-        };
-        let config = allowed.validate(&RC003).unwrap();
-        assert_eq!(
-            config.map.resolve(RemoteButton::Ok, Trigger::Single),
-            Some(&Action::Exec {
-                command: "notify-send hello".into()
-            })
-        );
-
-        let long = format!("exec:{}", "x".repeat(MAX_EXEC_COMMAND + 1));
-        let allowed = FileConfig {
-            allow_exec: Some(true),
-            buttons: BTreeMap::from([(
-                "ok".to_string(),
-                ButtonToml {
-                    single: Some(long),
-                    ..ButtonToml::default()
-                },
-            )]),
-            ..FileConfig::default()
-        };
-        assert!(matches!(
-            allowed.validate(&RC003),
-            Err(ConfigError::Action {
-                source: ActionCheckError::ExecTooLong,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn pointer_actions_validate_and_reject_raw_btn_names() {
-        for raw in [
-            "pointer:click:left",
-            "pointer:click:task",
-            "pointer:move:up:1",
-            "pointer:move:left:255",
-        ] {
-            let action = parse_checked_action(raw, false).unwrap();
-            assert_eq!(action.to_string(), raw);
-        }
-        for raw in [
-            "pointer:move:up:0",
-            "pointer:move:up:256",
-            "pointer:click:sideways",
-            "pointer:move:diagonal:1",
-        ] {
-            assert!(parse_checked_action(raw, false).is_err(), "{raw}");
-        }
-        let error = parse_checked_action("key:BTN_LEFT", false).unwrap_err();
-        assert!(
-            error.to_string().contains("pointer:click"),
-            "raw BTN_* must point at the pointer grammar: {error}"
-        );
-    }
-
-    #[test]
-    fn gesture_overrides_are_validated_and_merged() {
-        let mut file = FileConfig {
-            gesture: Some(GestureOverrides {
-                double_click_ms: Some(350),
-                ..GestureOverrides::default()
-            }),
-            ..FileConfig::default()
-        };
-        let config = file.validate(&RC003).unwrap();
-        assert_eq!(config.gesture.double_click_ms, 350);
-        assert_eq!(
-            config.gesture.long_press_ms,
-            RC003.gesture_timing.long_press_ms
-        );
-
-        file.gesture = Some(GestureOverrides {
+    fn layout_gesture_overrides_are_validated() {
+        let mut document = custom_document();
+        layout_mut(&mut document, "editor").gesture = Some(GestureOverrides {
             long_press_ms: Some(10),
             ..GestureOverrides::default()
         });
         assert!(matches!(
-            file.validate(&RC003),
-            Err(ConfigError::GestureRange {
-                field: "long_press_ms",
-                ..
-            })
+            document.validate(&RC003),
+            Err(ConfigError::LayoutGesture { .. })
         ));
     }
 
     #[test]
-    fn document_round_trips_through_json_and_file() {
-        let mut document = defaults();
-        document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
-        document.buttons.get_mut("ok").unwrap().long = Some("key:KEY_M".into());
-        document.gain_db = 6;
+    fn pointer_and_exec_policy_still_apply_per_layout() {
+        let mut document = custom_document();
+        layout_mut(&mut document, "editor").set_slot(
+            RemoteButton::Ok,
+            Trigger::Single,
+            Some("exec:true".to_string()),
+        );
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::LayoutAction {
+                source: ActionCheckError::ExecDisabled,
+                ..
+            })
+        ));
         document.allow_exec = true;
-        document.buttons.get_mut("menu").unwrap().single = Some("exec:true".into());
+        assert!(document.validate(&RC003).is_ok());
+    }
 
+    #[test]
+    fn document_round_trips_through_json_and_file() {
+        let document = custom_document();
         let json = serde_json::to_string(&document).unwrap();
-        let decoded: ConfigDocument = serde_json::from_str(&json).unwrap();
-        let config = decoded.validate(&RC003).unwrap();
-        assert_eq!(config.gain_db, 6);
+        assert_eq!(
+            serde_json::from_str::<ConfigDocument>(&json).unwrap(),
+            document
+        );
+        let config = document.validate(&RC003).unwrap();
+        assert_eq!(config.active_layout, "editor");
+        assert_eq!(config.active_layout_name(), "Coding");
         assert_eq!(
             config.map.resolve(RemoteButton::Up, Trigger::Single),
             Some(&Action::Key {
@@ -1167,38 +1633,73 @@ mod tests {
             })
         );
         assert_eq!(
-            config.map.resolve(RemoteButton::Menu, Trigger::Single),
-            Some(&Action::Exec {
-                command: "true".into()
+            config.map.resolve(RemoteButton::Ok, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_ENTER".into()
             })
+        );
+        assert_eq!(config.gesture.long_press_ms, 700);
+        assert_eq!(
+            config.gesture.double_click_ms,
+            RC003.gesture_timing.double_click_ms
         );
 
         let path = path("document");
         save_document(&path, &document, &RC003).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("schema_version = 1"), "{text}");
-        assert!(text.contains("gain_db = 6"), "{text}");
-        assert!(text.contains("allow_exec = true"), "{text}");
-        assert!(text.contains("[buttons.up]"), "{text}");
+        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("active_layout = \"editor\""), "{text}");
+        assert!(text.contains("[layouts.editor]"), "{text}");
+        assert!(text.contains("name = \"Coding\""), "{text}");
+        assert!(text.contains("[layouts.editor.buttons.up]"), "{text}");
         assert!(text.contains("single = \"key:KEY_F13\""), "{text}");
-        assert!(!text.contains("[buttons.home]"), "{text}");
+        assert!(text.contains("[layouts.editor.gesture]"), "{text}");
+        assert!(!text.contains("[buttons]"), "{text}");
+        let loaded = load(&path, &RC003).unwrap().config;
+        assert_eq!(loaded, config);
+        let _ = std::fs::remove_file(&path);
+    }
 
-        let loaded = load(&path, &RC003).unwrap();
-        assert_eq!(loaded.config.gain_db, 6);
-        assert_eq!(
-            loaded.config.map.resolve(RemoteButton::Ok, Trigger::Long),
-            Some(&Action::Key {
-                name: "KEY_M".into()
-            })
+    #[test]
+    fn default_template_is_synthesized_and_not_stored() {
+        let mut document = defaults();
+        document.layouts.insert(
+            "editor".to_string(),
+            LayoutDocument {
+                name: "Editor".to_string(),
+                ..LayoutDocument::default()
+            },
         );
+        let summaries = document.layout_summaries();
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].id, DEFAULT_LAYOUT);
+        assert!(summaries[0].template);
+        assert_eq!(summaries[1].id, "editor");
+
+        let path = path("template");
+        save_document(&path, &document, &RC003).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("layouts.default"), "{text}");
+        assert!(text.contains("active_layout = \"default\""), "{text}");
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
     fn document_null_slot_means_profile_default() {
         let mut document = defaults();
-        document.buttons.get_mut("ok").unwrap().single = None;
-        document.buttons.get_mut("ok").unwrap().long = Some("none".into());
+        document
+            .layouts
+            .entry("editor".to_string())
+            .or_insert_with(|| LayoutDocument {
+                name: "Editor".to_string(),
+                ..LayoutDocument::default()
+            });
+        document.active_layout = "editor".to_string();
+        layout_mut(&mut document, "editor").set_slot(
+            RemoteButton::Ok,
+            Trigger::Long,
+            Some("none".to_string()),
+        );
         let config = document.validate(&RC003).unwrap();
         assert_eq!(
             config.map.resolve(RemoteButton::Ok, Trigger::Single),
@@ -1210,19 +1711,113 @@ mod tests {
             config.map.resolve(RemoteButton::Ok, Trigger::Long),
             Some(&Action::None)
         );
+        layout_mut(&mut document, "editor").set_slot(RemoteButton::Ok, Trigger::Long, None);
+        assert!(
+            !layout_mut(&mut document, "editor")
+                .buttons
+                .contains_key("ok"),
+            "resetting a slot drops the empty entry"
+        );
     }
 
     #[test]
-    fn save_device_round_trips_and_preserves_settings() {
+    fn resolved_layout_reads_any_layout_without_switching() {
+        let document = custom_document();
+        let (map, gesture) = document.resolved_layout("editor", &RC003).unwrap();
+        assert_eq!(
+            map.resolve(RemoteButton::Up, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_F13".into()
+            })
+        );
+        assert_eq!(gesture.long_press_ms, 700);
+        let (map, gesture) = document.resolved_layout(DEFAULT_LAYOUT, &RC003).unwrap();
+        assert_eq!(
+            map.resolve(RemoteButton::Up, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_UP".into()
+            })
+        );
+        assert_eq!(gesture, RC003.gesture_timing);
+        assert!(matches!(
+            document.resolved_layout("missing", &RC003),
+            Err(ConfigError::ActiveLayout(id)) if id == "missing"
+        ));
+    }
+
+    #[test]
+    fn duplicate_chord_keys_are_rejected_in_layouts() {
+        let mut document = custom_document();
+        layout_mut(&mut document, "editor").set_slot(
+            RemoteButton::Ok,
+            Trigger::Double,
+            Some("combo:ctrl+ctrl+a".to_string()),
+        );
+        let error = document.validate(&RC003).unwrap_err();
+        assert!(
+            matches!(
+                error,
+                ConfigError::LayoutAction {
+                    source: ActionCheckError::DuplicateChordKey(_),
+                    ..
+                }
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn unknown_button_and_voice_key_are_rejected_in_layouts() {
+        let mut document = custom_document();
+        layout_mut(&mut document, "editor").buttons.insert(
+            "sideways".to_string(),
+            ButtonDocument {
+                single: Some("key:KEY_A".to_string()),
+                ..ButtonDocument::default()
+            },
+        );
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::UnknownButton(name)) if name == "sideways"
+        ));
+        document
+            .layouts
+            .get_mut("editor")
+            .unwrap()
+            .buttons
+            .remove("sideways");
+        layout_mut(&mut document, "editor").buttons.insert(
+            "voice".to_string(),
+            ButtonDocument {
+                single: Some("key:KEY_F5".to_string()),
+                ..ButtonDocument::default()
+            },
+        );
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::VoiceMapped)
+        ));
+    }
+
+    #[test]
+    fn save_device_round_trips_and_preserves_layouts() {
         let path = path("save");
-        std::fs::write(&path, "gain_db = 6\ninput = false\n").unwrap();
+        std::fs::write(
+            &path,
+            "schema_version = 1\ngain_db = 6\ninput = false\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
+        )
+        .unwrap();
         save_device(&path, "C0:5D:39:F8:2D:4C", Some("hci0")).unwrap();
 
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("[layouts.custom.buttons.up]"), "{text}");
         let loaded = load(&path, &RC003).unwrap();
         assert_eq!(loaded.config.device.as_deref(), Some("C0:5D:39:F8:2D:4C"));
         assert_eq!(loaded.config.adapter.as_deref(), Some("hci0"));
         assert_eq!(loaded.config.gain_db, 6);
         assert!(!loaded.config.input);
+        assert_eq!(loaded.config.active_layout, MIGRATED_LAYOUT);
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1235,10 +1830,10 @@ mod tests {
             Err(ConfigError::Parse { .. })
         ));
 
-        std::fs::write(&path, "schema_version = 2\n").unwrap();
+        std::fs::write(&path, "schema_version = 3\n").unwrap();
         assert!(matches!(
             save_device(&path, "C0:5D:39:F8:2D:4C", None),
-            Err(ConfigError::SchemaVersion { found: 2 })
+            Err(ConfigError::SchemaVersion { found: 3 })
         ));
         let _ = std::fs::remove_file(&path);
     }
@@ -1275,7 +1870,38 @@ mod tests {
         assert_eq!(loaded.config.vinput, VinputMode::Dbus);
         assert_eq!(loaded.config.trigger_key.as_deref(), Some("F18"));
         assert!(!loaded.config.input);
+        assert_eq!(loaded.config.active_layout, DEFAULT_LAYOUT);
         assert_eq!(loaded.config.gesture, RC003.gesture_timing);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn layout_naming_helpers_generate_valid_unique_ids() {
+        assert!(layout_id_is_valid("editor"));
+        assert!(layout_id_is_valid("editor-2"));
+        assert!(layout_id_is_valid("2fast"));
+        assert!(!layout_id_is_valid("Editor"));
+        assert!(!layout_id_is_valid("-editor"));
+        assert!(!layout_id_is_valid("x".repeat(33).as_str()));
+        assert!(layout_id_is_reserved("default"));
+        assert!(layout_id_is_reserved("media"));
+        assert_eq!(slug_layout_id("My Layout!"), "my-layout");
+        assert_eq!(slug_layout_id("默认"), "layout");
+        assert_eq!(
+            unique_layout_id("editor", ["editor", "editor-2"]),
+            "editor-3"
+        );
+        assert_eq!(
+            unique_layout_id("default", Vec::<&str>::new().iter().copied()),
+            "default-layout"
+        );
+        assert_eq!(
+            unique_layout_name("Coding", ["coding", "Coding 2"]),
+            "Coding 3"
+        );
+        assert_eq!(
+            unique_layout_name("Default", Vec::<&str>::new().iter().copied()),
+            "Default 2"
+        );
     }
 }

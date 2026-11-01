@@ -51,7 +51,7 @@ fn narrow_window_scrolls_to_the_selected_slot() {
 
     let model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(&RC003)))
         .expect("profile is known");
-    let window = AppWindow::build(None, Backend::start(None));
+    let window = AppWindow::build(None, Backend::detached());
     window.set_model(model);
     window.window().set_default_size(700, 560);
     window.window().present();

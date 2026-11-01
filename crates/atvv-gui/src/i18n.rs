@@ -352,6 +352,50 @@ fn zh(text: &str) -> Option<&'static str> {
         ", not remappable" => "，不可重映射",
         ", conflicting action" => "，操作冲突",
 
+        // Layout switcher and manager.
+        "Switch layout" => "切换布局",
+        "Layouts" => "布局",
+        "Manage layouts…" => "管理布局…",
+        "Template" => "模板",
+        "Active" => "当前",
+        "New layout…" => "新建布局…",
+        "New layout" => "新建布局",
+        "Rename layout" => "重命名布局",
+        "Save as layout" => "另存为布局",
+        "Description" => "描述",
+        "Create" => "创建",
+        "Save" => "保存",
+        "Duplicate" => "复制",
+        "Rename" => "重命名",
+        "My layout" => "我的布局",
+        "Apply or revert before switching layouts." => "请先应用或还原更改，再切换布局。",
+        "Unsaved changes on Default — Apply saves them as a new layout." => {
+            "默认布局有未保存的更改——应用后会另存为新布局。"
+        }
+        "That name is reserved or already used." => "该名称已被保留或使用。",
+        "Enter a layout name." => "请输入布局名称。",
+        "Use 40 characters or fewer." => "请使用不超过 40 个字符。",
+        "The active layout drives the board and the input runtime. Default is a template: edit it and Apply saves the changes as a new layout." => {
+            "当前布局驱动映射板和输入运行时。默认布局是模板：编辑后应用会另存为新布局。"
+        }
+        "Default is a template. These edits become a new layout." => {
+            "默认布局是模板。这些更改将保存为新布局。"
+        }
+        "Default is a template." => "默认布局是模板。",
+        "Cannot delete the active layout." => "无法删除当前布局。",
+        "Layout switched" => "已切换布局",
+        "Saved as a new layout" => "已另存为新布局",
+        "Layout created" => "已创建布局",
+        "Layout renamed" => "已重命名布局",
+        "Layout deleted" => "已删除布局",
+        "Layout reset" => "已重置布局",
+        "Layout duplicated" => "已复制布局",
+        "no layout selected" => "未选择布局",
+        "Actions for {name}" => "{name}的操作",
+        "Layout: {name}" => "布局：{name}",
+        "Switch layout · {name}" => "切换布局 · {name}",
+        "Cannot switch layouts: {error}" => "无法切换布局：{error}",
+
         // About dialog.
         "Configure ATVV remote button mappings and test them from the desktop." => {
             "在桌面上配置并测试 ATVV 遥控器按键映射。"

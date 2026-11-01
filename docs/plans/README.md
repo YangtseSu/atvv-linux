@@ -78,7 +78,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | E — Release | 09 | **done**: Arch package, permissions, CI, and signed hardware acceptance |
 | F — Configuration | 13–15 | 13 **done**: persistent keymap, live config API, capture; 14 **done**: GTK4/libadwaita GNOME-HIG app, clickable diagram, test mode; 15 **done**: mapping board with per-button cards, modal action editor, test bar |
 | G — Device information | 16 | **done**: battery, firmware, and DIS facts in status, CLI, MCP, and the GUI home view |
-| H — Layout profiles | 17–18 | **planned**: named user layouts with a template default (edits save as a new layout), plus built-in presets; layout-selector UI decided (header chip, popover, manager) |
+| H — Layout profiles | 17–18 | 17 **in progress**: named user layouts with a template default, live switching, CLI/GUI/D-Bus support, and v1 migration are implemented; the real-RC003 key press is pending. 18 **planned**: built-in presets |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
 | K — Device management | 21 | **planned**: single-active device registry and switching, per-device layouts |
@@ -86,7 +86,8 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
-approval/upstream; steps 11–16 are complete.
+approval/upstream; steps 11–16 are complete. Step 17 is implemented and awaits
+one recorded real-RC003 press; step 18 remains planned.
 
 ## Step files
 
@@ -98,7 +99,7 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 17 | H | [layout-profiles](17-layout-profiles.md) | ⬜ not-started | 13, 14, 15 | named layouts with a template default whose edits save as a new layout; the active layout is explicit and switches live; selector UI decided |
+| 17 | H | [layout-profiles](17-layout-profiles.md) | 🚧 in-progress | 13, 14, 15 | named layouts with a template default whose edits save as a new layout; the active layout is explicit and switches live; real-RC003 press pending |
 | 18 | H | [layout-presets](18-layout-presets.md) | ⬜ not-started | 17 | built-in presets create editable user layouts and never become live state |
 | 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 

@@ -7,7 +7,7 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` under `xvfb-run` → 212 passed, 8 ignored
+- Tests: `cargo test --workspace` under `xvfb-run` → 222 passed, 8 ignored
   tests (four kernel-uinput input tests, the real RC003 pointer test, one
   daemon live test, the real-device GUI test, and a locale-detection test;
   the kernel tests pass with `/dev/uinput` access, the pointer test also needs
@@ -359,13 +359,24 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **17 layout profiles (planned)**: add named user layouts (button slots plus
-  gesture timing) beside the device profile, with a synthesized `default`
-  template whose edits save as a new layout; schema v2, v1 migration,
-  `SetLayout`/`LayoutChanged`, CLI and GUI switching, and live apply.
-  Depends on 13, 14, and 15; see
-  `docs/plans/17-layout-profiles.md` and
-  `docs/research/layout-profiles-presets.md`.
+- **17 layout profiles (implemented; real-RC003 press pending)**: schema v2
+  adds `active_layout` and `[layouts.<id>]` records with raw slots and gesture
+  overrides. `default` is synthesized, never stored, and is a template: GUI
+  slot edits are staged and Apply saves them as a new user layout. The v1 flat
+  map migrates to `custom`; `default`, `media`, `coding`, and `slides` are
+  reserved ids; limits are 32 layouts, 40-character names, and 120-character
+  descriptions. The daemon exposes `SetLayout`/`LayoutChanged` and applies the
+  active layout live with rollback; `StatusView.layout` reports `{id, name}`.
+  `atvvctl layout list|show|use|new|rename|delete|reset`,
+  `config set --layout`, and `map test --layout` are implemented. The GUI has
+  the header layout chip, switcher popover, manager dialog with inline
+  New/Rename/Save-as forms, template staging, dirty switching block, and
+  test-result reset on switch. Docs updated in English and Chinese. Synthetic
+  verification passed (222 tests, 8 ignored; UI test 1 passed; isolated-bus
+  CLI run); the only open item is the recorded real-RC003 key press. The
+  running workspace daemon grabbed `/dev/input/event25` and created
+  `atvv-virtual-keyboard`, but two `evtest` windows received no press. See
+  `docs/plans/17-layout-profiles.md`.
 - **18 layout presets (planned)**: ship static `media`, `coding`, and
   `slides` templates that create editable user layouts; presets never become
   live state and never contain `exec:`. Depends on 17; see
@@ -508,6 +519,17 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 Historical session log, kept as recorded. Step-level evidence belongs in the
 step file's `## Verification`; new results go there, not here.
 
+- 2026-11-01 step 17: `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets -- -D warnings` are clean;
+  `cargo test --workspace` → 222 passed, 8 ignored;
+  `xvfb-run -a cargo test -p atvv-gui --test ui` → 1 passed. An isolated-bus
+  CLI run created, showed, switched, renamed, reset, and deleted layouts,
+  refused the `default` template for edits and deletion, edited a non-active
+  layout with `--layout`, and resolved `key:KEY_F13`/`key:KEY_UP` in
+  `map test`. A workspace `atvvd --device C0:5D:39:F8:2D:4C --config
+  /tmp/atvv17/daemon.toml` connected to 小米蓝牙语音遥控器 and grabbed
+  `/dev/input/event25`; two `evtest` windows on `/dev/input/event26` (20 s and
+  30 s) received no press, so the hardware key change is not yet recorded.
 - 2026-11-01 recording-key chooser: `cargo fmt --all -- --check`,
   `cargo clippy --workspace --all-targets -- -D warnings` clean;
   `cargo test --workspace` → 174 passed, 5 ignored;
@@ -679,6 +701,13 @@ is gone: `atvv-config` shows twelve per-button cards around the RC003 diagram,
 a modal action editor, a test bar, and a header device chip; see
 `docs/plans/15-mapping-board.md`.
 
+**Step 17 (layout profiles) is implemented and awaits one recorded real-RC003
+press.** Start the workspace daemon with
+`--config /tmp/atvv17/daemon.toml` (the `editor` layout is active,
+`up/single = key:KEY_F13`), press Up under `evtest` on
+`/dev/input/event26`, then switch to `default` and press Up again. Restore the
+installed `atvvd` unit afterwards. See `docs/plans/17-layout-profiles.md`.
+
 **Step 22 (pointer actions) is complete and verified.** Remote buttons can
 emit mouse clicks and relative pointer motion through `atvv-virtual-pointer`;
 the three gesture slots choose the distance, and the result was observed on
@@ -686,21 +715,22 @@ the real RC003; see `docs/plans/22-pointer-actions.md`. This closes the
 keyboard-only action limitation; raw `BTN_*` is intentionally rejected in
 favor of the pointer editor.
 
-The next UI step is **step 17 (layout profiles)**: Default is a template,
-board edits are staged, and Apply saves them as a new layout. Its selector UI
-(header chip, popover, manager dialog) is decided in
-`docs/plans/15-mapping-board.html`; the board does not have the chip yet.
-Step 21's device popover and per-device maps also preview there. B01
-(recording-key press/release actions) is backlog and does not block step 17.
+The next step is to record the step 17 hardware item; after that, step 18
+(layout presets) follows. The layout selector UI is implemented from
+`docs/plans/15-mapping-board.html`; the board now has the header layout chip,
+popover, and manager. Step 21's device popover and per-device maps also
+preview there. B01 (recording-key press/release actions) is backlog and does
+not block step 18.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: start step 17. In parallel, wait for upstream review on PR
-#493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
-vinput, and record the real auto-bind acceptance.
+Immediate action: record the step 17 real-RC003 press, then mark step 17 done
+and start step 18. In parallel, wait for upstream review on PR #493; after it
+merges, rebase PR #494 onto `main`, then PR #495, rebuild vinput, and record
+the real auto-bind acceptance.
 
 ## Commands
 

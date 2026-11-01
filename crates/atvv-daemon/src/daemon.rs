@@ -81,6 +81,11 @@ pub enum Command {
         json: String,
         reply: Sender<Result<(), String>>,
     },
+    /// Switch the active layout by id; the reply carries the result.
+    SetLayout {
+        id: String,
+        reply: Sender<Result<(), String>>,
+    },
     /// Run one checked action once (GUI test mode).
     RunAction {
         action: String,
@@ -95,6 +100,8 @@ pub enum DaemonEvent {
     StateChanged(String),
     VoiceStarted,
     VoiceStopped,
+    /// The active layout changed; carries the new id.
+    LayoutChanged(String),
     /// Logical button activity while capture mode is active.
     ButtonEvent {
         button: String,
@@ -328,6 +335,7 @@ impl Daemon {
                 address: config.address.clone(),
                 transport: transport.kind().to_string(),
             },
+            layout: layout_view(&config.config),
             hardware: HardwareView::default(),
             caps: None,
             audio: AudioView {
@@ -782,6 +790,15 @@ impl Daemon {
                 }
                 let _ = reply.send(result);
             }
+            Command::SetLayout { id, reply } => {
+                let result = self.set_layout(&id);
+                let failed = result.as_ref().err().cloned();
+                if let Some(error) = failed {
+                    self.last_error = Some(format!("set layout: {error}"));
+                    self.trace(format!("set layout failed: {error}"));
+                }
+                let _ = reply.send(result);
+            }
             Command::RunAction { action, reply } => {
                 let result = self.run_action(&action);
                 let failed = result.as_ref().err().cloned();
@@ -901,6 +918,42 @@ impl Daemon {
         }
         self.config_loaded = true;
         self.last_error = None;
+        Ok(())
+    }
+
+    /// Switch the active layout, apply it to the runtime, and persist it.
+    ///
+    /// The runtime is applied before the file is written; a failed apply
+    /// leaves the previous layout active, and a failed write rolls the runtime
+    /// back.
+    fn set_layout(&mut self, id: &str) -> Result<(), String> {
+        if id == self.config.active_layout {
+            return Ok(());
+        }
+        let previous = self.config.clone();
+        let mut next = previous.clone();
+        next.select_layout(id, &self.profile)
+            .map_err(|error| error.to_string())?;
+        self.apply_config(next)?;
+        let document = ConfigDocument::from_config(&self.config);
+        if let Err(error) = atvv_config::save_document(&self.config_path, &document, &self.profile)
+        {
+            let _ = self.apply_config(previous);
+            return Err(format!(
+                "cannot save {}: {error}",
+                self.config_path.display()
+            ));
+        }
+        self.config_loaded = true;
+        self.last_error = None;
+        self.trace(format!(
+            "layout switched to {} ({})",
+            self.config.active_layout,
+            self.config.active_layout_name()
+        ));
+        self.signals.publish(DaemonEvent::LayoutChanged(
+            self.config.active_layout.clone(),
+        ));
         Ok(())
     }
 
@@ -1344,6 +1397,7 @@ impl Daemon {
             state: self.state_name(),
             connected: self.connected,
             streaming: self.session.state() == SessionState::Streaming,
+            layout: layout_view(&self.config),
             device: DeviceView {
                 id: self.profile.id.to_string(),
                 name: self
@@ -1393,6 +1447,13 @@ impl Daemon {
             SessionState::Disconnected => "disconnected",
         }
         .to_string()
+    }
+}
+
+fn layout_view(config: &Config) -> crate::status::LayoutView {
+    crate::status::LayoutView {
+        id: config.active_layout.clone(),
+        name: config.active_layout_name().to_string(),
     }
 }
 
@@ -1483,6 +1544,24 @@ mod tests {
     use atvv_protocol::profile::{RC003, RemoteButton};
 
     use crate::transport::{DEFAULT_CAPS, MockConfig, MockHandle, MockTransport};
+
+    /// A v2 document with one user layout holding a single override.
+    fn document_with(
+        profile: DeviceProfile,
+        button: RemoteButton,
+        trigger: atvv_input::Trigger,
+        action: &str,
+    ) -> ConfigDocument {
+        let mut document = ConfigDocument::from_config(&Config::defaults(&profile));
+        let mut layout = atvv_config::LayoutDocument {
+            name: "Test".to_string(),
+            ..atvv_config::LayoutDocument::default()
+        };
+        layout.set_slot(button, trigger, Some(action.to_string()));
+        document.layouts.insert("test".to_string(), layout);
+        document.active_layout = "test".to_string();
+        document
+    }
 
     struct CountingSink {
         samples: usize,
@@ -1755,9 +1834,13 @@ mod tests {
     #[test]
     fn set_config_applies_and_persists_with_validation() {
         let (mut daemon, handle, _mock, path) = config_daemon("set");
-        let mut document = ConfigDocument::from_config(&Config::defaults(&RC003));
+        let mut document = document_with(
+            RC003,
+            RemoteButton::Up,
+            atvv_input::Trigger::Single,
+            "key:KEY_F13",
+        );
         document.gain_db = 6;
-        document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
         daemon
             .set_config(&serde_json::to_string(&document).unwrap())
             .unwrap();
@@ -1766,16 +1849,23 @@ mod tests {
         {
             let active = crate::status::lock_config(&config_cell);
             assert_eq!(active.gain_db, 6);
-            assert_eq!(active.buttons["up"].single.as_deref(), Some("key:KEY_F13"));
+            assert_eq!(
+                active.layouts["test"].slot(RemoteButton::Up, atvv_input::Trigger::Single),
+                Some("key:KEY_F13")
+            );
         }
         let written = std::fs::read_to_string(&path).unwrap();
         assert!(written.contains("gain_db = 6"), "{written}");
-        assert!(written.contains("[buttons.up]"), "{written}");
+        assert!(written.contains("[layouts.test.buttons.up]"), "{written}");
         assert!(written.contains("single = \"key:KEY_F13\""), "{written}");
 
         let before = crate::status::lock_config(&handle.config()).clone();
         let mut invalid = document.clone();
-        invalid.buttons.get_mut("up").unwrap().single = Some("key:not-a-key".into());
+        invalid.layouts.get_mut("test").unwrap().set_slot(
+            RemoteButton::Up,
+            atvv_input::Trigger::Single,
+            Some("key:not-a-key".into()),
+        );
         let error = daemon
             .set_config(&serde_json::to_string(&invalid).unwrap())
             .unwrap_err();
@@ -1788,25 +1878,42 @@ mod tests {
     #[test]
     fn reload_applies_button_overrides_and_keeps_the_old_map_on_error() {
         let (mut daemon, handle, _mock, path) = config_daemon("reload");
-        std::fs::write(&path, "[buttons.up]\nsingle = \"key:KEY_F13\"\n").unwrap();
+        std::fs::write(
+            &path,
+            "schema_version = 1\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
+        )
+        .unwrap();
         daemon.reload_config().unwrap();
         let config_cell = handle.config();
         {
             let active = crate::status::lock_config(&config_cell);
-            assert_eq!(active.buttons["up"].single.as_deref(), Some("key:KEY_F13"));
+            assert_eq!(active.active_layout, atvv_config::MIGRATED_LAYOUT);
             assert_eq!(
-                active.buttons["ok"].single.as_deref(),
-                Some("key:KEY_ENTER")
+                active.layouts[atvv_config::MIGRATED_LAYOUT]
+                    .slot(RemoteButton::Up, atvv_input::Trigger::Single),
+                Some("key:KEY_F13")
             );
         }
+        assert_eq!(
+            daemon
+                .config
+                .map
+                .resolve(RemoteButton::Ok, atvv_input::Trigger::Single),
+            Some(&atvv_input::Action::Key {
+                name: "KEY_ENTER".into()
+            })
+        );
 
-        std::fs::write(&path, "[buttons.up]\nsingle = \"key:not-a-key\"\n").unwrap();
+        std::fs::write(
+            &path,
+            "schema_version = 1\n[buttons.up]\nsingle = \"key:not-a-key\"\n",
+        )
+        .unwrap();
         let error = daemon.reload_config().unwrap_err();
         assert!(error.contains("not-a-key"), "{error}");
         assert_eq!(
-            crate::status::lock_config(&handle.config()).buttons["up"]
-                .single
-                .as_deref(),
+            crate::status::lock_config(&handle.config()).layouts[atvv_config::MIGRATED_LAYOUT]
+                .slot(RemoteButton::Up, atvv_input::Trigger::Single),
             Some("key:KEY_F13")
         );
         let _ = std::fs::remove_file(&path);
@@ -1933,8 +2040,12 @@ mod tests {
         );
         assert!(daemon.input.is_some(), "input runtime did not attach");
 
-        let mut document = ConfigDocument::from_config(&Config::defaults(&FAKE_REMOTE));
-        document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
+        let document = document_with(
+            FAKE_REMOTE,
+            RemoteButton::Up,
+            atvv_input::Trigger::Single,
+            "key:KEY_F13",
+        );
         daemon
             .set_config(&serde_json::to_string(&document).unwrap())
             .expect("live SetConfig");

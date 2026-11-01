@@ -1,6 +1,6 @@
 # Step 17 — Layout profiles
 
-Status: ⬜ not-started
+Status: 🚧 in-progress
 Depends on: 13, 14, 15
 Touches: `crates/atvv-config/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
 `crates/atvv-gui/`, `docs/`
@@ -19,8 +19,11 @@ automatic foreground-app switch.
 
 ## Next action
 
-Settle the v2 schema in `atvv-config`: layout records, reserved ids, and the
-v1 migration.
+Record the `[hardware]` press: start the workspace daemon with
+`--config /tmp/atvv17/daemon.toml` (the `editor` layout is active), press Up on
+the RC003 under `evtest` on `/dev/input/event26`, capture `KEY_F13`, then
+switch to `default`, press Up again, and capture `KEY_UP`. Restore the
+installed `atvvd` unit afterwards.
 
 ## Why layouts, not another profile
 
@@ -54,14 +57,14 @@ vinput = "trigger"
 trigger_key = "DICTATE"
 allow_exec = false
 
-[layouts.coding]
-name = "Coding"
+[layouts.editor]
+name = "Editor"
 description = "Enter/Escape navigation plus editor and browser shortcuts"
 
-[layouts.coding.gesture]
+[layouts.editor.gesture]
 long_press_ms = 600
 
-[layouts.coding.buttons.up]
+[layouts.editor.buttons.up]
 single = "key:KEY_UP"
 ```
 
@@ -75,7 +78,8 @@ single = "key:KEY_UP"
 - A layout has `name` (required, unique case-insensitively), optional
   `description`, optional `buttons`, and optional `gesture` overrides.
 - Layout ids are lowercase ASCII `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the
-  preset ids from step 18 are reserved.
+  preset ids from step 18 (`media`, `coding`, `slides`) are reserved. The
+  examples here use `editor` for that reason.
 - Global fields (`device`, `adapter`, `gain_db`, `input`, `vinput`,
   `trigger_key`, `allow_exec`) stay global. A layout changes only actions and
   gesture timing, never the exec policy or the device.
@@ -210,10 +214,10 @@ Real-device check:
 
 ```text
 atvvctl layout list
-atvvctl layout new coding --name Coding
-atvvctl config set --layout coding --button up --trigger single --action key:KEY_F13
-atvvctl layout use coding
-atvvctl status        # layout.id == "coding"
+atvvctl layout new editor --name Editor
+atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
+atvvctl layout use editor
+atvvctl status        # layout.id == "editor"
 # press Up on the RC003; KEY_F13 is emitted
 atvvctl layout use default
 # press Up again; the default Up action is emitted
@@ -221,16 +225,32 @@ atvvctl layout use default
 
 ## Exit criteria
 
-- ⬜ A v1 file migrates without losing the old button map.
-- ⬜ `default` is a template: its slot edits can only be saved as a new user
+- ✅ A v1 file migrates without losing the old button map.
+  `v1_button_map_migrates_to_the_custom_layout` loads a flat file, keeps the
+  gesture override, saves v2 with `[layouts.custom.buttons.up]`, and reloads
+  to an identical `Config`.
+- ✅ `default` is a template: its slot edits can only be saved as a new user
   layout, and it cannot be renamed, deleted, or reset; user layouts can be
-  created, renamed, deleted, and reset.
-- ⬜ The active layout is persisted and shown in status.
+  created, renamed, deleted, and reset. `template_edits_are_saved_as_a_new_layout`,
+  `the_template_cannot_be_renamed_deleted_or_reset`, and
+  `manager_creates_renames_duplicates_deletes_and_resets` cover the model; the
+  daemon rejects a stored `default` id and the CLI refuses the template.
+- ✅ The active layout is persisted and shown in status. `SetLayout` writes
+  `active_layout`, `StatusView.layout` reports `{id, name}`, and
+  `set_layout_switches_persists_and_rejects_unknown_ids` reloads the file.
 - ⬜ [hardware] Switching applies live and changes the emitted key on the real
-  RC003.
-- ⬜ Invalid documents or unknown layouts leave the current state untouched.
-- ⬜ CLI, GUI, and D-Bus agree on the active layout.
-- ⬜ No automatic per-app/focus switching is introduced.
+  RC003. Two `evtest` windows (20 s and 30 s) opened on
+  `/dev/input/event26`; no physical press arrived (`last_button` stayed null).
+- ✅ Invalid documents or unknown layouts leave the current state untouched.
+  `set_config` and `set_layout` apply before writing and roll the runtime back
+  on failure; the D-Bus test checks an unknown id and an invalid action leave
+  the document and file unchanged.
+- ✅ CLI, GUI, and D-Bus agree on the active layout. The isolated-bus CLI run
+  below lists, creates, renames, resets, deletes, and switches layouts; the GUI
+  reads and writes the same v2 document through `GetConfig`/`SetConfig` and
+  `SetLayout`.
+- ✅ No automatic per-app/focus switching is introduced; switching is explicit
+  through `atvvctl layout use`, the GUI chip, or `SetLayout`.
 
 ## Risks
 
@@ -247,7 +267,58 @@ atvvctl layout use default
   switching layouts or devices stays blocked until Apply or Revert.
 - `exec:` policy is global by design; a layout must never enable it.
 
+## Verification results
+
+```text
+cargo fmt --all -- --check                                   clean
+cargo clippy --workspace --all-targets -- -D warnings        clean
+cargo test --workspace                                       222 passed, 8 ignored
+xvfb-run -a cargo test -p atvv-gui --test ui                 1 passed
+```
+
+Isolated-bus CLI run (`dbus-run-session`, `atvvd --mock`, scratch
+`XDG_CONFIG_HOME`):
+
+```text
+atvvctl layout new editor --name Editor --from default   created layout editor (inactive)
+atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
+atvvctl layout show editor                               up single=key:KEY_F13, profile timing
+atvvctl layout use editor                                active layout: editor
+atvvctl status                                           layout.id=editor, layout.name=Editor
+atvvctl map test --button up --trigger single            layout: editor, up single key:KEY_F13
+atvvctl layout rename editor "Editor layout"             renamed layout editor
+atvvctl layout delete editor                             refused: active layout
+atvvctl layout use default                               active layout: default
+atvvctl layout delete editor                             deleted layout editor
+atvvctl config set --button up ...                       refused: default is the template
+atvvctl layout reset player                              reset layout player
+atvvctl config set (player active)                       up single=key:KEY_F14
+atvvctl layout use default; map test                     up single=key:KEY_UP
+```
+
+Real RC003 (`C0:5D:39:F8:2D:4C`, 2026-11-01): the workspace daemon connected
+(`connected to 小米蓝牙语音遥控器`), grabbed `/dev/input/event25`, and created
+`atvv-virtual-keyboard`. `layout new editor`, `config set --layout editor`,
+and `layout use editor` persisted
+`active_layout = "editor"` and `[layouts.editor.buttons.up] single = "key:KEY_F13"`.
+The physical key press is still pending; see `## Next action`.
+
 ## Progress log
 
 - 2026-11-01 — plan reviewed; a `Next action` line was added and the hardware
   items tagged. No implementation started.
+- 2026-11-01 — implemented schema v2 in `atvv-config`: `active_layout`,
+  `[layouts.<id>]` records with raw slots and gesture overrides, the
+  synthesized `default` template, reserved ids (`default`, `media`, `coding`,
+  `slides`), the v1 `custom` migration, id/name/description/32-layout limits,
+  and `SetConfig` v2-only validation. `default` is never stored, and empty
+  legacy tables are omitted on save.
+- 2026-11-01 — daemon: `StatusView.layout`, `SetLayout`, `LayoutChanged`,
+  live apply and persistence with runtime rollback; `SetConfig` applies the
+  active layout. CLI: `layout list|show|use|new|rename|delete|reset`,
+  `config set --layout`, `map test --layout`, and v2 `config get`. GUI:
+  layout chip/popover, manager dialog with inline forms, template staging and
+  Save as layout, dirty switching block, and test-result reset on switch.
+  Docs: configuration and GUI pages in English and Chinese.
+- 2026-11-01 — synthetic verification is complete (see Verification
+  results); the real RC003 press is the only open item.

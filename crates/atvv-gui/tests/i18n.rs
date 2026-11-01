@@ -36,7 +36,7 @@ fn chinese_window() {
 
     let model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(&RC003)))
         .expect("profile is known");
-    let window = AppWindow::build(None, Backend::start(None));
+    let window = AppWindow::build(None, Backend::detached());
     window.set_model(model);
     window.set_status(DaemonStatus {
         state: "ready".to_string(),

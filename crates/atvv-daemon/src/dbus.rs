@@ -87,6 +87,16 @@ impl DaemonInterface {
         wait(result)
     }
 
+    /// Switch the active layout by id.
+    fn set_layout(&self, id: &str) -> zbus::fdo::Result<()> {
+        let (reply, result) = mpsc::channel();
+        self.send(Command::SetLayout {
+            id: id.to_string(),
+            reply,
+        })?;
+        wait(result)
+    }
+
     /// Start reporting logical button events to the caller.
     fn begin_capture(
         &self,
@@ -150,6 +160,9 @@ impl DaemonInterface {
 
     #[zbus(signal)]
     async fn state_changed(emitter: &SignalEmitter<'_>, state: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn layout_changed(emitter: &SignalEmitter<'_>, id: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     async fn voice_started(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
@@ -229,6 +242,9 @@ impl EventSink for DbusSink {
             DaemonEvent::StateChanged(state) => {
                 zbus::block_on(DaemonInterface::state_changed(&self.emitter, &state))
             }
+            DaemonEvent::LayoutChanged(id) => {
+                zbus::block_on(DaemonInterface::layout_changed(&self.emitter, &id))
+            }
             DaemonEvent::VoiceStarted => {
                 zbus::block_on(DaemonInterface::voice_started(&self.emitter))
             }
@@ -278,6 +294,7 @@ pub trait DaemonApi {
     fn get_status(&self) -> zbus::Result<String>;
     fn get_config(&self) -> zbus::Result<String>;
     fn set_config(&self, json: &str) -> zbus::Result<()>;
+    fn set_layout(&self, id: &str) -> zbus::Result<()>;
     fn begin_capture(&self) -> zbus::Result<()>;
     fn end_capture(&self) -> zbus::Result<()>;
     fn list_devices(&self) -> zbus::Result<Vec<String>>;
@@ -289,6 +306,9 @@ pub trait DaemonApi {
 
     #[zbus(signal)]
     fn state_changed(&self, state: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn layout_changed(&self, id: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn voice_started(&self) -> zbus::Result<()>;
@@ -352,6 +372,10 @@ impl Client {
     pub fn set_config(&self, document: &ConfigDocument) -> Result<(), ClientError> {
         let json = serde_json::to_string(document)?;
         Ok(zbus::block_on(self.proxy()?.set_config(&json))?)
+    }
+
+    pub fn set_layout(&self, id: &str) -> Result<(), ClientError> {
+        Ok(zbus::block_on(self.proxy()?.set_layout(id))?)
     }
 
     pub fn begin_capture(&self) -> Result<(), ClientError> {

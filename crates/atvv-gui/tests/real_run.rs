@@ -58,9 +58,7 @@ fn gui_against_real_daemon() {
     );
 
     // Pick a value different from the live one so the edit is always dirty.
-    let current = window.document().expect("document").buttons["up"]
-        .double
-        .clone();
+    let current = window.effective_slot(RemoteButton::Up, atvv_input::Trigger::Double);
     let next = if current.as_deref() == Some("key:KEY_F13") {
         "key:KEY_F14"
     } else {
@@ -80,6 +78,19 @@ fn gui_against_real_daemon() {
     pump(&window);
     assert!(window.apply_button().is_sensitive());
     window.apply_button().emit_clicked();
+    pump(&window);
+    if window.layout_form_is_visible() {
+        // Default is a template: Apply saves the staged edits as a new layout.
+        let name = format!(
+            "GUI test {}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_millis()
+        );
+        window.layout_name_row().set_text(&name);
+        window.layout_form_submit().emit_clicked();
+    }
     assert!(
         wait_until(&window, Duration::from_secs(10), "SetConfig", || {
             !window.apply_button().is_sensitive()
@@ -87,11 +98,18 @@ fn gui_against_real_daemon() {
         "the daemon did not apply the document"
     );
     let document = window.document().expect("document after save");
-    assert_eq!(document.buttons["up"].double.as_deref(), Some(next));
+    let active = document.active_layout.clone();
+    assert_eq!(
+        document.layouts[&active].slot(RemoteButton::Up, atvv_input::Trigger::Double),
+        Some(next)
+    );
 
     let client = atvv_daemon::dbus::Client::connect().expect("daemon client");
     let live = client.config().expect("GetConfig from the daemon");
-    assert_eq!(live.buttons["up"].double.as_deref(), Some(next));
+    assert_eq!(
+        live.layouts[&active].slot(RemoteButton::Up, atvv_input::Trigger::Double),
+        Some(next)
+    );
 
     window.test_button().set_active(true);
     assert!(

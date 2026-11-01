@@ -8,7 +8,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use atvv_config::ConfigDocument;
+use atvv_config::{ConfigDocument, LayoutDocument};
 use atvv_daemon::Transport;
 use atvv_daemon::audio::PcmSink;
 use atvv_daemon::capture;
@@ -16,7 +16,7 @@ use atvv_daemon::daemon::{Command as DaemonCommand, Daemon, DaemonConfig, EventS
 use atvv_daemon::dbus::{self, Client, DaemonInterface, DbusSink};
 use atvv_daemon::status::StatusView;
 use atvv_daemon::transport::{MockConfig, MockTransport};
-use atvv_protocol::profile::RC003;
+use atvv_protocol::profile::{RC003, RemoteButton};
 use futures_util::StreamExt;
 use zbus::Connection;
 use zbus::connection::Builder;
@@ -184,6 +184,8 @@ fn config_round_trip_persists_and_invalid_documents_do_not_apply() {
     for member in [
         "GetConfig",
         "SetConfig",
+        "SetLayout",
+        "LayoutChanged",
         "BeginCapture",
         "EndCapture",
         "ButtonEvent",
@@ -194,26 +196,43 @@ fn config_round_trip_persists_and_invalid_documents_do_not_apply() {
 
     let mut document = fixture.client.config().expect("GetConfig");
     assert_eq!(document.schema_version, atvv_config::SCHEMA_VERSION);
-    assert_eq!(
-        document.buttons["ok"].single.as_deref(),
-        Some("key:KEY_ENTER")
-    );
+    assert_eq!(document.active_layout, atvv_config::DEFAULT_LAYOUT);
+    assert!(document.layouts.is_empty());
     document.gain_db = 6;
-    document.buttons.get_mut("up").unwrap().single = Some("key:KEY_F13".into());
+    let mut layout = LayoutDocument {
+        name: "Editor".to_string(),
+        ..LayoutDocument::default()
+    };
+    layout.set_slot(
+        RemoteButton::Up,
+        atvv_input::Trigger::Single,
+        Some("key:KEY_F13".into()),
+    );
+    document.layouts.insert("editor".to_string(), layout);
+    document.active_layout = "editor".to_string();
     fixture.client.set_config(&document).expect("SetConfig");
 
     let status = wait_status(&fixture.client, |status| status.config.gain_db == 6);
     assert!(status.config.loaded);
+    assert_eq!(status.layout.id, "editor");
+    assert_eq!(status.layout.name, "Editor");
     let stored = fixture.client.config().expect("GetConfig after SetConfig");
     assert_eq!(stored.gain_db, 6);
-    assert_eq!(stored.buttons["up"].single.as_deref(), Some("key:KEY_F13"));
+    assert_eq!(
+        stored.layouts["editor"].slot(RemoteButton::Up, atvv_input::Trigger::Single),
+        Some("key:KEY_F13")
+    );
 
     let text = std::fs::read_to_string(&fixture.path).expect("config file");
     assert!(text.contains("gain_db = 6"), "{text}");
-    assert!(text.contains("[buttons.up]"), "{text}");
+    assert!(text.contains("[layouts.editor.buttons.up]"), "{text}");
 
     let mut invalid = stored.clone();
-    invalid.buttons.get_mut("up").unwrap().single = Some("key:not-a-key".into());
+    invalid.layouts.get_mut("editor").unwrap().set_slot(
+        RemoteButton::Up,
+        atvv_input::Trigger::Single,
+        Some("key:not-a-key".into()),
+    );
     let error = fixture
         .client
         .set_config(&invalid)
@@ -286,15 +305,76 @@ fn get_config_returns_the_document_shape() {
     let bus = TestBus::start();
     let fixture = Fixture::start(&bus, "shape");
     let document: ConfigDocument = fixture.client.config().expect("GetConfig");
-    for button in atvv_protocol::profile::RemoteButton::LOGICAL {
-        assert!(
-            document.buttons.contains_key(button.name()),
-            "{} missing",
-            button.name()
-        );
-    }
+    assert_eq!(document.schema_version, atvv_config::SCHEMA_VERSION);
+    assert_eq!(document.active_layout, atvv_config::DEFAULT_LAYOUT);
+    assert!(document.layouts.is_empty());
     assert!(!document.allow_exec);
     assert_eq!(document.trigger_key.as_deref(), Some("DICTATE"));
+}
+
+#[test]
+fn set_layout_switches_persists_and_rejects_unknown_ids() {
+    let bus = TestBus::start();
+    let fixture = Fixture::start(&bus, "layout");
+
+    let mut document = fixture.client.config().expect("GetConfig");
+    for (id, name, action) in [
+        ("editor", "Editor", "key:KEY_F13"),
+        ("player", "Player", "key:KEY_F14"),
+    ] {
+        let mut layout = LayoutDocument {
+            name: name.to_string(),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Up,
+            atvv_input::Trigger::Single,
+            Some(action.to_string()),
+        );
+        document.layouts.insert(id.to_string(), layout);
+    }
+    fixture.client.set_config(&document).expect("SetConfig");
+
+    let proxy = fixture.client.proxy().expect("proxy");
+    let mut events = zbus::block_on(proxy.receive_layout_changed()).expect("receive LayoutChanged");
+    fixture.client.set_layout("editor").expect("SetLayout");
+    let event = zbus::block_on(events.next()).expect("LayoutChanged signal");
+    assert_eq!(*event.args().expect("args").id(), "editor");
+
+    let status = wait_status(&fixture.client, |status| status.layout.id == "editor");
+    assert_eq!(status.layout.name, "Editor");
+    let stored = fixture.client.config().expect("GetConfig after SetLayout");
+    assert_eq!(stored.active_layout, "editor");
+    let loaded = atvv_config::load(&fixture.path, &RC003).expect("persisted file");
+    assert_eq!(loaded.config.active_layout, "editor");
+
+    let error = fixture
+        .client
+        .set_layout("missing")
+        .expect_err("unknown layout must fail");
+    assert!(error.to_string().contains("missing"), "{error}");
+    assert_eq!(fixture.client.config().unwrap().active_layout, "editor");
+    assert_eq!(
+        atvv_config::load(&fixture.path, &RC003)
+            .unwrap()
+            .config
+            .active_layout,
+        "editor"
+    );
+
+    fixture
+        .client
+        .set_layout("default")
+        .expect("SetLayout default");
+    let status = wait_status(&fixture.client, |status| status.layout.id == "default");
+    assert_eq!(status.layout.name, atvv_config::DEFAULT_LAYOUT_NAME);
+    assert_eq!(
+        atvv_config::load(&fixture.path, &RC003)
+            .unwrap()
+            .config
+            .active_layout,
+        "default"
+    );
 }
 
 #[test]

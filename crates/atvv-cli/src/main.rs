@@ -11,7 +11,10 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
-use atvv_config::{ConfigDocument, VinputMode, parse_checked_action};
+use atvv_config::{
+    ConfigDocument, DEFAULT_LAYOUT, LayoutDocument, VinputMode, layout_id_is_reserved,
+    layout_id_is_valid, parse_checked_action,
+};
 use atvv_daemon::{Client, ContractView};
 use atvv_input::{
     ActionMap, FAKE_REMOTE, FakeRemote, Gesture, InputRuntime, KeyResolver, RemoteEvent, Trigger,
@@ -81,6 +84,11 @@ enum Command {
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
+    },
+    /// Switch, inspect, or manage named key layouts.
+    Layout {
+        #[command(subcommand)]
+        command: LayoutCommand,
     },
     /// Wait for one physical remote button press (capture mode).
     Capture {
@@ -162,6 +170,63 @@ enum ConfigCommand {
     Set(ConfigSet),
 }
 
+#[derive(Debug, Subcommand)]
+enum LayoutCommand {
+    /// List layouts, the active marker, and the source.
+    List {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print one layout's effective slots and gesture timing.
+    Show {
+        /// Layout id (`default` is the template).
+        id: String,
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Switch the active layout by id.
+    Use {
+        /// Layout id.
+        id: String,
+    },
+    /// Create a user layout without switching to it.
+    New {
+        /// New layout id: [a-z0-9][a-z0-9_-]{0,31}, not reserved.
+        id: String,
+        /// Display name, unique case-insensitively.
+        #[arg(long)]
+        name: String,
+        /// Optional description.
+        #[arg(long)]
+        description: Option<String>,
+        /// Copy slots and gesture timing from this layout.
+        #[arg(long)]
+        from: Option<String>,
+    },
+    /// Rename a user layout; `--description` replaces its description.
+    Rename {
+        /// Layout id.
+        id: String,
+        /// New display name, unique case-insensitively.
+        name: String,
+        /// New description; empty clears it.
+        #[arg(long)]
+        description: Option<String>,
+    },
+    /// Delete a user layout; the active layout cannot be deleted.
+    Delete {
+        /// Layout id.
+        id: String,
+    },
+    /// Clear a user layout's slots and gesture timing.
+    Reset {
+        /// Layout id.
+        id: String,
+    },
+}
+
 #[derive(Debug, clap::Args)]
 struct ConfigSet {
     /// Output gain in dB.
@@ -187,6 +252,9 @@ struct ConfigSet {
     /// BlueZ adapter name saved for the next start.
     #[arg(long)]
     adapter: Option<String>,
+    /// Layout to edit; defaults to the active layout. `default` is rejected.
+    #[arg(long)]
+    layout: Option<String>,
     /// Logical button to edit: power, ok, back, up, down, left, right, home,
     /// menu, tv, volume_up, volume_down.
     #[arg(long)]
@@ -209,6 +277,9 @@ enum MapCommand {
         #[arg(long, default_value = "single",
               value_parser = ["single", "double", "long"])]
         trigger: String,
+        /// Resolve this layout instead of the active one.
+        #[arg(long)]
+        layout: Option<String>,
         /// Validate this action string instead of reading the configuration.
         #[arg(long)]
         action: Option<String>,
@@ -285,6 +356,7 @@ fn run() -> Result<(), String> {
         Command::Mic { command } => mic(command),
         Command::Reload => reload(),
         Command::Config { command } => config(command),
+        Command::Layout { command } => layout(command),
         Command::Capture { timeout, json } => capture(timeout, json),
         Command::Map { command } => map(command),
         Command::Pair {
@@ -421,6 +493,286 @@ fn reload() -> Result<(), String> {
     Ok(())
 }
 
+fn profile_for(document: &ConfigDocument) -> Result<atvv_protocol::profile::DeviceProfile, String> {
+    PROFILES
+        .iter()
+        .copied()
+        .find(|profile| profile.id == document.profile)
+        .ok_or_else(|| format!("unknown device profile {:?}", document.profile))
+}
+
+fn layout(command: LayoutCommand) -> Result<(), String> {
+    let client = daemon_client()?;
+    match command {
+        LayoutCommand::List { json } => {
+            let document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            let active = document.active_layout.clone();
+            let summaries = document.layout_summaries();
+            if json {
+                let entries: Vec<_> = summaries
+                    .iter()
+                    .map(|summary| {
+                        serde_json::json!({
+                            "id": summary.id,
+                            "name": summary.name,
+                            "description": summary.description,
+                            "template": summary.template,
+                            "active": summary.id == active,
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?
+                );
+            } else {
+                for summary in summaries {
+                    let marker = if summary.id == active { "*" } else { " " };
+                    let source = if summary.template { "template" } else { "user" };
+                    println!(
+                        "{marker} {:<16} {:<8} {:<20} {}",
+                        summary.id,
+                        source,
+                        summary.name,
+                        summary.description.as_deref().unwrap_or("")
+                    );
+                }
+            }
+            Ok(())
+        }
+        LayoutCommand::Show { id, json } => {
+            let document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            let summary = document
+                .layout_summaries()
+                .into_iter()
+                .find(|summary| summary.id == id)
+                .ok_or_else(|| format!("layout {id:?} does not exist"))?;
+            let profile = profile_for(&document)?;
+            let (map, gesture) = document
+                .resolved_layout(&id, &profile)
+                .map_err(|error| error.to_string())?;
+            let active = document.active_layout == id;
+            if json {
+                let mut slots = serde_json::Map::new();
+                for button in RemoteButton::LOGICAL {
+                    if button == RemoteButton::Voice {
+                        continue;
+                    }
+                    slots.insert(
+                        button.name().to_string(),
+                        serde_json::json!({
+                            "single": map.resolve(button, Trigger::Single).map(ToString::to_string),
+                            "double": map.resolve(button, Trigger::Double).map(ToString::to_string),
+                            "long": map.resolve(button, Trigger::Long).map(ToString::to_string),
+                        }),
+                    );
+                }
+                let value = serde_json::json!({
+                    "id": summary.id,
+                    "name": summary.name,
+                    "description": summary.description,
+                    "template": summary.template,
+                    "active": active,
+                    "gesture": {
+                        "double_click_ms": gesture.double_click_ms,
+                        "long_press_ms": gesture.long_press_ms,
+                        "repeat_start_ms": gesture.repeat_start_ms,
+                        "stable_release_ms": gesture.stable_release_ms,
+                        "suppression_ms": gesture.suppression_ms,
+                        "repeat_interval_ms": gesture.repeat_interval_ms,
+                        "back_repeat_interval_ms": gesture.back_repeat_interval_ms,
+                    },
+                    "slots": slots,
+                });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
+                );
+            } else {
+                println!("id:          {}", summary.id);
+                println!("name:        {}", summary.name);
+                println!(
+                    "source:      {}",
+                    if summary.template { "template" } else { "user" }
+                );
+                println!(
+                    "description: {}",
+                    summary.description.as_deref().unwrap_or("-")
+                );
+                println!("active:      {}", if active { "yes" } else { "no" });
+                println!(
+                    "gesture:     double={} long={} repeat_start={} latch={} suppression={} repeat={} back_repeat={}",
+                    gesture.double_click_ms,
+                    gesture.long_press_ms,
+                    gesture.repeat_start_ms,
+                    gesture.stable_release_ms,
+                    gesture.suppression_ms,
+                    gesture.repeat_interval_ms,
+                    gesture.back_repeat_interval_ms,
+                );
+                println!("slots:");
+                for button in RemoteButton::LOGICAL {
+                    if button == RemoteButton::Voice {
+                        continue;
+                    }
+                    let slot = |trigger: Trigger| {
+                        map.resolve(button, trigger)
+                            .map_or_else(|| "-".to_string(), ToString::to_string)
+                    };
+                    println!(
+                        "  {:<12} single={:<22} double={:<22} long={}",
+                        button.name(),
+                        slot(Trigger::Single),
+                        slot(Trigger::Double),
+                        slot(Trigger::Long),
+                    );
+                }
+            }
+            Ok(())
+        }
+        LayoutCommand::Use { id } => {
+            client
+                .set_layout(&id)
+                .map_err(|error| format!("cannot switch layouts: {error}"))?;
+            println!("active layout: {id}");
+            Ok(())
+        }
+        LayoutCommand::New {
+            id,
+            name,
+            description,
+            from,
+        } => {
+            let mut document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            if !layout_id_is_valid(&id) {
+                return Err(format!(
+                    "layout id {id:?} must match [a-z0-9][a-z0-9_-]{{0,31}}"
+                ));
+            }
+            if layout_id_is_reserved(&id) {
+                return Err(format!("layout id {id:?} is reserved"));
+            }
+            if document.layouts.contains_key(&id) {
+                return Err(format!("layout {id:?} already exists"));
+            }
+            let source = match from.as_deref() {
+                None | Some(DEFAULT_LAYOUT) => LayoutDocument::default(),
+                Some(from) => document
+                    .layouts
+                    .get(from)
+                    .cloned()
+                    .ok_or_else(|| format!("layout {from:?} does not exist"))?,
+            };
+            let name = name.trim().to_string();
+            if name.is_empty() {
+                return Err("the layout name cannot be empty".to_string());
+            }
+            document.layouts.insert(
+                id.clone(),
+                LayoutDocument {
+                    name,
+                    description: description
+                        .map(|description| description.trim().to_string())
+                        .filter(|description| !description.is_empty()),
+                    gesture: source.gesture,
+                    buttons: source.buttons,
+                },
+            );
+            client
+                .set_config(&document)
+                .map_err(|error| format!("cannot create the layout: {error}"))?;
+            println!("created layout {id} (inactive)");
+            Ok(())
+        }
+        LayoutCommand::Rename {
+            id,
+            name,
+            description,
+        } => {
+            if id == DEFAULT_LAYOUT {
+                return Err(
+                    "layout \"default\" is the profile template and cannot be renamed".to_string(),
+                );
+            }
+            let mut document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            let name = name.trim().to_string();
+            if name.is_empty() {
+                return Err("the layout name cannot be empty".to_string());
+            }
+            {
+                let layout = document
+                    .layouts
+                    .get_mut(&id)
+                    .ok_or_else(|| format!("layout {id:?} does not exist"))?;
+                layout.name = name;
+                if let Some(description) = description {
+                    layout.description = Some(description.trim().to_string())
+                        .filter(|description| !description.is_empty());
+                }
+            }
+            client
+                .set_config(&document)
+                .map_err(|error| format!("cannot rename the layout: {error}"))?;
+            println!("renamed layout {id}");
+            Ok(())
+        }
+        LayoutCommand::Delete { id } => {
+            if id == DEFAULT_LAYOUT {
+                return Err(
+                    "layout \"default\" is the profile template and cannot be deleted".to_string(),
+                );
+            }
+            let mut document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            if document.active_layout == id {
+                return Err(format!(
+                    "layout {id:?} is active; switch to another layout first"
+                ));
+            }
+            if document.layouts.remove(&id).is_none() {
+                return Err(format!("layout {id:?} does not exist"));
+            }
+            client
+                .set_config(&document)
+                .map_err(|error| format!("cannot delete the layout: {error}"))?;
+            println!("deleted layout {id}");
+            Ok(())
+        }
+        LayoutCommand::Reset { id } => {
+            if id == DEFAULT_LAYOUT {
+                return Err(
+                    "layout \"default\" is the profile template and cannot be reset".to_string(),
+                );
+            }
+            let mut document = client
+                .config()
+                .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            {
+                let layout = document
+                    .layouts
+                    .get_mut(&id)
+                    .ok_or_else(|| format!("layout {id:?} does not exist"))?;
+                layout.buttons.clear();
+                layout.gesture = None;
+            }
+            client
+                .set_config(&document)
+                .map_err(|error| format!("cannot reset the layout: {error}"))?;
+            println!("reset layout {id}");
+            Ok(())
+        }
+    }
+}
+
 fn config(command: ConfigCommand) -> Result<(), String> {
     let client = daemon_client()?;
     match command {
@@ -487,17 +839,29 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
         (Some(button), Some(trigger), Some(action)) => {
             let button = find_button(&button)?;
             let trigger = parse_trigger(&trigger)?;
+            let target = args
+                .layout
+                .clone()
+                .unwrap_or_else(|| document.active_layout.clone());
+            if target == DEFAULT_LAYOUT {
+                return Err(
+                    "layout \"default\" is the profile template; create a layout first: \
+                     atvvctl layout new <id> --from default"
+                        .to_string(),
+                );
+            }
             let value = if action.trim().eq_ignore_ascii_case("default") {
                 default_action(status.as_ref(), button, trigger)
             } else {
                 Some(action.trim().to_string())
             };
-            let slots = document
-                .buttons
-                .entry(button.name().to_string())
-                .or_default();
-            set_slot(slots, trigger, value);
+            document
+                .layouts
+                .get_mut(&target)
+                .ok_or_else(|| format!("layout {target:?} does not exist"))?
+                .set_slot(button, trigger, value);
             changed = true;
+            println!("layout: {target}");
         }
         (None, None, None) => {}
         _ => return Err("--button requires --trigger and --action".to_string()),
@@ -556,18 +920,10 @@ fn default_action(
         .map(ToString::to_string)
 }
 
-fn set_slot(slots: &mut atvv_config::ButtonDocument, trigger: Trigger, value: Option<String>) {
-    match trigger {
-        Trigger::Single => slots.single = value,
-        Trigger::Double => slots.double = value,
-        Trigger::Long => slots.long = value,
-    }
-}
-
 fn render_config(document: &ConfigDocument) -> String {
     let trigger_key = document.trigger_key.as_deref().unwrap_or("none");
     let mut text = format!(
-        "schema:      {}\nprofile:     {}\ndevice:      {}\nadapter:     {}\ngain_db:     {}\ninput:       {}\nvinput:      {}\ntrigger_key: {}\nallow_exec:  {}\ngesture:     double={} long={} repeat_start={} latch={} suppression={} repeat={} back_repeat={}\n",
+        "schema:        {}\nprofile:       {}\ndevice:        {}\nadapter:       {}\ngain_db:       {}\ninput:         {}\nvinput:        {}\ntrigger_key:   {}\nallow_exec:    {}\nactive_layout: {}\nlayouts:\n",
         document.schema_version,
         document.profile,
         document.device.as_deref().unwrap_or("-"),
@@ -577,26 +933,55 @@ fn render_config(document: &ConfigDocument) -> String {
         document.vinput.name(),
         trigger_key,
         document.allow_exec,
-        document.gesture.double_click_ms,
-        document.gesture.long_press_ms,
-        document.gesture.repeat_start_ms,
-        document.gesture.stable_release_ms,
-        document.gesture.suppression_ms,
-        document.gesture.repeat_interval_ms,
-        document.gesture.back_repeat_interval_ms,
+        document.active_layout,
     );
-    text.push_str("buttons:\n");
-    for button in RemoteButton::LOGICAL {
-        let Some(slots) = document.buttons.get(button.name()) else {
-            continue;
-        };
+    for summary in document.layout_summaries() {
         text.push_str(&format!(
-            "  {:<12} single={:<22} double={:<22} long={}\n",
-            button.name(),
-            slots.single.as_deref().unwrap_or("-"),
-            slots.double.as_deref().unwrap_or("-"),
-            slots.long.as_deref().unwrap_or("-"),
+            "  {}{:<16} {:<8} {:<20} {}\n",
+            if summary.id == document.active_layout {
+                "* "
+            } else {
+                "  "
+            },
+            summary.id,
+            if summary.template { "template" } else { "user" },
+            summary.name,
+            summary.description.as_deref().unwrap_or(""),
         ));
+    }
+    for (id, layout) in &document.layouts {
+        text.push_str(&format!("[{id}]\n"));
+        for button in RemoteButton::LOGICAL {
+            let Some(slots) = layout.buttons.get(button.name()) else {
+                continue;
+            };
+            for (trigger, value) in [
+                (Trigger::Single, slots.single.as_deref()),
+                (Trigger::Double, slots.double.as_deref()),
+                (Trigger::Long, slots.long.as_deref()),
+            ] {
+                if let Some(value) = value {
+                    text.push_str(&format!(
+                        "  {:<12} {}={}\n",
+                        button.name(),
+                        trigger.name(),
+                        value
+                    ));
+                }
+            }
+        }
+        if let Some(gesture) = &layout.gesture {
+            text.push_str(&format!(
+                "  gesture double={:?} long={:?} repeat_start={:?} latch={:?} suppression={:?} repeat={:?} back_repeat={:?}\n",
+                gesture.double_click_ms,
+                gesture.long_press_ms,
+                gesture.repeat_start_ms,
+                gesture.stable_release_ms,
+                gesture.suppression_ms,
+                gesture.repeat_interval_ms,
+                gesture.back_repeat_interval_ms,
+            ));
+        }
     }
     if document.allow_exec {
         text.push_str("note: exec actions run shell commands as your user\n");
@@ -682,6 +1067,7 @@ fn map(command: MapCommand) -> Result<(), String> {
     let MapCommand::Test {
         button,
         trigger,
+        layout,
         action,
         json,
     } = command;
@@ -726,6 +1112,11 @@ fn map(command: MapCommand) -> Result<(), String> {
         return Ok(());
     }
 
+    let target = layout.unwrap_or_else(|| document.active_layout.clone());
+    let profile = profile_for(&document)?;
+    let (map, _gesture) = document
+        .resolved_layout(&target, &profile)
+        .map_err(|error| error.to_string())?;
     let buttons: Vec<RemoteButton> = button
         .as_deref()
         .map(find_button)
@@ -735,51 +1126,48 @@ fn map(command: MapCommand) -> Result<(), String> {
         if let Some(button) = button.as_deref() {
             let button = find_button(button)?;
             let value = serde_json::json!({
+                "layout": target,
                 "button": button.name(),
                 "trigger": trigger.name(),
-                "action": resolved_action(&document, button, trigger),
+                "action": resolved_action(&map, button, trigger),
             });
             println!(
                 "{}",
                 serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
             );
         } else {
-            let mut map = serde_json::Map::new();
+            let mut actions = serde_json::Map::new();
             for button in buttons {
-                map.insert(
+                actions.insert(
                     button.name().to_string(),
-                    serde_json::json!(resolved_action(&document, button, trigger)),
+                    serde_json::json!(resolved_action(&map, button, trigger)),
                 );
             }
             println!(
                 "{}",
-                serde_json::to_string_pretty(&map).map_err(|error| error.to_string())?
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "layout": target,
+                    "actions": actions,
+                }))
+                .map_err(|error| error.to_string())?
             );
         }
     } else {
+        println!("layout: {target}");
         for button in buttons {
             println!(
                 "{:<12} {:<7} {}",
                 button.name(),
                 trigger.name(),
-                resolved_action(&document, button, trigger).unwrap_or_else(|| "-".to_string())
+                resolved_action(&map, button, trigger).unwrap_or_else(|| "-".to_string())
             );
         }
     }
     Ok(())
 }
 
-fn resolved_action(
-    document: &ConfigDocument,
-    button: RemoteButton,
-    trigger: Trigger,
-) -> Option<String> {
-    let slots = document.buttons.get(button.name())?;
-    match trigger {
-        Trigger::Single => slots.single.clone(),
-        Trigger::Double => slots.double.clone(),
-        Trigger::Long => slots.long.clone(),
-    }
+fn resolved_action(map: &ActionMap, button: RemoteButton, trigger: Trigger) -> Option<String> {
+    map.resolve(button, trigger).map(ToString::to_string)
 }
 
 fn action_kind(action: &atvv_input::Action) -> &'static str {

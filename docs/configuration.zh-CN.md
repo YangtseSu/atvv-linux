@@ -12,7 +12,7 @@
 ## 模式
 
 ```toml
-schema_version = 1
+schema_version = 2
 profile = "miremote-rc003"          # 必须与构建中的设备配置文件一致
 device = "C0:5D:39:F8:2D:4C"        # 由 `atvvctl pair` 写入
 adapter = "hci0"                    # 可选的 BlueZ 适配器
@@ -21,26 +21,25 @@ input = true                        # evdev/uinput 路径
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # 按键或组合键；none 表示禁用
 allow_exec = false                  # 启用 exec: 操作
+active_layout = "editor"            # default 或某个用户布局 id
 
-[gesture]
-double_click_ms = 300
-long_press_ms = 550
-repeat_start_ms = 350
-stable_release_ms = 600
-suppression_ms = 180
-repeat_interval_ms = 100
-back_repeat_interval_ms = 50
+[layouts.editor]
+name = "Editor"
+description = "编辑器和浏览器快捷键"
 
-[buttons.up]
+[layouts.editor.gesture]
+long_press_ms = 700
+
+[layouts.editor.buttons.up]
 single = "key:KEY_F13"
 
-[buttons.ok]
+[layouts.editor.buttons.ok]
 long = "combo:ctrl+alt+v"
 ```
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `schema_version` | `1` | 未知版本会被拒绝。 |
+| `schema_version` | `2` | 版本 1 在加载时迁移；更高版本会被拒绝。 |
 | `profile` | 当前设备配置文件 | 不同的 id 会被拒绝；按键映射只属于一个设备配置文件。 |
 | `device` | 无 | 蓝牙地址；`atvvctl pair` 会写入。更改在下次启动时生效。 |
 | `adapter` | BlueZ 默认 | 适配器名称，例如 `hci0`。 |
@@ -49,8 +48,8 @@ long = "combo:ctrl+alt+v"
 | `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
 | `allow_exec` | `false` | 任何 `exec:` 操作都需要它。 |
-| `[gesture]` | 设备配置文件时序 | 每个字段覆盖一个设备配置文件值；边界会被校验。 |
-| `[buttons.<button>]` | 设备配置文件默认值 | 按槽位的操作覆盖。 |
+| `active_layout` | `default` | 驱动输入运行时的布局。 |
+| `[layouts.<id>]` | 无 | 用户布局：`name`、可选的 `description`、`[gesture]` 和 `[buttons.<button>]`。 |
 
 十二个可映射按键是 `power`、`ok`、`back`、`up`、`down`、`left`、`right`、
 `home`、`menu`、`tv`、`volume_up` 和 `volume_down`。语音键不可映射：它控制
@@ -60,7 +59,32 @@ ATVV 麦克风和 vinput 触发。
 而不是“未映射”。默认映射会为每个逻辑按键重新发出原始按键，`power` 除外；
 它默认为 `none`，以免与 logind 竞争。
 
-## 操作语法
+## 布局
+
+布局是一组命名的按键操作，加上手势时序覆盖。设备配置文件仍然是硬件/固件标识；
+布局是用户的按键映射。`default` 由设备配置文件合成，从不存储，并且是**模板**：
+在映射板上编辑它后点击“应用”，会把更改另存为新的用户布局，模板本身保持不变。
+
+布局必须有名称（不区分大小写地唯一）、可选描述、可选的按键覆盖和可选手势覆盖。
+布局 id 匹配 `[a-z0-9][a-z0-9_-]{0,31}`；`default` 以及预设 id `media`、`coding`、
+`slides` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
+
+全局字段（`profile`、`device`、`adapter`、`gain_db`、`input`、`vinput`、
+`trigger_key`、`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、设备或
+录音键。`default` 不能被存储、重命名、删除或重置，也不会出现在 `layouts` 中。
+
+手势覆盖作用于整个活动布局，因此切换布局可能改变双击/长按行为。
+`atvvctl layout show` 会打印实际生效的时序。
+
+### 迁移
+
+包含顶层 `[buttons]` 或 `[gesture]` 表的版本 1 文件在加载时迁移为名为 "Custom"
+的用户布局 `custom`，并设置 `active_layout = "custom"`。没有覆盖的版本 1 文件变为
+`active_layout = "default"`。下一次保存会写入版本 2 并删除旧表。版本 2 文件不得
+包含顶层表，并且 `SetConfig` 只接受版本 2，因此过期的客户端会明确失败，而不是
+悄悄丢弃布局。
+
+## 操作语法## 操作语法
 
 ```text
 none
@@ -123,15 +147,16 @@ single = "pointer:click:right"
 ## 应用更改
 
 `atvvctl config set` 通过 D-Bus 发送整个文档。守护进程在应用任何内容之前校验
-每个字段，然后：
+每个字段（包括每个已存储的布局），然后：
 
-1. 应用增益、输入、vinput 模式、触发键、手势时序和操作映射；
+1. 应用增益、输入、vinput 模式、触发键、手势时序和活动布局的操作映射；
 2. 当映射、时序、触发键或 vinput 模式变化时重启输入运行时，因为 uinput
    按键注册依赖映射。重启失败会恢复之前的运行时并报告错误；
 3. 原子地写入文件。写入失败会回滚运行时。
 
-无效文档不会触碰活动映射、运行时或文件。`atvvctl reload` 通过同一路径重新读取
-文件，并返回校验或应用错误，而不是报告成功。
+无效文档不会触碰活动映射、运行时或文件。`atvvctl layout use` 通过同一路径应用
+所选布局并持久化 `active_layout`；运行时应用或写入失败时，之前的布局保持活动。
+`atvvctl reload` 通过同一路径重新读取文件，并返回校验或应用错误，而不是报告成功。
 
 按键映射是本地配置。它不属于 PipeWire 源上公布的提供方契约；消费者绑定声明的
 录音键，而不是按键映射。
@@ -145,6 +170,14 @@ atvvctl config set --gain-db 6
 atvvctl config set --input false
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
+atvvctl layout list
+atvvctl layout show editor
+atvvctl layout use editor
+atvvctl layout new editor --name Editor --from default
+atvvctl layout rename editor "Editor layout"
+atvvctl layout delete editor
+atvvctl layout reset editor
+atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
 atvvctl config set --button ok --trigger single --action pointer:click:left
@@ -155,13 +188,20 @@ atvvctl config set --button up --trigger single --action none
 atvvctl config set --button up --trigger single --action default
 atvvctl reload
 atvvctl map test --button up --trigger single
+atvvctl map test --layout editor --button up --trigger single
 atvvctl map test --action "combo:ctrl+alt+v"
 atvvctl map test --action "pointer:click:left"
 atvvctl capture --timeout 30    # 一次按下；打印逻辑按键和槽位
 ```
 
-`atvvctl map test` 解析活动文档或单个操作字符串。它从不执行 `exec:`；只校验并
-打印按键程序。指针操作报告 `kind: pointer`，没有按键程序。`atvvctl status`
+`atvvctl layout use` 发送 `SetLayout`。`layout new` 和 `layout rename` 不会切换
+活动布局。`layout delete` 拒绝活动布局，`layout delete`、`layout rename` 和
+`layout reset` 拒绝 `default`。活动布局为 `default` 时，`config set --button`
+会拒绝并提示使用 `atvvctl layout new <id> --from default`；使用 `--layout <id>`
+可编辑其他用户布局。
+
+`atvvctl map test` 默认解析活动布局，也可用 `--layout <id>` 或单个操作字符串。
+它从不执行 `exec:`；只校验并打印按键程序。指针操作报告 `kind: pointer`，没有按键程序。`atvvctl status`
 在 `input.pointer` 中报告指针设备是否活动；纯键盘映射为 false。
 
 `atvvctl capture` 启动捕获模式，等待一次逻辑按键按下，然后结束。捕获会报告输入
@@ -174,10 +214,13 @@ atvvctl capture --timeout 30    # 一次按下；打印逻辑按键和槽位
 | 成员 | 签名 | 说明 |
 |---|---|---|
 | `GetConfig` | `() -> s` | JSON `ConfigDocument`。 |
-| `SetConfig` | `(s) -> ()` | 校验、应用并持久化。无效输入返回 `org.freedesktop.DBus.Error.InvalidArgs` 和字段错误。 |
+| `SetConfig` | `(s) -> ()` | 校验版本 2、应用并持久化。无效输入返回 `org.freedesktop.DBus.Error.InvalidArgs` 和字段错误。 |
+| `SetLayout` | `(s) -> ()` | 按 id 切换活动布局、应用并持久化。 |
 | `BeginCapture` | `() -> ()` | 为调用连接启动捕获。 |
 | `EndCapture` | `() -> ()` | 停止捕获。 |
+| `LayoutChanged` | 信号 `(s)` | 新的活动布局 id。 |
 | `ButtonEvent` | 信号 `(s, s, b)` | 捕获活动时的 `button`、`trigger`、`pressed`。 |
 
-当调用 `BeginCapture` 的连接离开总线时，捕获模式会自动结束。负载由
-`schema_version` 版本化；客户端必须把完整文档发回 `SetConfig`。
+`GetStatus` 通过 `layout.id` 和 `layout.name` 报告活动布局。当调用 `BeginCapture`
+的连接离开总线时，捕获模式会自动结束。负载由 `schema_version` 版本化；客户端
+必须把完整的版本 2 文档（包括所有布局）发回 `SetConfig`。

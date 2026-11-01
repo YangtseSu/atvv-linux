@@ -71,6 +71,8 @@ dialog.
   and the Device Information Service facts (firmware, hardware and software
   revisions, serial number, manufacturer, model). Rows without a value are
   hidden; a disconnected battery reads `last known`.
+- **Layout chip**: the active layout name. It opens the layout switcher, which
+  lists every layout and opens the manager.
 - **Subtitle**: the profile model (`RC003`) and the session state. The
   Bluetooth address lives in the device information dialog.
 - **Test**, **Revert**, and **Apply**.
@@ -78,6 +80,40 @@ dialog.
 The device chip covers the one active device. Switching between known remotes
 and per-device layouts belongs to step 21, so this step opens device
 information instead of a device list.
+
+## Layouts
+
+A layout is a named set of button actions and gesture timing. The layout chip
+next to the device chip shows the active layout and opens a switcher. Its
+popover lists every layout with an active check mark and description;
+**Default** carries a *Template* tag. **Manage layouts…** opens the manager.
+
+`Default` is synthesized from the device profile and is a template. It is
+editable: slot and hotspot clicks open the normal editor and stage the change
+in a working copy. The dirty banner reads "Unsaved changes on Default — Apply
+saves them as a new layout." **Apply** opens **Save as layout** instead of
+writing the template; the name, description, and staged map create a new user
+layout that becomes active. **Revert** discards the staged edits and leaves
+Default active.
+
+User layouts can be created, renamed, duplicated, reset, and deleted from the
+manager. Names are unique case-insensitively and 1–40 characters long;
+`Default` and the preset ids `media`, `coding`, and `slides` are reserved. At
+most 32 user layouts fit. Clicking a manager row switches layouts; the trailing
+menu offers Duplicate, Rename, Delete, and Reset. Default offers Duplicate only,
+and Delete is disabled for the active layout. Rename and **New layout…** use an
+inline name/description form. While the document is dirty the footer shows
+**Revert** and **Apply**.
+
+Switching is blocked while the document is dirty: apply or revert first.
+Switching calls `SetLayout`, applies the map and gesture timing live, and keeps
+Test mode active while clearing the last pressed result. A failed switch keeps
+the previous layout and shows the error.
+
+Global settings (device, gain, vinput mode, recording key, exec policy) do not
+belong to a layout, and the diagram and hotspot geometry do not change per
+layout. The selected layout is persisted as `active_layout`; the Default
+template is never stored in `daemon.toml`.
 
 ## Edit a mapping
 
@@ -105,7 +141,8 @@ information instead of a device list.
    `KEY_SYSRQ`. Modifiers held while learning
    become part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
 4. Click **Update**. The dialog closes, the board shows the new action, and
-   **Apply** in the header becomes active.
+   **Apply** in the header becomes active. While Default is active the edit is
+   staged as described under Layouts.
 
 A **Pointer** action selects a click button or a movement direction and unit
 count; units are relative counts, and the desktop's pointer acceleration and
@@ -120,9 +157,11 @@ key retargets the dialog to that button and gesture. **Reset** restores the
 profile default for the slot, and **Cancel** discards the dialog's edits.
 
 **Apply** validates the complete document, applies it to the running daemon,
-and writes the file atomically. Invalid input stays in the dialog with an
-inline error, and the previous map remains active. **Revert** discards unsaved
-edits by reloading the daemon document.
+and writes the file atomically. When Default has staged slot edits, Apply opens
+**Save as layout** instead; a document that only changed the layout list is
+written in place. Invalid input stays in the dialog with an inline error, and
+the previous map remains active. **Revert** discards unsaved edits by reloading
+the daemon document.
 
 ## Recording key
 
@@ -161,6 +200,7 @@ voice key is reported as fixed; it does not start the microphone in Test mode.
 Shell commands require a separate confirmation dialog with Cancel as the
 default response.
 
+Switching layouts keeps Test mode active but clears the last pressed result.
 Capture ends when Test is toggled off, **Cancel** is clicked in the banner, or
 the GUI's bus connection disappears. The GUI never reads input devices; the
 daemon owns the evdev grab, the action map, and capture state.
@@ -184,19 +224,20 @@ itself is theme-neutral.
 
 ## Persistence
 
-The daemon writes the mapping to `$XDG_CONFIG_HOME/atvv/daemon.toml` (default
+The daemon writes the active layout, every user layout, and the global settings
+to `$XDG_CONFIG_HOME/atvv/daemon.toml` (default
 `~/.config/atvv/daemon.toml`). The same document is available through
 `atvvctl config get --json`, `atvv-mcp`, and the daemon's D-Bus API, so the GUI
-is not a second source of truth. The map survives daemon restarts.
+is not a second source of truth. The active layout survives daemon restarts.
 
 ## Limits
 
 - One device profile at a time; the window shows the profile reported by the
   daemon.
-- No layout selection or per-device layouts yet (steps 17 and 21). The board
-  follows the interface reference except for the layout chip, the device
-  switcher popover, the editor's raw-value preview line, and connector arrows
-  between cards and the diagram.
+- Device switching and per-device layouts belong to step 21; the layout chip
+  switches layouts for the one active device. The board follows the interface
+  reference except for the device switcher popover, the editor's raw-value
+  preview line, and connector arrows between cards and the diagram.
 - No per-application layers or automatic shortcut discovery.
 - No ASR or cloud protocol in the app; dictation only drives the ATVV session.
 - The GUI is optional. `atvvd`, `atvvctl`, `atvv-mcp`, and consumers such as

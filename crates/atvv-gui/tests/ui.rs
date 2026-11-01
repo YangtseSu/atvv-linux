@@ -36,7 +36,7 @@ fn pump(millis: u64) {
 fn window() -> std::rc::Rc<AppWindow> {
     let model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(&RC003)))
         .expect("profile is known");
-    let window = AppWindow::build(None, Backend::start(None));
+    let window = AppWindow::build(None, Backend::detached());
     window.set_model(model);
     window.window().present();
     for _ in 0..3 {
@@ -172,10 +172,15 @@ fn window_smoke() {
     window.editor().value_row().set_text("KEY_F13");
     window.editor().update_button().emit_clicked();
     pump(30);
-    let document = window.document().expect("document");
     assert_eq!(
-        document.buttons["up"].double.as_deref(),
+        window
+            .staged_slot(RemoteButton::Up, Trigger::Double)
+            .as_deref(),
         Some("key:KEY_F13")
+    );
+    assert!(
+        window.template_active(),
+        "a fresh document edits the Default template"
     );
     assert!(window.apply_button().is_sensitive());
     assert_eq!(
@@ -225,8 +230,8 @@ fn window_smoke() {
         window.editor().error().text()
     );
     assert_eq!(
-        window.document().expect("document").buttons["up"]
-            .single
+        window
+            .effective_slot(RemoteButton::Up, Trigger::Single)
             .as_deref(),
         Some("key:KEY_UP"),
         "an invalid edit must not change the document"
@@ -247,8 +252,8 @@ fn window_smoke() {
     window.editor().update_button().emit_clicked();
     pump(30);
     assert_eq!(
-        window.document().expect("document").buttons["up"]
-            .long
+        window
+            .staged_slot(RemoteButton::Up, Trigger::Long)
             .as_deref(),
         Some("pointer:click:right")
     );
@@ -269,8 +274,8 @@ fn window_smoke() {
     window.editor().update_button().emit_clicked();
     pump(30);
     assert_eq!(
-        window.document().expect("document").buttons["up"]
-            .long
+        window
+            .staged_slot(RemoteButton::Up, Trigger::Long)
             .as_deref(),
         Some("pointer:move:up:7")
     );
@@ -371,8 +376,8 @@ fn window_smoke() {
     window.editor().update_button().emit_clicked();
     pump(30);
     assert_eq!(
-        window.document().expect("document").buttons["menu"]
-            .long
+        window
+            .staged_slot(RemoteButton::Menu, Trigger::Long)
             .as_deref(),
         Some("key:KEY_SYSRQ")
     );
@@ -413,10 +418,7 @@ fn window_smoke() {
         "exec error: {}",
         window.editor().error().text()
     );
-    assert_eq!(
-        window.document().expect("document").buttons["tv"].long,
-        None
-    );
+    assert_eq!(window.staged_slot(RemoteButton::Tv, Trigger::Long), None);
     window.editor().cancel_button().emit_clicked();
     pump(30);
 
@@ -453,6 +455,134 @@ fn window_smoke() {
     window.test_button().set_active(false);
     pump(30);
 
+    // Layout chip, template staging, save-as, and the manager.
+    assert_eq!(window.layout_chip_text(), "Default");
+    assert!(window.template_active());
+    window
+        .board()
+        .slot(RemoteButton::Up, Trigger::Single)
+        .expect("up single")
+        .emit_clicked();
+    window.editor().type_row().set_selected(1);
+    window.editor().value_row().set_text("KEY_F13");
+    window.editor().update_button().emit_clicked();
+    pump(30);
+    assert_eq!(
+        window.dirty_banner_text(),
+        "Unsaved changes on Default — Apply saves them as a new layout."
+    );
+    window.apply_button().emit_clicked();
+    pump(30);
+    assert!(window.layout_form_is_visible());
+    assert!(window.layout_manager_is_open());
+    assert_eq!(window.layout_name_row().text(), "My layout");
+    window.layout_name_row().set_text("Coding");
+    window.layout_form_submit().emit_clicked();
+    pump(30);
+    assert!(!window.layout_form_is_visible());
+    assert_eq!(window.active_layout_id().as_deref(), Some("coding-layout"));
+    assert_eq!(window.layout_chip_text(), "Coding");
+    assert!(!window.template_active());
+    assert_eq!(
+        window.document().expect("document").layouts["coding-layout"]
+            .slot(RemoteButton::Up, Trigger::Single),
+        Some("key:KEY_F13")
+    );
+    assert_eq!(window.dirty_banner_text(), "Unsaved changes");
+    window.mark_saved_for_test();
+
+    // The manager tags the template and disables its destructive actions.
+    window.present_layout_manager();
+    pump(30);
+    assert_eq!(
+        window
+            .layout_manager_row("default")
+            .expect("default row")
+            .title(),
+        "Default"
+    );
+    assert!(window.layout_manager_row("coding-layout").is_some());
+    for action in ["rename", "delete", "reset"] {
+        assert!(
+            !window
+                .layout_manager_action("default", action)
+                .unwrap()
+                .is_sensitive(),
+            "Default must not offer {action}"
+        );
+    }
+    assert!(
+        window
+            .layout_manager_action("default", "duplicate")
+            .unwrap()
+            .is_sensitive()
+    );
+
+    // A dirty document refuses to switch layouts.
+    window
+        .board()
+        .slot(RemoteButton::Ok, Trigger::Single)
+        .expect("ok single")
+        .emit_clicked();
+    window.editor().type_row().set_selected(1);
+    window.editor().value_row().set_text("KEY_F13");
+    window.editor().update_button().emit_clicked();
+    pump(30);
+    libadwaita::prelude::ActionRowExt::activate(&window.layout_manager_row("default").unwrap());
+    pump(30);
+    assert_eq!(window.active_layout_id().as_deref(), Some("coding-layout"));
+    window.mark_saved_for_test();
+
+    // Rename, duplicate, delete, and reset through the manager.
+    window.present_layout_manager();
+    pump(30);
+    window
+        .layout_manager_action("coding-layout", "rename")
+        .unwrap()
+        .emit_clicked();
+    pump(30);
+    assert!(window.layout_form_is_visible());
+    window.layout_name_row().set_text("Editor");
+    window.layout_form_submit().emit_clicked();
+    pump(30);
+    assert_eq!(
+        window.layout_manager_row("coding-layout").unwrap().title(),
+        "Editor"
+    );
+    window
+        .layout_manager_action("coding-layout", "duplicate")
+        .unwrap()
+        .emit_clicked();
+    pump(30);
+    assert!(window.layout_manager_row("editor-copy").is_some());
+    window
+        .layout_manager_action("editor-copy", "delete")
+        .unwrap()
+        .emit_clicked();
+    pump(30);
+    assert!(window.layout_manager_row("editor-copy").is_none());
+    assert!(
+        !window
+            .layout_manager_action("coding-layout", "delete")
+            .unwrap()
+            .is_sensitive()
+    );
+    window
+        .layout_manager_action("coding-layout", "reset")
+        .unwrap()
+        .emit_clicked();
+    pump(30);
+    assert_eq!(window.staged_slot(RemoteButton::Up, Trigger::Single), None);
+    assert_eq!(
+        window
+            .effective_slot(RemoteButton::Up, Trigger::Single)
+            .as_deref(),
+        Some("key:KEY_UP")
+    );
+    assert_eq!(window.layout_chip_text(), "Editor");
+    window.close_layout_manager();
+    pump(400);
+
     // Real pointer clicks through XTEST: every card slot and every hotspot.
     if let Some(pointer) = XPointer::connect("ATVV Remote", window.window()) {
         if !pointer.covers() {
@@ -467,6 +597,8 @@ fn window_smoke() {
         for button in RemoteButton::LOGICAL {
             for trigger in SLOTS {
                 let slot = window.board().slot(button, trigger).expect("slot");
+                window.scroll_slot_into_view(button, trigger);
+                pump(40);
                 pointer.click(slot);
                 pump(120);
                 assert_eq!(
@@ -477,11 +609,13 @@ fn window_smoke() {
                 assert_eq!(window.selected_trigger(), Some(trigger));
                 assert!(window.editor().is_open());
                 window.editor().close();
-                pump(180);
+                pump(400);
             }
         }
         for button in RemoteButton::ALL {
             let hotspot = window.diagram().button(button).expect("hotspot");
+            window.scroll_board_to(hotspot);
+            pump(40);
             pointer.click(hotspot);
             pump(120);
             if button == RemoteButton::Voice {
@@ -496,7 +630,7 @@ fn window_smoke() {
                 assert_eq!(window.selected_trigger(), Some(Trigger::Single));
                 window.editor().close();
             }
-            pump(180);
+            pump(400);
         }
     } else {
         eprintln!("XTest pointer checks skipped: no X11 window titled ATVV Remote");
@@ -576,6 +710,7 @@ impl XPointer {
         let Some(bounds) = widget.compute_bounds(&self.window) else {
             return;
         };
+
         let x = self.origin.0
             + i16::try_from((bounds.x() + bounds.width() / 2.0).round() as i64).unwrap_or(0);
         let y = self.origin.1

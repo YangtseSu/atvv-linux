@@ -83,6 +83,7 @@ pub enum Request {
     Load,
     Status,
     Save(ConfigDocument),
+    SetLayout(String),
     BeginCapture,
     EndCapture,
     RunAction(String),
@@ -99,10 +100,12 @@ pub enum Event {
     LoadFailed(String),
     Status(Result<DaemonStatus, String>),
     Saved(Result<(), String>),
+    LayoutSwitched(Result<(), String>),
     CaptureStarted(Result<(), String>),
     CaptureEnded(Result<(), String>),
     ActionRun(Result<(), String>),
     Button(ButtonSignal),
+    LayoutChanged(String),
     SignalStreamEnded,
 }
 
@@ -115,12 +118,16 @@ pub trait DaemonApi {
     fn get_status(&self) -> zbus::Result<String>;
     fn get_config(&self) -> zbus::Result<String>;
     fn set_config(&self, json: &str) -> zbus::Result<()>;
+    fn set_layout(&self, id: &str) -> zbus::Result<()>;
     fn begin_capture(&self) -> zbus::Result<()>;
     fn end_capture(&self) -> zbus::Result<()>;
     fn run_action(&self, action: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn button_event(&self, button: &str, trigger: &str, pressed: bool) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn layout_changed(&self, id: &str) -> zbus::Result<()>;
 }
 
 /// Connection to `org.atvv.Daemon`; created on the worker thread.
@@ -164,6 +171,10 @@ impl DaemonClient {
         zbus::block_on(self.proxy()?.set_config(&json)).map_err(|error| error.to_string())
     }
 
+    fn set_layout(&self, id: &str) -> Result<(), String> {
+        zbus::block_on(self.proxy()?.set_layout(id)).map_err(|error| error.to_string())
+    }
+
     fn begin_capture(&self) -> Result<(), String> {
         zbus::block_on(self.proxy()?.begin_capture()).map_err(|error| error.to_string())
     }
@@ -196,6 +207,15 @@ impl Backend {
         Self { requests, events }
     }
 
+    /// Start a worker that cannot reach a bus.
+    ///
+    /// Widget tests use this so a live `atvvd` on the session bus is never
+    /// asked to change its configuration.
+    #[must_use]
+    pub fn detached() -> Self {
+        Self::start(Some("unix:path=/nonexistent-atvv-gui-test".to_string()))
+    }
+
     pub fn load(&self) {
         let _ = self.requests.send(Request::Load);
     }
@@ -206,6 +226,10 @@ impl Backend {
 
     pub fn save(&self, document: ConfigDocument) {
         let _ = self.requests.send(Request::Save(document));
+    }
+
+    pub fn set_layout(&self, id: String) {
+        let _ = self.requests.send(Request::SetLayout(id));
     }
 
     pub fn begin_capture(&self) {
@@ -292,6 +316,14 @@ fn worker(address: Option<&str>, requests: &Receiver<Request>, events: &Sender<E
                     client = None;
                 }
             }
+            Request::SetLayout(id) => {
+                let result = active.set_layout(&id);
+                let failed = result.is_err();
+                let _ = events.send(Event::LayoutSwitched(result));
+                if failed {
+                    client = None;
+                }
+            }
             Request::BeginCapture => {
                 let result = active.begin_capture();
                 let failed = result.is_err();
@@ -332,6 +364,9 @@ fn send_failure(request: &Request, events: &Sender<Event>, error: &str) {
         Request::Save(_) => {
             let _ = events.send(Event::Saved(Err(error.to_string())));
         }
+        Request::SetLayout(_) => {
+            let _ = events.send(Event::LayoutSwitched(Err(error.to_string())));
+        }
         Request::BeginCapture => {
             let _ = events.send(Event::CaptureStarted(Err(error.to_string())));
         }
@@ -347,17 +382,17 @@ fn send_failure(request: &Request, events: &Sender<Event>, error: &str) {
 
 fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
     let connection = client.connection.clone();
-    let events = events.clone();
+    let button_events = Sender::clone(events);
     let _ = thread::Builder::new()
         .name("atvv-gui-signals".to_string())
         .spawn(move || {
             zbus::block_on(async {
                 let Ok(proxy) = DaemonApiProxy::new(&connection).await else {
-                    let _ = events.send(Event::SignalStreamEnded);
+                    let _ = button_events.send(Event::SignalStreamEnded);
                     return;
                 };
                 let Ok(mut stream) = proxy.receive_button_event().await else {
-                    let _ = events.send(Event::SignalStreamEnded);
+                    let _ = button_events.send(Event::SignalStreamEnded);
                     return;
                 };
                 while let Some(event) = stream.next().await {
@@ -367,7 +402,7 @@ fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
                     let button = args.button().to_string();
                     let trigger = args.trigger().to_string();
                     let pressed = *args.pressed();
-                    if events
+                    if button_events
                         .send(Event::Button(ButtonSignal {
                             button,
                             trigger,
@@ -378,7 +413,33 @@ fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
                         return;
                     }
                 }
-                let _ = events.send(Event::SignalStreamEnded);
+                let _ = button_events.send(Event::SignalStreamEnded);
+            });
+        });
+
+    let connection = client.connection.clone();
+    let layout_events = Sender::clone(events);
+    let _ = thread::Builder::new()
+        .name("atvv-gui-layout-signals".to_string())
+        .spawn(move || {
+            zbus::block_on(async {
+                let Ok(proxy) = DaemonApiProxy::new(&connection).await else {
+                    return;
+                };
+                let Ok(mut stream) = proxy.receive_layout_changed().await else {
+                    return;
+                };
+                while let Some(event) = stream.next().await {
+                    let Ok(args) = event.args() else {
+                        continue;
+                    };
+                    if layout_events
+                        .send(Event::LayoutChanged(args.id().to_string()))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
             });
         });
 }

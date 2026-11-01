@@ -7,7 +7,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use atvv_config::{ConfigDocument, parse_checked_action};
+use atvv_config::{
+    ConfigDocument, DEFAULT_LAYOUT, DEFAULT_LAYOUT_NAME, LayoutDocument, LayoutSummary,
+    MAX_LAYOUT_NAME, parse_checked_action, slug_layout_id, unique_layout_id, unique_layout_name,
+};
 use atvv_input::{Action, ActionMap, Trigger, parse_action};
 use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
 
@@ -218,37 +221,34 @@ fn title_case(value: &str) -> String {
         .join(" ")
 }
 
-/// One slot in the document for a logical button.
-fn slot_ref(document: &ConfigDocument, button: RemoteButton, trigger: Trigger) -> Option<&str> {
-    let slots = document.buttons.get(button.name())?;
-    match trigger {
-        Trigger::Single => slots.single.as_deref(),
-        Trigger::Double => slots.double.as_deref(),
-        Trigger::Long => slots.long.as_deref(),
+fn working_layout(document: &ConfigDocument) -> Result<LayoutDocument, String> {
+    if document.active_layout == DEFAULT_LAYOUT {
+        return Ok(LayoutDocument::default());
     }
+    document
+        .layouts
+        .get(&document.active_layout)
+        .cloned()
+        .ok_or_else(|| format!("unknown layout {:?}", document.active_layout))
 }
 
-fn slot_mut(
-    document: &mut ConfigDocument,
-    button: RemoteButton,
-    trigger: Trigger,
-) -> &mut Option<String> {
-    let slots = document
-        .buttons
-        .entry(button.name().to_string())
-        .or_default();
-    match trigger {
-        Trigger::Single => &mut slots.single,
-        Trigger::Double => &mut slots.double,
-        Trigger::Long => &mut slots.long,
-    }
+fn clean_description(description: Option<&str>) -> Option<String> {
+    description
+        .map(str::trim)
+        .filter(|description| !description.is_empty())
+        .map(str::to_string)
 }
 
 /// Editable configuration and the current selection.
+///
+/// `working` holds the raw slots of the active layout. While the `default`
+/// template is active it is a staged copy: the document keeps no `default`
+/// layout, and saving replaces it with a new user layout.
 #[derive(Debug, Clone)]
 pub struct GuiModel {
     pub profile: DeviceProfile,
     pub document: ConfigDocument,
+    pub working: LayoutDocument,
     pub selected: RemoteButton,
     pub trigger: Trigger,
     pub dirty: bool,
@@ -259,9 +259,11 @@ impl GuiModel {
     pub fn new(document: ConfigDocument) -> Result<Self, String> {
         let profile = profile_by_id(&document.profile)
             .ok_or_else(|| format!("unknown device profile {:?}", document.profile))?;
+        let working = working_layout(&document)?;
         Ok(Self {
             profile,
             document,
+            working,
             selected: RemoteButton::Ok,
             trigger: Trigger::Single,
             dirty: false,
@@ -269,10 +271,46 @@ impl GuiModel {
         })
     }
 
+    /// The active layout is the synthesized, read-only `default` template.
+    #[must_use]
+    pub fn template(&self) -> bool {
+        self.document.active_layout == DEFAULT_LAYOUT
+    }
+
+    /// Active layout id.
+    #[must_use]
+    pub fn active_layout(&self) -> &str {
+        &self.document.active_layout
+    }
+
+    /// Localized display name for a layout id.
+    #[must_use]
+    pub fn layout_name(&self, id: &str) -> String {
+        if id == DEFAULT_LAYOUT {
+            return tr("Default").to_string();
+        }
+        self.document
+            .layouts
+            .get(id)
+            .map_or_else(|| id.to_string(), |layout| layout.name.clone())
+    }
+
+    /// Selector entries: the template first, then user layouts by id.
+    #[must_use]
+    pub fn summaries(&self) -> Vec<LayoutSummary> {
+        self.document.layout_summaries()
+    }
+
+    /// The template has staged slot edits that must be saved as a layout.
+    #[must_use]
+    pub fn template_changed(&self) -> bool {
+        self.template() && !self.working.is_empty()
+    }
+
     /// Raw override stored for one slot; `None` means the profile default.
     #[must_use]
     pub fn slot(&self, button: RemoteButton, trigger: Trigger) -> Option<&str> {
-        slot_ref(&self.document, button, trigger)
+        self.working.slot(button, trigger)
     }
 
     /// Profile default for one slot, if the profile defines one.
@@ -305,24 +343,261 @@ impl GuiModel {
 
     /// Replace the selected slot. `None` restores the profile default.
     ///
+    /// While the template is active this stages the change in `working`.
     /// Returns whether the document changed.
     pub fn set_slot_raw(&mut self, raw: Option<String>) -> Result<bool, String> {
         if let Some(value) = raw.as_deref() {
             parse_checked_action(value, self.document.allow_exec)
                 .map_err(|error| error.to_string())?;
         }
-        let before = self.selected_raw().map(str::to_string);
-        *slot_mut(&mut self.document, self.selected, self.trigger) = raw.clone();
+        let before = self
+            .working
+            .slot(self.selected, self.trigger)
+            .map(str::to_string);
+        self.working
+            .set_slot(self.selected, self.trigger, raw.clone());
         let changed = before != raw;
         if changed {
+            self.sync_active();
             self.dirty = true;
         }
         Ok(changed)
     }
 
+    /// Mirror the active user layout into the document.
+    fn sync_active(&mut self) {
+        if !self.template() {
+            self.document
+                .layouts
+                .insert(self.document.active_layout.clone(), self.working.clone());
+        }
+    }
+
     /// The document was persisted; clear the dirty flag.
     pub fn mark_saved(&mut self) {
         self.dirty = false;
+    }
+
+    /// Switch the active layout. Dirty documents must be applied or reverted
+    /// first so a staged template edit is never dropped.
+    pub fn switch_layout(&mut self, id: &str) -> Result<bool, String> {
+        if self.dirty {
+            return Err(tr("Apply or revert before switching layouts.").to_string());
+        }
+        if id == self.document.active_layout {
+            return Ok(false);
+        }
+        if id != DEFAULT_LAYOUT && !self.document.layouts.contains_key(id) {
+            return Err(format!("unknown layout {id:?}"));
+        }
+        self.document.active_layout = id.to_string();
+        self.working = working_layout(&self.document)?;
+        Ok(true)
+    }
+
+    /// Create a user layout from `default` or another layout without switching.
+    pub fn create_layout(
+        &mut self,
+        name: &str,
+        description: Option<&str>,
+        from: Option<&str>,
+    ) -> Result<String, String> {
+        let name = name.trim();
+        self.check_name(name, None)?;
+        let mut next = self.document.clone();
+        let source = match from {
+            None | Some(DEFAULT_LAYOUT) => LayoutDocument::default(),
+            Some(from) => next
+                .layouts
+                .get(from)
+                .cloned()
+                .ok_or_else(|| format!("unknown layout {from:?}"))?,
+        };
+        let id = unique_layout_id(
+            &slug_layout_id(name),
+            next.layouts.keys().map(String::as_str),
+        );
+        next.layouts.insert(
+            id.clone(),
+            LayoutDocument {
+                name: name.to_string(),
+                description: clean_description(description),
+                gesture: source.gesture,
+                buttons: source.buttons,
+            },
+        );
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        self.dirty = true;
+        Ok(id)
+    }
+
+    /// Persist the staged template slots as a new active layout.
+    pub fn save_as_layout(
+        &mut self,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<String, String> {
+        let name = name.trim();
+        self.check_name(name, None)?;
+        let mut next = self.document.clone();
+        let id = unique_layout_id(
+            &slug_layout_id(name),
+            next.layouts.keys().map(String::as_str),
+        );
+        let mut layout = self.working.clone();
+        layout.name = name.to_string();
+        layout.description = clean_description(description);
+        next.layouts.insert(id.clone(), layout);
+        next.active_layout = id.clone();
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.working = working_layout(&next)?;
+        self.document = next;
+        self.dirty = true;
+        Ok(id)
+    }
+
+    /// Rename a user layout; `None` keeps the current description.
+    pub fn rename_layout(
+        &mut self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<(), String> {
+        if id == DEFAULT_LAYOUT {
+            return Err(tr("Default is a template.").to_string());
+        }
+        let name = name.trim();
+        self.check_name(name, Some(id))?;
+        let mut next = self.document.clone();
+        {
+            let layout = next
+                .layouts
+                .get_mut(id)
+                .ok_or_else(|| format!("unknown layout {id:?}"))?;
+            layout.name = name.to_string();
+            if let Some(description) = description {
+                layout.description = clean_description(Some(description));
+            }
+        }
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        if self.document.active_layout == id {
+            self.working = working_layout(&self.document)?;
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Delete a user layout; the template and the active layout stay.
+    pub fn delete_layout(&mut self, id: &str) -> Result<(), String> {
+        if id == DEFAULT_LAYOUT {
+            return Err(tr("Default is a template.").to_string());
+        }
+        if id == self.document.active_layout {
+            return Err(tr("Cannot delete the active layout.").to_string());
+        }
+        let mut next = self.document.clone();
+        if next.layouts.remove(id).is_none() {
+            return Err(format!("unknown layout {id:?}"));
+        }
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Clear a user layout's slots and gesture timing.
+    pub fn reset_layout(&mut self, id: &str) -> Result<(), String> {
+        if id == DEFAULT_LAYOUT {
+            return Err(tr("Default is a template.").to_string());
+        }
+        let mut next = self.document.clone();
+        {
+            let layout = next
+                .layouts
+                .get_mut(id)
+                .ok_or_else(|| format!("unknown layout {id:?}"))?;
+            layout.buttons.clear();
+            layout.gesture = None;
+        }
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        if self.document.active_layout == id {
+            self.working = working_layout(&self.document)?;
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Copy a layout under a new name and id; the copy stays inactive.
+    ///
+    /// Duplicating the template copies the profile baseline, not staged edits.
+    pub fn duplicate_layout(&mut self, id: &str) -> Result<String, String> {
+        let source = if id == DEFAULT_LAYOUT {
+            LayoutDocument::default()
+        } else {
+            self.document
+                .layouts
+                .get(id)
+                .cloned()
+                .ok_or_else(|| format!("unknown layout {id:?}"))?
+        };
+        let base = if id == DEFAULT_LAYOUT {
+            DEFAULT_LAYOUT_NAME.to_string()
+        } else {
+            source.name.clone()
+        };
+        let existing: Vec<String> = self
+            .document
+            .layouts
+            .values()
+            .map(|layout| layout.name.clone())
+            .collect();
+        let name = unique_layout_name(&format!("{base} copy"), existing.iter().map(String::as_str));
+        let mut next = self.document.clone();
+        let new_id = unique_layout_id(
+            &slug_layout_id(&name),
+            next.layouts.keys().map(String::as_str),
+        );
+        next.layouts.insert(
+            new_id.clone(),
+            LayoutDocument {
+                name,
+                description: source.description,
+                gesture: source.gesture,
+                buttons: source.buttons,
+            },
+        );
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        self.dirty = true;
+        Ok(new_id)
+    }
+
+    /// Reject empty, overlong, reserved, and duplicate names before saving.
+    fn check_name(&self, name: &str, exclude: Option<&str>) -> Result<(), String> {
+        if name.is_empty() {
+            return Err(tr("Enter a layout name.").to_string());
+        }
+        if name.chars().count() > MAX_LAYOUT_NAME {
+            return Err(tr("Use 40 characters or fewer.").to_string());
+        }
+        if name.eq_ignore_ascii_case(DEFAULT_LAYOUT_NAME) {
+            return Err(tr("That name is reserved or already used.").to_string());
+        }
+        if self.document.layouts.iter().any(|(id, layout)| {
+            Some(id.as_str()) != exclude && layout.name.eq_ignore_ascii_case(name)
+        }) {
+            return Err(tr("That name is reserved or already used.").to_string());
+        }
+        Ok(())
     }
 
     /// Change the synthetic key emitted while the recording key is held.
@@ -458,6 +733,12 @@ mod tests {
         model.selected = RemoteButton::Up;
         assert!(model.set_slot_raw(Some("combo:ctrl+alt+v".into())).unwrap());
         assert!(model.dirty);
+        assert!(model.template(), "a fresh document starts on Default");
+        assert!(model.template_changed());
+        assert!(
+            model.document.layouts.is_empty(),
+            "the template is never written into the document"
+        );
         assert_eq!(model.selected_raw(), Some("combo:ctrl+alt+v"));
         assert!(model.validate().is_ok());
 
@@ -550,11 +831,140 @@ mod tests {
         model.selected = RemoteButton::Menu;
         model.set_slot_raw(Some("key:KEY_F13".into())).unwrap();
         let mut saved = document();
-        saved.buttons.get_mut("menu").unwrap().single = Some("key:KEY_F13".into());
+        let mut layout = LayoutDocument {
+            name: "Coding".to_string(),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Menu,
+            Trigger::Single,
+            Some("key:KEY_F13".into()),
+        );
+        saved.layouts.insert("coding-layout".to_string(), layout);
+        saved.active_layout = "coding-layout".to_string();
         model.replace_saved(saved).unwrap();
         assert_eq!(model.selected, RemoteButton::Menu);
         assert!(!model.dirty);
+        assert_eq!(model.active_layout(), "coding-layout");
+        assert_eq!(
+            model.slot(RemoteButton::Menu, Trigger::Single),
+            Some("key:KEY_F13")
+        );
         assert_eq!(model.document.schema_version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn template_edits_are_saved_as_a_new_layout() {
+        let mut model = model();
+        model.selected = RemoteButton::Up;
+        model.set_slot_raw(Some("key:KEY_F13".into())).unwrap();
+        assert!(model.template_changed());
+        let id = model
+            .save_as_layout("Coding", Some("Editor shortcuts"))
+            .unwrap();
+        assert_eq!(
+            id, "coding-layout",
+            "reserved preset ids get a suffix instead of colliding"
+        );
+        assert!(!model.template());
+        assert!(!model.template_changed());
+        assert_eq!(model.active_layout(), id);
+        assert_eq!(model.document.layouts[&id].name, "Coding");
+        assert_eq!(
+            model.document.layouts[&id].slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_F13")
+        );
+        assert_eq!(
+            model.effective_slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_F13".to_string())
+        );
+        assert!(model.dirty, "the new layout still needs Apply");
+        assert!(model.validate().is_ok());
+    }
+
+    #[test]
+    fn switching_layouts_is_blocked_while_dirty() {
+        let mut model = model();
+        let id = model.create_layout("Media", None, None).unwrap();
+        assert_eq!(id, "media-layout");
+        model.mark_saved();
+        assert!(model.switch_layout(&id).unwrap());
+        assert_eq!(model.active_layout(), id);
+        assert!(!model.template());
+
+        model.selected = RemoteButton::Ok;
+        model.set_slot_raw(Some("key:KEY_F13".into())).unwrap();
+        let error = model.switch_layout(DEFAULT_LAYOUT).unwrap_err();
+        assert!(error.contains("Apply or revert"), "{error}");
+        assert_eq!(model.active_layout(), id);
+
+        model.mark_saved();
+        assert!(model.switch_layout(DEFAULT_LAYOUT).unwrap());
+        assert!(model.template());
+        assert!(!model.switch_layout(DEFAULT_LAYOUT).unwrap());
+    }
+
+    #[test]
+    fn manager_creates_renames_duplicates_deletes_and_resets() {
+        let mut model = model();
+        let id = model.create_layout("Media", None, None).unwrap();
+        assert!(model.document.layouts.contains_key(&id));
+        assert!(model.dirty);
+
+        model
+            .rename_layout(&id, "Playback", Some("Player shortcuts"))
+            .unwrap();
+        assert_eq!(model.document.layouts[&id].name, "Playback");
+        assert_eq!(
+            model.document.layouts[&id].description.as_deref(),
+            Some("Player shortcuts")
+        );
+
+        let copy = model.duplicate_layout(&id).unwrap();
+        assert_eq!(model.document.layouts[&copy].name, "Playback copy");
+        assert!(model.document.layouts[&copy].is_empty());
+
+        let template_copy = model.duplicate_layout(DEFAULT_LAYOUT).unwrap();
+        assert_eq!(model.document.layouts[&template_copy].name, "Default copy");
+
+        assert!(model.delete_layout(&id).is_ok());
+        assert!(!model.document.layouts.contains_key(&id));
+
+        model.mark_saved();
+        model.switch_layout(&copy).unwrap();
+        model.selected = RemoteButton::Up;
+        model.set_slot_raw(Some("key:KEY_F13".into())).unwrap();
+        model.mark_saved();
+        model.reset_layout(&copy).unwrap();
+        assert!(model.working.is_empty());
+        assert_eq!(
+            model.effective_slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_UP".to_string())
+        );
+        assert!(model.dirty);
+    }
+
+    #[test]
+    fn the_template_cannot_be_renamed_deleted_or_reset() {
+        let mut model = model();
+        assert!(model.rename_layout(DEFAULT_LAYOUT, "Mine", None).is_err());
+        assert!(model.delete_layout(DEFAULT_LAYOUT).is_err());
+        assert!(model.reset_layout(DEFAULT_LAYOUT).is_err());
+        assert!(model.switch_layout("missing").is_err());
+    }
+
+    #[test]
+    fn duplicate_names_and_reserved_names_are_rejected() {
+        let mut model = model();
+        model.create_layout("Media", None, None).unwrap();
+        let error = model.create_layout("media", None, None).unwrap_err();
+        assert!(error.contains("reserved or already used"), "{error}");
+        let error = model.create_layout("Default", None, None).unwrap_err();
+        assert!(error.contains("reserved or already used"), "{error}");
+        let error = model
+            .create_layout("x".repeat(41).as_str(), None, None)
+            .unwrap_err();
+        assert!(error.contains("40"), "{error}");
     }
 
     #[test]
