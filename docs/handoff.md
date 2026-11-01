@@ -222,17 +222,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   test, picker/chip/subtitle assertions in the UI and i18n suites, and the
   daemon ready-status assertion. Screenshots refreshed.
 - **Key picker and alias `-git` packages (built, not installed)**: the
-  picker/alias/locale fix produced `atvv-git 0.1.0.r23.gb6e956c-1`
-  (6,646,917 bytes; sha256
-  `96c362105d2cd39ebcf7f54020c2a2da6106677ece707817e1c55b220a9d0b00`) and
-  `atvv-gui-git 0.1.0.r23.gb6e956c-1` (1,371,460 bytes; sha256
-  `085fcfd3025f04b80757db084b5b507ce281fc0b8ae91edadfec763cda6673ff`),
-  built from commit `b6e956c` with the checked-in split recipe pointed at the
-  local repository. `atvv-gui-git` carries the key picker, locale-independent
-  search, Print Screen mapping, and alias-aware chip; `atvv-git` keeps
-  `pipewire`/`bluez`/`dbus` only. This supersedes the r20 build, which had
-  the locale-bound search and was removed before install. The installed r8
-  pair remains active until the operator installs these. Both are copied to
+  picker/alias/locale/completeness fixes produced
+  `atvv-git 0.1.0.r25.ge9fc598-1` (6,646,891 bytes; sha256
+  `963dab9ed70d97ba75ccab7988ca5b07c2d855d2aece99d6d74791079433eae7`) and
+  `atvv-gui-git 0.1.0.r25.ge9fc598-1` (1,374,946 bytes; sha256
+  `82c23ac5b0740ad3f9bd4e1623f71cffc5e0a16cd84fa2ee7c8a0443e1ccfd79`),
+  built from commit `e9fc598` with the checked-in split recipe pointed at the
+  local repository. `atvv-gui-git` carries the key picker with all 524
+  resolvable `KEY_*` names, locale-independent search, Print Screen mapping,
+  and alias-aware chip; `atvv-git` keeps `pipewire`/`bluez`/`dbus` only. This
+  supersedes the r23 build (incomplete key list) and r20 (locale-bound
+  search); both were removed before install. The installed r8 pair remains
+  active until the operator installs these. Both are copied to
   `~/projects/arch-pkgs/atvv-git/`.
 - **Recording-key declared chooser (2026-11-01)**: the recording-key page
   offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
