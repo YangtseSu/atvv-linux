@@ -92,7 +92,8 @@ information instead of a device list.
    - *Run a command* runs `exec:<command>` through the daemon.
    - *Dictation* starts, stops, or toggles the ATVV microphone.
 3. Type the value, use **Learn Key**, or use **Choose…** for a searchable
-   list of kernel key names with their friendly labels. The picker inserts the
+   list of every key the input backend supports, with its friendly label and
+   kernel name. The picker inserts the
    chosen key; in a chord it replaces only the final key and keeps the
    modifiers. Search matches the canonical name, the localized label, and the
    English label, and ignores spaces/separators (`print`, `printscreen`,

@@ -202,8 +202,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   remains active. The published `arch-pkgs` recipe is unchanged.
 - **Key-name picker and BlueZ alias (2026-11-01)**: the action editor's key
   row gained **Choose…**, a searchable picker over
-  `atvv_input::KEY_NAMES` (curated canonical names; friendly labels from the
-  catalog). The filter matches the canonical name, the localized label, and
+  `atvv_input::KEY_NAMES` (all 524 resolvable `KEY_*` names, common keys
+  first; friendly labels from the catalog). The filter matches the canonical
+  name, the localized label, and
   the English label, and ignores spaces/separators, so English queries
   (`print`, `printscreen`, `key_sysrq`) work under any locale. It inserts
   the canonical name and, in a chord, replaces only the final key and keeps

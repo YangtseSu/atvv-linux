@@ -4,7 +4,7 @@
 //!
 //! The list comes from [`atvv_input::KEY_NAMES`], so every row is a name the
 //! action grammar resolves. Free-form entry still accepts kernel names that
-//! are not in the curated list.
+//! are not in the list.
 
 use std::cell::Cell;
 use std::rc::Rc;
