@@ -48,13 +48,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   annotated tag `v0.2.0` (`073fa93`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0)
   with x86_64 (9.1 MB) and aarch64 (8.6 MB) binaries, the 2.24 MB source
-  archive, checksums, and generated notes. The tag CI passed; the
-  main-branch CI failed on a language-test race, fixed in the follow-up
-  commit without changing the binaries. Highlights since v0.1.0: named
+  archive, checksums, and generated notes. The tag CI and the follow-up main
+  CI passed; the one main failure was a language-test race, fixed in
+  `ba99bcf` without changing the binaries. Highlights since v0.1.0: named
   layouts (17), app-verified presets (18), pointer actions (22), the key
-  picker and BlueZ alias, and the CAPS-rate fix. AUR/VCS recipes are
-  external; the stable AUR `atvv` needs its `pkgver` and checksum updated
-  from the published source archive.
+  picker and BlueZ alias, and the CAPS-rate fix. The stable AUR
+  `atvv`/`atvv-gui` `0.2.0-1` were built from this archive and published;
+  `.SRCINFO` matches and `namcap PKGBUILD` is clean.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -717,9 +717,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 **v0.2.0 is published.** The tag `v0.2.0` (`073fa93`) has the x86_64/aarch64
 binaries, source archive, checksums, and generated notes at
-<https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0>. The external
-AUR `atvv` recipe update follows the published source archive. `Cargo.toml`
-and `Cargo.lock` carry 0.2.0.
+<https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0>. The AUR
+`atvv`/`atvv-gui` `0.2.0-1` update is published from the same source archive.
+`Cargo.toml` and `Cargo.lock` carry 0.2.0.
 
 **Step 20 is complete and published.** The tag `v0.1.0`, the source archive,
 and the x86_64/aarch64 binary archives are on the GitHub release. The AUR
