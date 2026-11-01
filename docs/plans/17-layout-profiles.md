@@ -1,6 +1,6 @@
 # Step 17 — Layout profiles
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 13, 14, 15
 Touches: `crates/atvv-config/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
 `crates/atvv-gui/`, `docs/`
@@ -16,14 +16,6 @@ layout applies it to the input runtime and the GUI immediately, without an
 automatic foreground-app switch.
 
 "NFC" is not part of this step; see backlog B02.
-
-## Next action
-
-Record the `[hardware]` press: start the workspace daemon with
-`--config /tmp/atvv17/daemon.toml` (the `editor` layout is active), press Up on
-the RC003 under `evtest` on `/dev/input/event26`, capture `KEY_F13`, then
-switch to `default`, press Up again, and capture `KEY_UP`. Restore the
-installed `atvvd` unit afterwards.
 
 ## Why layouts, not another profile
 
@@ -197,9 +189,16 @@ libadwaita widgets, not the HTML/CSS.
   update the list; a dirty manager footer shows Revert/Apply; Apply with only
   layout-list changes persists them without opening Save as layout; the chip
   updates after a device switch (step 21).
-- ⬜ [hardware] Real RC003: two layouts with different actions for one button;
+- ✅ [hardware] Real RC003: two layouts with different actions for one button;
   switch and press the remote; the emitted key changes without a daemon
-  restart; the active layout survives a restart.
+  restart; the active layout survives a restart. 2026-11-01, device
+  `C0:5D:39:F8:2D:4C`: with `editor` active (`up/single = key:KEY_F13`),
+  `evtest /dev/input/event26` recorded `code 183 (KEY_F13), value 1` then
+  `value 0`; after `atvvctl layout use default`, the next press recorded
+  `code 103 (KEY_UP), value 1` then `value 0`, with no daemon restart between
+  the presses. After `atvvctl layout use editor` and a daemon restart,
+  `atvvctl status` reported `layout.id=editor` and the input runtime
+  reattached.
 
 ## Verification
 
@@ -238,9 +237,10 @@ atvvctl layout use default
 - ✅ The active layout is persisted and shown in status. `SetLayout` writes
   `active_layout`, `StatusView.layout` reports `{id, name}`, and
   `set_layout_switches_persists_and_rejects_unknown_ids` reloads the file.
-- ⬜ [hardware] Switching applies live and changes the emitted key on the real
-  RC003. Two `evtest` windows (20 s and 30 s) opened on
-  `/dev/input/event26`; no physical press arrived (`last_button` stayed null).
+- ✅ [hardware] Switching applies live and changes the emitted key on the real
+  RC003. `evtest` on `/dev/input/event26` recorded `KEY_F13` (code 183) on
+  `editor` and `KEY_UP` (code 103) on `default` after `SetLayout`, without a
+  daemon restart; the active layout also survived a restart.
 - ✅ Invalid documents or unknown layouts leave the current state untouched.
   `set_config` and `set_layout` apply before writing and roll the runtime back
   on failure; the D-Bus test checks an unknown id and an invalid action leave
@@ -301,7 +301,20 @@ Real RC003 (`C0:5D:39:F8:2D:4C`, 2026-11-01): the workspace daemon connected
 `atvv-virtual-keyboard`. `layout new editor`, `config set --layout editor`,
 and `layout use editor` persisted
 `active_layout = "editor"` and `[layouts.editor.buttons.up] single = "key:KEY_F13"`.
-The physical key press is still pending; see `## Next action`.
+
+Recorded presses on `evtest /dev/input/event26`:
+
+```text
+editor:  Event: time 1793545618.757346, type 1 (EV_KEY), code 183 (KEY_F13), value 1
+         Event: time 1793545618.757367, type 1 (EV_KEY), code 183 (KEY_F13), value 0
+default: Event: time 1793545638.954774, type 1 (EV_KEY), code 103 (KEY_UP), value 1
+         Event: time 1793545638.954792, type 1 (EV_KEY), code 103 (KEY_UP), value 0
+```
+
+`atvvctl layout use default` ran between the two presses; the daemon stayed
+up. `atvvctl layout use editor` followed by a daemon restart kept
+`layout.id=editor` and reattached `/dev/input/event25`. The installed `atvvd`
+unit was restored afterwards.
 
 ## Progress log
 
@@ -321,4 +334,7 @@ The physical key press is still pending; see `## Next action`.
   Save as layout, dirty switching block, and test-result reset on switch.
   Docs: configuration and GUI pages in English and Chinese.
 - 2026-11-01 — synthetic verification is complete (see Verification
-  results); the real RC003 press is the only open item.
+  results).
+- 2026-11-01 — recorded the real RC003 hardware item: `KEY_F13` on `editor`,
+  `KEY_UP` on `default`, and persistence across a daemon restart; the
+  installed `atvvd` unit was restored. Step complete.

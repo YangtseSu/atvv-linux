@@ -276,6 +276,23 @@ per-session copies; `docs/plans/` remains the canonical plan.
   7.93 s and `atvvd` was restarted.
   `docs/configuration*.md` and `docs/gui*.md` document the relative-unit and
   pointer-acceleration limitation. See `docs/plans/22-pointer-actions.md`.
+- **17 layout profiles (complete and verified)**: schema v2 adds
+  `active_layout` and `[layouts.<id>]` records with raw slots and gesture
+  overrides. `default` is synthesized, never stored, and is a template: GUI
+  slot edits are staged and Apply saves them as a new user layout. The v1 flat
+  map migrates to `custom`; `default`, `media`, `coding`, and `slides` are
+  reserved; limits are 32 layouts, 40-character names, and 120-character
+  descriptions. The daemon exposes `SetLayout`/`LayoutChanged`, applies the
+  active layout live with runtime rollback, and reports `StatusView.layout`.
+  `atvvctl layout list|show|use|new|rename|delete|reset`,
+  `config set --layout`, and `map test --layout` are implemented. The GUI has
+  the header layout chip, switcher popover, manager dialog with inline
+  New/Rename/Save-as forms, template staging, dirty switching block, and
+  `LayoutChanged` reloads. Real RC003 (2026-11-01): `editor`
+  (`up/single=key:KEY_F13`) emitted `KEY_F13` (code 183); after
+  `layout use default` the next press emitted `KEY_UP` (code 103) without a
+  daemon restart; `layout.id=editor` survived a restart. Docs and screenshots
+  updated in English and Chinese. See `docs/plans/17-layout-profiles.md`.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -359,24 +376,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **17 layout profiles (implemented; real-RC003 press pending)**: schema v2
-  adds `active_layout` and `[layouts.<id>]` records with raw slots and gesture
-  overrides. `default` is synthesized, never stored, and is a template: GUI
-  slot edits are staged and Apply saves them as a new user layout. The v1 flat
-  map migrates to `custom`; `default`, `media`, `coding`, and `slides` are
-  reserved ids; limits are 32 layouts, 40-character names, and 120-character
-  descriptions. The daemon exposes `SetLayout`/`LayoutChanged` and applies the
-  active layout live with rollback; `StatusView.layout` reports `{id, name}`.
-  `atvvctl layout list|show|use|new|rename|delete|reset`,
-  `config set --layout`, and `map test --layout` are implemented. The GUI has
-  the header layout chip, switcher popover, manager dialog with inline
-  New/Rename/Save-as forms, template staging, dirty switching block, and
-  test-result reset on switch. Docs updated in English and Chinese. Synthetic
-  verification passed (222 tests, 8 ignored; UI test 1 passed; isolated-bus
-  CLI run); the only open item is the recorded real-RC003 key press. The
-  running workspace daemon grabbed `/dev/input/event25` and created
-  `atvv-virtual-keyboard`, but two `evtest` windows received no press. See
-  `docs/plans/17-layout-profiles.md`.
 - **18 layout presets (planned)**: ship static `media`, `coding`, and
   `slides` templates that create editable user layouts; presets never become
   live state and never contain `exec:`. Depends on 17; see
@@ -701,12 +700,10 @@ is gone: `atvv-config` shows twelve per-button cards around the RC003 diagram,
 a modal action editor, a test bar, and a header device chip; see
 `docs/plans/15-mapping-board.md`.
 
-**Step 17 (layout profiles) is implemented and awaits one recorded real-RC003
-press.** Start the workspace daemon with
-`--config /tmp/atvv17/daemon.toml` (the `editor` layout is active,
-`up/single = key:KEY_F13`), press Up under `evtest` on
-`/dev/input/event26`, then switch to `default` and press Up again. Restore the
-installed `atvvd` unit afterwards. See `docs/plans/17-layout-profiles.md`.
+**Step 17 (layout profiles) is complete and verified.** Schema v2, live
+layout switching, CLI/GUI/D-Bus support, v1 migration, and the real-RC003 key
+changes are recorded in `docs/plans/17-layout-profiles.md`. The installed
+`atvvd` unit was restored after the hardware run.
 
 **Step 22 (pointer actions) is complete and verified.** Remote buttons can
 emit mouse clicks and relative pointer motion through `atvv-virtual-pointer`;
@@ -715,22 +712,21 @@ the real RC003; see `docs/plans/22-pointer-actions.md`. This closes the
 keyboard-only action limitation; raw `BTN_*` is intentionally rejected in
 favor of the pointer editor.
 
-The next step is to record the step 17 hardware item; after that, step 18
-(layout presets) follows. The layout selector UI is implemented from
-`docs/plans/15-mapping-board.html`; the board now has the header layout chip,
-popover, and manager. Step 21's device popover and per-device maps also
-preview there. B01 (recording-key press/release actions) is backlog and does
-not block step 18.
+The next step is **step 18 (layout presets)**: ship `media`, `coding`, and
+`slides` templates that create editable user layouts. The layout selector UI
+is implemented from `docs/plans/15-mapping-board.html`; the board has the
+header layout chip, popover, and manager. Step 21's device popover and
+per-device maps also preview there. B01 (recording-key press/release actions)
+is backlog and does not block step 18.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: record the step 17 real-RC003 press, then mark step 17 done
-and start step 18. In parallel, wait for upstream review on PR #493; after it
-merges, rebase PR #494 onto `main`, then PR #495, rebuild vinput, and record
-the real auto-bind acceptance.
+Immediate action: start step 18. In parallel, wait for upstream review on PR
+#493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
+vinput, and record the real auto-bind acceptance.
 
 ## Commands
 
