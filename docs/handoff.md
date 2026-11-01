@@ -237,6 +237,16 @@ per-session copies; `docs/plans/` remains the canonical plan.
   search); both were removed before install. The installed r8 pair remains
   active until the operator installs these. Both are copied to
   `~/projects/arch-pkgs/atvv-git/`.
+- **Pointer actions `-git` packages (built, not installed)**: `atvv-git
+  0.1.0.r27.g1b64ac7-1` (6,683,731 bytes; sha256
+  `27ef3492a07ed17e8cae9ead7f8b90f50f8d7029d5f7daf5d39aa37ec9ad2adc`) and
+  `atvv-gui-git 0.1.0.r27.g1b64ac7-1` (1,381,779 bytes; sha256
+  `19dfbcedefb99af05c4bb51a11d21c058661370aaf2a3f822ec49939c8a66053`),
+  built from commit `1b64ac7` with the split recipe pointed at the local
+  repository. They carry the pointer grammar, `atvv-virtual-pointer`, the
+  status field, and the GUI *Pointer* editor. The installed r8 pair remains
+  active; the published recipe tracks the branch after push. Both packages
+  are in `~/projects/arch-pkgs/atvv-git/`.
 - **Recording-key declared chooser (2026-11-01)**: the recording-key page
   offers the contract's declared keys (`DICTATE`, `VOICECOMMAND`,
   `ASSISTANT`) plus `None (disable synthetic key)` through **Declared key…**.
