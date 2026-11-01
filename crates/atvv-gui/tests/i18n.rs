@@ -150,12 +150,20 @@ fn chinese_window() {
             .as_deref(),
         Some("搜索按键")
     );
-    window.editor().picker().search().set_text("打印");
-    let visible = window.editor().picker().visible_names();
-    assert!(
-        visible.contains(&"KEY_SYSRQ"),
-        "Print Screen missing from the Chinese list: {visible:?}"
-    );
+    // The filter matches English labels and canonical names as well as the
+    // localized label, regardless of the UI language.
+    for query in ["print", "打印", "sysrq"] {
+        window.editor().picker().search().set_text(query);
+        let visible = window.editor().picker().visible_names();
+        assert!(
+            visible.contains(&"KEY_SYSRQ"),
+            "{query:?} did not find Print Screen: {visible:?}"
+        );
+        assert!(
+            !visible.contains(&"KEY_A"),
+            "{query:?} did not filter unrelated keys: {visible:?}"
+        );
+    }
     assert!(window.editor().picker().select("KEY_SYSRQ"));
     assert_eq!(window.editor().value_row().text().as_str(), "KEY_SYSRQ");
     window.editor().cancel_button().emit_clicked();

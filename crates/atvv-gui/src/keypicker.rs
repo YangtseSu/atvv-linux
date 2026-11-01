@@ -15,13 +15,20 @@ use libadwaita as adw;
 use adw::prelude::*;
 
 use crate::i18n::tr;
-use crate::model::friendly_key;
+use crate::model::{friendly_key, friendly_key_english};
+
+/// One picker row: canonical name, localized label, and English label.
+struct PickerRow {
+    name: &'static str,
+    label: String,
+    english: String,
+}
 
 pub struct KeyPicker {
     dialog: adw::Dialog,
     search: gtk::SearchEntry,
     list: gtk::ListBox,
-    rows: Rc<Vec<(&'static str, String)>>,
+    rows: Rc<Vec<PickerRow>>,
     activate: Rc<dyn Fn(usize)>,
     open: Rc<Cell<bool>>,
 }
@@ -43,6 +50,7 @@ impl KeyPicker {
         for name in atvv_input::KEY_NAMES {
             let name: &'static str = name;
             let label = friendly_key(name);
+            let english = friendly_key_english(name);
             let row = gtk::ListBoxRow::new();
             row.set_widget_name(name);
             row.set_activatable(true);
@@ -64,7 +72,11 @@ impl KeyPicker {
             let accessible = format!("{label} ({name})");
             row.update_property(&[gtk::accessible::Property::Label(&accessible)]);
             list.append(&row);
-            rows.push((name, label));
+            rows.push(PickerRow {
+                name,
+                label,
+                english,
+            });
         }
         let rows = Rc::new(rows);
 
@@ -75,10 +87,14 @@ impl KeyPicker {
             if query.is_empty() {
                 return true;
             }
-            let Some((name, label)) = rows_for_filter.get(row.index() as usize) else {
+            let Some(row) = rows_for_filter.get(row.index() as usize) else {
                 return false;
             };
-            name.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)
+            // Match the canonical name, the localized label, and the English
+            // label, so an English query works in every locale.
+            row.name.to_lowercase().contains(&query)
+                || row.label.to_lowercase().contains(&query)
+                || row.english.to_lowercase().contains(&query)
         });
         // `search-changed` is delayed by GtkSearchEntry; filter on every
         // keystroke instead so the list and the tests stay immediate.
@@ -119,10 +135,10 @@ impl KeyPicker {
             let choose = Rc::clone(&choose);
             let weak = dialog.downgrade();
             Rc::new(move |index| {
-                let Some((name, _)) = rows.get(index) else {
+                let Some(row) = rows.get(index) else {
                     return;
                 };
-                choose(name);
+                choose(row.name);
                 if let Some(dialog) = weak.upgrade() {
                     dialog.close();
                 }
@@ -208,17 +224,13 @@ impl KeyPicker {
                     .row_at_index(*index as i32)
                     .is_some_and(|row| row.is_child_visible())
             })
-            .map(|(_, (name, _))| *name)
+            .map(|(_, row)| row.name)
             .collect()
     }
 
     /// Choose a key by canonical name, as a row click would.
     pub fn select(&self, name: &str) -> bool {
-        let Some(index) = self
-            .rows
-            .iter()
-            .position(|(candidate, _)| *candidate == name)
-        else {
+        let Some(index) = self.rows.iter().position(|row| row.name == name) else {
             return false;
         };
         (self.activate)(index);

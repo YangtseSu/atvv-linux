@@ -94,7 +94,9 @@ information instead of a device list.
 3. Type the value, use **Learn Key**, or use **Choose…** for a searchable
    list of kernel key names with their friendly labels. The picker inserts the
    chosen key; in a chord it replaces only the final key and keeps the
-   modifiers. Print Screen is `KEY_SYSRQ`. Modifiers held while learning
+   modifiers. Search matches the canonical name, the localized label, and the
+   English label, so `print` works in every locale. Print Screen is
+   `KEY_SYSRQ`. Modifiers held while learning
    become part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
 4. Click **Update**. The dialog closes, the board shows the new action, and
    **Apply** in the header becomes active.

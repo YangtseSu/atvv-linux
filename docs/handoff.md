@@ -7,7 +7,7 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 202 passed, 5 ignored tests (two
+- Tests: `cargo test --workspace` → 203 passed, 5 ignored tests (two
   kernel-uinput input tests, one fake-remote live-map test, the real-device
   GUI test, and a locale-detection test; the first three pass with
   `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
@@ -203,8 +203,10 @@ per-session copies; `docs/plans/` remains the canonical plan.
 - **Key-name picker and BlueZ alias (2026-11-01)**: the action editor's key
   row gained **Choose…**, a searchable picker over
   `atvv_input::KEY_NAMES` (curated canonical names; friendly labels from the
-  catalog). It inserts the canonical name and, in a chord, replaces only the
-  final key and keeps the modifiers. Learn Key maps the GDK `Print`/`Sys_Req`
+  catalog). The filter matches the canonical name, the localized label, and
+  the English label, so an English query works under any locale. It inserts
+  the canonical name and, in a chord, replaces only the final key and keeps
+  the modifiers. Learn Key maps the GDK `Print`/`Sys_Req`
   keysyms to `KEY_SYSRQ` instead of the legacy `KEY_PRINT`;
   `printscreen`/`prtsc`/`sysrq` aliases resolve to `KEY_SYSRQ`, and the board
   shows `Print Screen`. The daemon now stores the BlueZ alias/name from

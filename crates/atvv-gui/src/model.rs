@@ -143,32 +143,51 @@ fn modifier_label(token: &str) -> String {
 /// `Comma`.
 #[must_use]
 pub fn friendly_key(name: &str) -> String {
+    known_key_label(name)
+        .map(|label| tr(label).to_string())
+        .unwrap_or_else(|| derived_key_label(name))
+}
+
+/// English source label for a key, independent of the active UI language.
+///
+/// Used by the key picker so an English query works in every locale.
+#[must_use]
+pub fn friendly_key_english(name: &str) -> String {
+    known_key_label(name)
+        .map(str::to_string)
+        .unwrap_or_else(|| derived_key_label(name))
+}
+
+/// English catalog label for a known key name.
+fn known_key_label(name: &str) -> Option<&'static str> {
     let upper = name.trim().to_ascii_uppercase();
-    let known = match upper.as_str() {
-        "KEY_ENTER" | "KEY_KPENTER" => Some(tr("Return")),
-        "KEY_BACK" => Some(tr("Back")),
-        "KEY_BACKSPACE" => Some(tr("Backspace")),
-        "KEY_DELETE" => Some(tr("Delete")),
-        "KEY_UP" => Some(tr("Up")),
-        "KEY_DOWN" => Some(tr("Down")),
-        "KEY_LEFT" => Some(tr("Left")),
-        "KEY_RIGHT" => Some(tr("Right")),
-        "KEY_HOME" | "KEY_HOMEPAGE" => Some(tr("Home")),
-        "KEY_COMPOSE" | "KEY_MENU" => Some(tr("Menu")),
-        "KEY_GRAVE" => Some(tr("TV")),
-        "KEY_VOLUMEUP" => Some(tr("Volume up")),
-        "KEY_VOLUMEDOWN" => Some(tr("Volume down")),
-        "KEY_POWER" => Some(tr("Power")),
-        "KEY_SYSRQ" => Some(tr("Print Screen")),
-        "KEY_ESC" => Some(tr("Escape")),
-        "KEY_SPACE" => Some(tr("Space")),
-        "KEY_TAB" => Some(tr("Tab")),
-        "KEY_PLAYPAUSE" => Some(tr("Play/Pause")),
+    match upper.as_str() {
+        "KEY_ENTER" | "KEY_KPENTER" => Some("Return"),
+        "KEY_BACK" => Some("Back"),
+        "KEY_BACKSPACE" => Some("Backspace"),
+        "KEY_DELETE" => Some("Delete"),
+        "KEY_UP" => Some("Up"),
+        "KEY_DOWN" => Some("Down"),
+        "KEY_LEFT" => Some("Left"),
+        "KEY_RIGHT" => Some("Right"),
+        "KEY_HOME" | "KEY_HOMEPAGE" => Some("Home"),
+        "KEY_COMPOSE" | "KEY_MENU" => Some("Menu"),
+        "KEY_GRAVE" => Some("TV"),
+        "KEY_VOLUMEUP" => Some("Volume up"),
+        "KEY_VOLUMEDOWN" => Some("Volume down"),
+        "KEY_POWER" => Some("Power"),
+        "KEY_SYSRQ" => Some("Print Screen"),
+        "KEY_ESC" => Some("Escape"),
+        "KEY_SPACE" => Some("Space"),
+        "KEY_TAB" => Some("Tab"),
+        "KEY_PLAYPAUSE" => Some("Play/Pause"),
         _ => None,
-    };
-    if let Some(label) = known {
-        return label.to_string();
     }
+}
+
+/// Label derived from the kernel name for keys without a catalog entry.
+fn derived_key_label(name: &str) -> String {
+    let upper = name.trim().to_ascii_uppercase();
     let bare = upper.strip_prefix("KEY_").unwrap_or(&upper);
     if bare.len() > 1 && bare.starts_with('F') && bare[1..].chars().all(|c| c.is_ascii_digit()) {
         return bare.to_string();
@@ -560,6 +579,17 @@ mod tests {
         let unknown = action_label(Some("bogus-value"));
         assert_eq!(unknown.text, "bogus-value");
         assert!(!unknown.none, "invalid values stay visible, not dimmed");
+    }
+
+    #[test]
+    fn english_key_labels_ignore_the_active_language() {
+        let _guard = crate::i18n::language_guard();
+        crate::i18n::Language::set(crate::i18n::Language::Chinese);
+        assert_eq!(friendly_key("KEY_SYSRQ"), "打印屏幕");
+        assert_eq!(friendly_key_english("KEY_SYSRQ"), "Print Screen");
+        crate::i18n::Language::set(crate::i18n::Language::English);
+        assert_eq!(friendly_key("KEY_SYSRQ"), "Print Screen");
+        crate::i18n::Language::set(crate::i18n::Language::English);
     }
 
     #[test]
