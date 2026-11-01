@@ -44,6 +44,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **v0.2.0 release (tagged)**: workspace version 0.2.0. The annotated tag
+  runs the tag-triggered release workflow for x86_64/aarch64 binaries, the
+  source archive, checksums, and generated notes. Highlights since v0.1.0:
+  named layouts (17), app-verified presets (18), pointer actions (22), the
+  key picker and BlueZ alias, and the CAPS-rate fix. AUR/VCS recipes are
+  external; the stable AUR `atvv` needs its `pkgver` and checksum updated
+  after the tag assets exist.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -703,6 +710,10 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   clean.
 
 ## Next step
+
+**v0.2.0 is tagged.** The tag push runs the release workflow; the external
+AUR `atvv` recipe update follows the published source archive. `Cargo.toml`
+and `Cargo.lock` carry 0.2.0.
 
 **Step 20 is complete and published.** The tag `v0.1.0`, the source archive,
 and the x86_64/aarch64 binary archives are on the GitHub release. The AUR
