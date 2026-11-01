@@ -204,7 +204,8 @@ per-session copies; `docs/plans/` remains the canonical plan.
   row gained **Choose…**, a searchable picker over
   `atvv_input::KEY_NAMES` (curated canonical names; friendly labels from the
   catalog). The filter matches the canonical name, the localized label, and
-  the English label, so an English query works under any locale. It inserts
+  the English label, and ignores spaces/separators, so English queries
+  (`print`, `printscreen`, `key_sysrq`) work under any locale. It inserts
   the canonical name and, in a chord, replaces only the final key and keeps
   the modifiers. Learn Key maps the GDK `Print`/`Sys_Req`
   keysyms to `KEY_SYSRQ` instead of the legacy `KEY_PRINT`;

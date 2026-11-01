@@ -152,7 +152,7 @@ fn chinese_window() {
     );
     // The filter matches English labels and canonical names as well as the
     // localized label, regardless of the UI language.
-    for query in ["print", "打印", "sysrq"] {
+    for query in ["print", "printscreen", "打印", "sysrq", "key_sysrq"] {
         window.editor().picker().search().set_text(query);
         let visible = window.editor().picker().visible_names();
         assert!(

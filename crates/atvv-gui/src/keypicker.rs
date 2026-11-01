@@ -17,6 +17,15 @@ use adw::prelude::*;
 use crate::i18n::tr;
 use crate::model::{friendly_key, friendly_key_english};
 
+/// Lower-case and drop separators so `print screen`, `printscreen`, and
+/// `print_screen` all match the same row.
+fn compact(text: &str) -> String {
+    text.chars()
+        .filter(|character| !matches!(character, ' ' | '_' | '-' | '.'))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 /// One picker row: canonical name, localized label, and English label.
 struct PickerRow {
     name: &'static str,
@@ -83,18 +92,20 @@ impl KeyPicker {
         let search_for_filter = search.clone();
         let rows_for_filter = Rc::clone(&rows);
         list.set_filter_func(move |row| {
-            let query = search_for_filter.text().trim().to_lowercase();
-            if query.is_empty() {
+            let raw = search_for_filter.text().trim().to_lowercase();
+            if raw.is_empty() {
                 return true;
             }
+            let query = compact(&raw);
             let Some(row) = rows_for_filter.get(row.index() as usize) else {
                 return false;
             };
             // Match the canonical name, the localized label, and the English
-            // label, so an English query works in every locale.
-            row.name.to_lowercase().contains(&query)
-                || row.label.to_lowercase().contains(&query)
-                || row.english.to_lowercase().contains(&query)
+            // label, so an English query works in every locale. Separator-free
+            // forms match too (`printscreen`, `page_up`, `key_sysrq`).
+            let matches =
+                |text: &str| text.to_lowercase().contains(&raw) || compact(text).contains(&query);
+            matches(row.name) || matches(&row.label) || matches(&row.english)
         });
         // `search-changed` is delayed by GtkSearchEntry; filter on every
         // keystroke instead so the list and the tests stay immediate.
