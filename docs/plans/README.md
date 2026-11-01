@@ -82,6 +82,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
 | K — Device management | 21 | **planned**: single-active device registry and switching, per-device layouts |
+| L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
@@ -122,6 +123,7 @@ verified; they are not reopened. Live work is listed first.
 | 16 | G | [hardware-info](16-hardware-info.md) | ✅ done | 06, 07, 14 | battery, firmware, and DIS facts appear in status, CLI, MCP, and the GUI home view |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
 | 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | ✅ done | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |
+| 22 | L | [pointer-actions](22-pointer-actions.md) | ✅ done | 05, 13, 14, 15 | pointer clicks and relative motion on a dedicated uinput device, verified with the RC003 |
 
 ## Architecture contract
 

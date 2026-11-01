@@ -24,6 +24,7 @@ use crate::action::{Action, ActionError, ActionMap};
 use crate::device::{SkippedDevice, discover};
 use crate::gesture::{Gesture, GestureEngine, Timing};
 use crate::keymap::{KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program};
+use crate::pointer::VirtualPointer;
 use crate::vkbd::VirtualKeyboard;
 
 /// Event delivered to the daemon / CLI.
@@ -106,6 +107,7 @@ struct Dispatcher {
     map: ActionMap,
     resolver: KeyResolver,
     vkbd: Option<VirtualKeyboard>,
+    vptr: Option<VirtualPointer>,
     events: Sender<RemoteEvent>,
     /// Capture/test mode observes mappings without emitting them.
     actions_enabled: Arc<AtomicBool>,
@@ -163,6 +165,18 @@ impl Dispatcher {
                             Err(resolve_error) => error = Some(resolve_error.to_string()),
                         }
                     }
+                    Action::Pointer(pointer) => match &self.vptr {
+                        Some(vptr) => {
+                            if let Err(pointer_error) = vptr.apply(pointer) {
+                                error = Some(pointer_error.to_string());
+                            }
+                        }
+                        None => {
+                            error = Some(
+                                "virtual pointer unavailable; pointer mapping degraded".to_string(),
+                            );
+                        }
+                    },
                     Action::None | Action::Exec { .. } | Action::Dictation(_) => {}
                 }
             }
@@ -187,6 +201,7 @@ pub struct InputRuntime {
     stop: Arc<AtomicBool>,
     threads: Vec<JoinHandle<()>>,
     vkbd: Option<VirtualKeyboard>,
+    vptr: Option<VirtualPointer>,
     actions_enabled: Arc<AtomicBool>,
     /// Parsed synthetic trigger, released when the runtime is dropped.
     voice_trigger: Option<KeyProgram>,
@@ -251,6 +266,22 @@ impl InputRuntime {
                 degraded.push(format!("uinput unavailable; key mapping degraded: {error}"));
                 None
             }
+        };
+        let vptr = if map
+            .actions()
+            .any(|action| matches!(action, Action::Pointer(_)))
+        {
+            match VirtualPointer::open() {
+                Ok(pointer) => Some(pointer),
+                Err(error) => {
+                    degraded.push(format!(
+                        "uinput pointer unavailable; pointer mapping degraded: {error}"
+                    ));
+                    None
+                }
+            }
+        } else {
+            None
         };
 
         let stop = Arc::new(AtomicBool::new(false));
@@ -371,6 +402,7 @@ impl InputRuntime {
         let engine_stop = Arc::clone(&stop);
         let engine_actions_enabled = Arc::clone(&actions_enabled);
         let engine_vkbd = vkbd.clone();
+        let engine_vptr = vptr.clone();
         let engine_map = map.clone();
         let engine_timing = timing;
         let engine_event_tx = event_tx.clone();
@@ -387,6 +419,7 @@ impl InputRuntime {
                     map: engine_map,
                     resolver: KeyResolver,
                     vkbd: engine_vkbd,
+                    vptr: engine_vptr,
                     events: engine_event_tx,
                     actions_enabled: engine_actions_enabled,
                 };
@@ -447,6 +480,7 @@ impl InputRuntime {
             stop,
             threads,
             vkbd,
+            vptr,
             actions_enabled,
             voice_trigger: drop_trigger,
         })
@@ -484,6 +518,18 @@ impl InputRuntime {
             .is_some_and(VirtualKeyboard::is_available)
     }
 
+    /// `/dev/input/eventN` of the virtual pointer, when the map needs one.
+    #[must_use]
+    pub fn pointer_path(&self) -> Option<&Path> {
+        self.vptr.as_ref().and_then(VirtualPointer::node_path)
+    }
+
+    /// Whether uinput pointer emission is available.
+    #[must_use]
+    pub fn pointer_available(&self) -> bool {
+        self.vptr.as_ref().is_some_and(VirtualPointer::is_available)
+    }
+
     /// Enable or suppress automatic key/chord and trigger emission.
     ///
     /// Capture/test mode observes mappings without executing them. An explicit
@@ -502,11 +548,18 @@ impl InputRuntime {
         self.events.try_recv()
     }
 
-    /// Emit one mapped key or chord once; used by the test-mode `RunAction`.
+    /// Emit one mapped key, chord, or pointer action once; used by the
+    /// test-mode `RunAction`.
     ///
-    /// `none`, `exec:`, and `dictation:` are not key programs and are
+    /// `none`, `exec:`, and `dictation:` are not input programs and are
     /// rejected here; the daemon handles those actions itself.
     pub fn tap_action(&self, action: &Action) -> Result<(), String> {
+        if let Action::Pointer(pointer) = action {
+            return match &self.vptr {
+                Some(vptr) => vptr.apply(pointer).map_err(|error| error.to_string()),
+                None => Err("the virtual pointer is unavailable".to_string()),
+            };
+        }
         let program = KeyResolver
             .program(action)
             .map_err(|error| error.to_string())?;
@@ -535,6 +588,7 @@ impl Drop for InputRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Trigger;
 
     #[test]
     fn dispatch_degrades_without_uinput_instead_of_panicking() {
@@ -543,6 +597,7 @@ mod tests {
             map: ActionMap::defaults(),
             resolver: KeyResolver,
             vkbd: None,
+            vptr: None,
             events: tx,
             actions_enabled: Arc::new(AtomicBool::new(true)),
         };
@@ -566,12 +621,44 @@ mod tests {
     }
 
     #[test]
+    fn pointer_actions_report_a_missing_pointer_device() {
+        let mut map = ActionMap::defaults();
+        map.set(
+            RemoteButton::Up,
+            Trigger::Single,
+            crate::action::parse_action("pointer:move:up:3").unwrap(),
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel();
+        let dispatcher = Dispatcher {
+            map,
+            resolver: KeyResolver,
+            vkbd: None,
+            vptr: None,
+            events: tx,
+            actions_enabled: Arc::new(AtomicBool::new(true)),
+        };
+        dispatcher.dispatch(vec![Gesture::SingleClick(RemoteButton::Up)]);
+        match rx.recv().expect("button event") {
+            RemoteEvent::Button { action, error, .. } => {
+                assert!(matches!(action, Some(Action::Pointer(_))));
+                assert!(
+                    error.expect("pointer error").contains("pointer"),
+                    "error should name the pointer device"
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
     fn release_edges_are_forwarded_without_an_action() {
         let (tx, rx) = mpsc::channel();
         let dispatcher = Dispatcher {
             map: ActionMap::defaults(),
             resolver: KeyResolver,
             vkbd: None,
+            vptr: None,
             events: tx,
             actions_enabled: Arc::new(AtomicBool::new(true)),
         };
@@ -599,6 +686,7 @@ mod tests {
             map: ActionMap::defaults(),
             resolver: KeyResolver,
             vkbd: None,
+            vptr: None,
             events: tx,
             actions_enabled: Arc::new(AtomicBool::new(false)),
         };
@@ -660,8 +748,11 @@ mod tests {
 #[cfg(test)]
 mod kernel_tests {
     use super::*;
+    use crate::Trigger;
+    use crate::action::parse_action;
     use crate::fake::{FAKE_REMOTE, FakeRemote};
     use evdevil::Evdev;
+    use evdevil::event::Rel;
 
     fn wait_for(reader: &mut evdevil::EventReader, key: Key, state: KeyState) -> bool {
         let deadline = Instant::now() + Duration::from_secs(2);
@@ -739,5 +830,114 @@ mod kernel_tests {
             }
         }
         assert_eq!(edges, [true, false], "raw voice edges were lost");
+    }
+
+    fn wait_for_click(reader: &mut evdevil::EventReader, key: Key) -> (bool, bool) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut pressed = false;
+        let mut released = false;
+        while Instant::now() < deadline {
+            for event in reader.events() {
+                let Ok(event) = event else {
+                    return (pressed, released);
+                };
+                if let EventKind::Key(event) = event.kind()
+                    && event.key() == key
+                {
+                    if event.state() == KeyState::PRESSED {
+                        pressed = true;
+                    }
+                    if event.state() == KeyState::RELEASED {
+                        released = true;
+                    }
+                }
+            }
+            if pressed && released {
+                return (pressed, released);
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        (pressed, released)
+    }
+
+    fn wait_for_rel(reader: &mut evdevil::EventReader, axis: Rel, value: i32) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            let mut found = false;
+            for event in reader.events() {
+                let Ok(event) = event else {
+                    return false;
+                };
+                if let EventKind::Rel(event) = event.kind()
+                    && event.rel() == axis
+                    && event.value() == value
+                {
+                    found = true;
+                }
+            }
+            if found {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        false
+    }
+
+    #[test]
+    #[ignore = "needs /dev/uinput and evdev read access"]
+    fn pointer_actions_are_dispatched_to_the_pointer_device() {
+        let mut map = ActionMap::defaults();
+        map.set(
+            RemoteButton::Up,
+            Trigger::Single,
+            parse_action("pointer:move:up:5").unwrap(),
+        )
+        .unwrap();
+        map.set(
+            RemoteButton::Ok,
+            Trigger::Single,
+            parse_action("pointer:click:right").unwrap(),
+        )
+        .unwrap();
+
+        let mut fake = FakeRemote::open().expect("fake remote");
+        let runtime = InputRuntime::start_with_options(FAKE_REMOTE, map, InputOptions::default())
+            .expect("input runtime");
+        let path = runtime
+            .pointer_path()
+            .expect("virtual pointer node")
+            .to_path_buf();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let device = loop {
+            match Evdev::open(&path) {
+                Ok(device) => break device,
+                Err(_) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("cannot open {}: {error}", path.display()),
+            }
+        };
+        device.set_nonblocking(true).unwrap();
+        let mut reader = device.into_reader().unwrap();
+
+        fake.tap(RemoteButton::Up).expect("up tap");
+        assert!(
+            wait_for_rel(&mut reader, Rel::Y, -5),
+            "Up did not move the pointer"
+        );
+
+        fake.tap(RemoteButton::Ok).expect("ok tap");
+        let (pressed, released) = wait_for_click(&mut reader, Key::BTN_RIGHT);
+        assert!(pressed, "OK did not press BTN_RIGHT");
+        assert!(released, "OK did not release BTN_RIGHT");
+
+        runtime
+            .tap_action(&parse_action("pointer:move:right:6").unwrap())
+            .expect("RunAction pointer path");
+        assert!(
+            wait_for_rel(&mut reader, Rel::X, 6),
+            "RunAction did not move the pointer"
+        );
+        assert!(runtime.pointer_available());
     }
 }

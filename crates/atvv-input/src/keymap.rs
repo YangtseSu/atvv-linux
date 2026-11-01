@@ -775,7 +775,7 @@ impl KeyResolver {
                 let release = press.iter().rev().copied().collect();
                 Ok(KeyProgram { press, release })
             }
-            Action::None | Action::Exec { .. } | Action::Dictation(_) => {
+            Action::None | Action::Exec { .. } | Action::Dictation(_) | Action::Pointer(_) => {
                 Err(ActionError::NotEmittable)
             }
         }
@@ -800,6 +800,7 @@ impl KeyResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::action::{PointerAction, PointerButton};
     use atvv_protocol::RC003;
 
     #[test]
@@ -954,6 +955,10 @@ mod tests {
         let resolver = KeyResolver;
         assert_eq!(
             resolver.program(&Action::None),
+            Err(ActionError::NotEmittable)
+        );
+        assert_eq!(
+            resolver.program(&Action::Pointer(PointerAction::Click(PointerButton::Left))),
             Err(ActionError::NotEmittable)
         );
         assert_eq!(

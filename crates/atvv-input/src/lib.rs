@@ -15,11 +15,13 @@ pub mod device;
 pub mod fake;
 pub mod gesture;
 pub mod keymap;
+pub mod pointer;
 pub mod runtime;
 pub mod vkbd;
 
 pub use action::{
-    Action, ActionError, ActionMap, ButtonActions, DictationMode, Trigger, parse_action,
+    Action, ActionError, ActionMap, ButtonActions, DictationMode, PointerAction, PointerAxis,
+    PointerButton, Trigger, parse_action,
 };
 pub use device::{
     Discovery, MatchQuality, MatchedDevice, SkipReason, SkippedDevice, discover, match_quality,
@@ -28,6 +30,9 @@ pub use fake::{FAKE_REMOTE, FakeRemote, FakeRemoteError};
 pub use gesture::{Gesture, GestureEngine, Policy, Timing};
 pub use keymap::{
     KEY_NAMES, KeyMap, KeyMapError, KeyProgram, KeyResolver, parse_key_program, resolve_key,
+};
+pub use pointer::{
+    PointerError, VIRTUAL_POINTER_NAME, VirtualPointer, button_key, click_frames, move_events,
 };
 pub use runtime::{InputError, InputOptions, InputRuntime, RemoteEvent};
 pub use vkbd::{

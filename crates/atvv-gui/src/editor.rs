@@ -17,7 +17,12 @@ use libadwaita as adw;
 
 use adw::prelude::*;
 
-use crate::actions::{ActionDraft, ActionKind, DictationChoice};
+use atvv_input::{PointerAction, PointerAxis, PointerButton};
+
+use crate::actions::{
+    ActionDraft, ActionKind, DictationChoice, POINTER_AXES, POINTER_BUTTONS, PointerKind,
+    pointer_axis_index, pointer_axis_label, pointer_button_index, pointer_button_label,
+};
 use crate::i18n::{tr, tr_args};
 use crate::keypicker::KeyPicker;
 use crate::model::{GuiModel, button_label, trigger_label};
@@ -31,6 +36,10 @@ fn action_hint(kind: ActionKind, allow_exec: bool) -> &'static str {
             tr("A chord, emitted after the gesture. Modifiers follow ctrl, alt, shift, super.")
         }
         ActionKind::Dictation => tr("Controls the ATVV microphone: start, stop, or toggle."),
+        ActionKind::Pointer => tr(
+            "Emits a mouse click or moves the pointer. Movement is relative; \
+             the desktop may apply pointer acceleration.",
+        ),
         ActionKind::Exec if allow_exec => {
             tr("The command runs as your user with a 5 s timeout and closed stdio.")
         }
@@ -105,6 +114,10 @@ struct EditorRows {
     value_row: adw::EntryRow,
     choose_key: gtk::Button,
     learn_key: gtk::Button,
+    pointer_kind: adw::ComboRow,
+    pointer_button: adw::ComboRow,
+    pointer_direction: adw::ComboRow,
+    pointer_units: adw::SpinRow,
     exec_row: adw::EntryRow,
     allow_row: adw::SwitchRow,
     dictation_row: adw::ComboRow,
@@ -131,8 +144,23 @@ impl EditorRows {
         self.allow_row.set_visible(kind == ActionKind::Exec);
         self.dictation_row
             .set_visible(kind == ActionKind::Dictation);
+        self.refresh_pointer(kind == ActionKind::Pointer);
         self.hint.set_text(action_hint(kind, allow));
         self.update.set_sensitive(kind != ActionKind::Exec || allow);
+    }
+
+    fn refresh_pointer(&self, visible: bool) {
+        self.pointer_kind.set_visible(visible);
+        if !visible {
+            self.pointer_button.set_visible(false);
+            self.pointer_direction.set_visible(false);
+            self.pointer_units.set_visible(false);
+            return;
+        }
+        let click = PointerKind::from_index(self.pointer_kind.selected()) == PointerKind::Click;
+        self.pointer_button.set_visible(click);
+        self.pointer_direction.set_visible(!click);
+        self.pointer_units.set_visible(!click);
     }
 
     /// Insert a picked key, preserving chord modifiers.
@@ -200,11 +228,36 @@ impl ActionEditor {
             .model(&dictation_list)
             .selected(0)
             .build();
+        let pointer_kind_list = gtk::StringList::new(&PointerKind::ALL.map(PointerKind::label));
+        let pointer_button_list = gtk::StringList::new(&POINTER_BUTTONS.map(pointer_button_label));
+        let pointer_direction_list = gtk::StringList::new(&POINTER_AXES.map(pointer_axis_label));
+        let pointer_kind = adw::ComboRow::builder()
+            .title(tr("Pointer action"))
+            .model(&pointer_kind_list)
+            .selected(0)
+            .build();
+        let pointer_button = adw::ComboRow::builder()
+            .title(tr("Button"))
+            .model(&pointer_button_list)
+            .selected(0)
+            .build();
+        let pointer_direction = adw::ComboRow::builder()
+            .title(tr("Direction"))
+            .model(&pointer_direction_list)
+            .selected(0)
+            .build();
+        let pointer_units = adw::SpinRow::with_range(1.0, 255.0, 1.0);
+        pointer_units.set_title(tr("Units"));
+        pointer_units.set_value(1.0);
         let hint = dim_label("");
         let update = gtk::Button::with_label(tr("Update"));
         update.add_css_class("suggested-action");
         group.add(&type_row);
         group.add(&value_row);
+        group.add(&pointer_kind);
+        group.add(&pointer_button);
+        group.add(&pointer_direction);
+        group.add(&pointer_units);
         group.add(&exec_row);
         group.add(&allow_row);
         group.add(&dictation_row);
@@ -255,6 +308,10 @@ impl ActionEditor {
             value_row,
             choose_key,
             learn_key,
+            pointer_kind,
+            pointer_button,
+            pointer_direction,
+            pointer_units,
             exec_row,
             allow_row,
             dictation_row,
@@ -266,6 +323,9 @@ impl ActionEditor {
         let refresh = Rc::clone(&rows);
         rows.type_row
             .connect_selected_notify(move |_| refresh.refresh());
+        let pointer_refresh = Rc::clone(&rows);
+        rows.pointer_kind
+            .connect_selected_notify(move |_| pointer_refresh.refresh());
 
         let picker_rows = Rc::clone(&rows);
         let picker_error = error.clone();
@@ -348,6 +408,25 @@ impl ActionEditor {
         self.rows
             .dictation_row
             .set_selected(draft.dictation.index());
+        match draft.pointer {
+            PointerAction::Click(button) => {
+                self.rows
+                    .pointer_kind
+                    .set_selected(PointerKind::Click.index());
+                self.rows
+                    .pointer_button
+                    .set_selected(pointer_button_index(button));
+            }
+            PointerAction::Move { direction, units } => {
+                self.rows
+                    .pointer_kind
+                    .set_selected(PointerKind::Move.index());
+                self.rows
+                    .pointer_direction
+                    .set_selected(pointer_axis_index(direction));
+                self.rows.pointer_units.set_value(f64::from(units));
+            }
+        }
         self.rows.allow_row.set_active(model.document.allow_exec);
         self.rows.allow_exec.set(model.document.allow_exec);
         self.reset.set_sensitive(custom);
@@ -370,12 +449,27 @@ impl ActionEditor {
     pub fn draft(&self) -> ActionDraft {
         let kind = ActionKind::from_index(self.rows.type_row.selected());
         let text = self.rows.value_row.text().to_string();
+        let pointer =
+            if PointerKind::from_index(self.rows.pointer_kind.selected()) == PointerKind::Move {
+                let index = usize::try_from(self.rows.pointer_direction.selected()).unwrap_or(0);
+                let direction = POINTER_AXES.get(index).copied().unwrap_or(PointerAxis::Up);
+                let units = self.rows.pointer_units.value().round() as u16;
+                PointerAction::Move { direction, units }
+            } else {
+                let index = usize::try_from(self.rows.pointer_button.selected()).unwrap_or(0);
+                let button = POINTER_BUTTONS
+                    .get(index)
+                    .copied()
+                    .unwrap_or(PointerButton::Left);
+                PointerAction::Click(button)
+            };
         ActionDraft {
             kind,
             key: text.clone(),
             chord: text,
             command: self.rows.exec_row.text().to_string(),
             dictation: DictationChoice::from_index(self.rows.dictation_row.selected()),
+            pointer,
         }
     }
 
@@ -493,6 +587,26 @@ impl ActionEditor {
     #[must_use]
     pub fn dictation_row(&self) -> &adw::ComboRow {
         &self.rows.dictation_row
+    }
+
+    #[must_use]
+    pub fn pointer_kind_row(&self) -> &adw::ComboRow {
+        &self.rows.pointer_kind
+    }
+
+    #[must_use]
+    pub fn pointer_button_row(&self) -> &adw::ComboRow {
+        &self.rows.pointer_button
+    }
+
+    #[must_use]
+    pub fn pointer_direction_row(&self) -> &adw::ComboRow {
+        &self.rows.pointer_direction
+    }
+
+    #[must_use]
+    pub fn pointer_units_row(&self) -> &adw::SpinRow {
+        &self.rows.pointer_units
     }
 
     #[must_use]

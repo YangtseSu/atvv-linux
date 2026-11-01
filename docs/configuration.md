@@ -70,6 +70,8 @@ key:<name>
 combo:<mod>+<mod>+<name>
 exec:<command>
 dictation:start|stop|toggle
+pointer:click:left|right|middle|side|extra|forward|back|task
+pointer:move:up|down|left|right:<units>
 ```
 
 Key names use the same resolver as the input runtime: kernel names
@@ -82,10 +84,38 @@ first and release them in reverse. A key may appear only once in a chord.
 `none` swallows the button. `dictation:start|stop|toggle` drives the ATVV
 session only; it does not emit a key.
 
+Pointer actions use a dedicated `atvv-virtual-pointer` uinput device with
+`REL_X`/`REL_Y` and the mouse buttons. `pointer:click:<button>` presses and
+releases one button. `pointer:move:<direction>:<units>` moves by 1–255
+relative counts; up and left are negative. The device exists only while the
+map contains a pointer action. Relative counts are not screen pixels: the
+desktop's pointer acceleration and speed settings apply. Raw `BTN_*` names are
+rejected; use `pointer:click:<button>` so the button goes to the pointer
+device instead of the keyboard.
+
+One direction key can carry the whole pointer gesture:
+
+```toml
+[buttons.up]
+single = "pointer:move:up:1"
+double = "pointer:move:up:10"
+long = "pointer:move:up:50"
+```
+
+Click, side, extra, forward, back, and task buttons can be mapped the same way:
+
+```toml
+[buttons.ok]
+single = "pointer:click:left"
+
+[buttons.menu]
+single = "pointer:click:right"
+```
+
 Validation rejects an unknown button, the voice key, an unknown key name, a
-duplicate chord key, a malformed action, an out-of-range gain or gesture value,
-and an `exec:` action when `allow_exec = false`. Errors name the button, the
-slot, and the value.
+duplicate chord key, a malformed action, pointer units outside 1–255, a raw
+`BTN_*` key, an out-of-range gain or gesture value, and an `exec:` action when
+`allow_exec = false`. Errors name the button, the slot, and the value.
 
 ## `exec:` policy
 
@@ -129,16 +159,24 @@ atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
+atvvctl config set --button ok --trigger single --action pointer:click:left
+atvvctl config set --button up --trigger single --action pointer:move:up:1
+atvvctl config set --button up --trigger double --action pointer:move:up:10
+atvvctl config set --button up --trigger long --action pointer:move:up:50
 atvvctl config set --button up --trigger single --action none
 atvvctl config set --button up --trigger single --action default
 atvvctl reload
 atvvctl map test --button up --trigger single
 atvvctl map test --action "combo:ctrl+alt+v"
+atvvctl map test --action "pointer:click:left"
 atvvctl capture --timeout 30    # one press; prints the logical button and slot
 ```
 
 `atvvctl map test` resolves the active document or a single action string. It
-never executes `exec:`; it only validates and prints the key program.
+never executes `exec:`; it only validates and prints the key program. A
+pointer action reports `kind: pointer` and no key program. `atvvctl status`
+reports whether the pointer device is active in `input.pointer`; it is false
+for keyboard-only maps.
 
 `atvvctl capture` starts capture mode, waits for one logical button press, and
 ends it. Capture reports the logical button and gesture slot recognized by the

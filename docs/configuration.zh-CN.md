@@ -68,6 +68,8 @@ key:<name>
 combo:<mod>+<mod>+<name>
 exec:<command>
 dictation:start|stop|toggle
+pointer:click:left|right|middle|side|extra|forward|back|task
+pointer:move:up|down|left|right:<units>
 ```
 
 按键名称使用与输入运行时相同的解析器：内核名称（`KEY_F13`、截屏键
@@ -78,9 +80,35 @@ dictation:start|stop|toggle
 
 `none` 会吞掉按键。`dictation:start|stop|toggle` 只驱动 ATVV 会话，不发出按键。
 
+指针操作使用独立的 `atvv-virtual-pointer` uinput 设备，具备 `REL_X`/`REL_Y`
+和鼠标按键。`pointer:click:<button>` 按下并释放一个鼠标键；
+`pointer:move:<direction>:<units>` 按 1–255 个相对计数移动，向上和向左为负值。
+只有映射中包含指针操作时才会创建该设备。相对计数不是屏幕像素：桌面的指针加速
+和速度设置会生效。原始 `BTN_*` 名称会被拒绝；请使用
+`pointer:click:<button>`，让按键由指针设备发出，而不是键盘设备。
+
+一个方向键可以承载完整的指针手势：
+
+```toml
+[buttons.up]
+single = "pointer:move:up:1"
+double = "pointer:move:up:10"
+long = "pointer:move:up:50"
+```
+
+鼠标左键、右键、中键、侧键、扩展键、前进键、后退键和任务键都可以这样映射：
+
+```toml
+[buttons.ok]
+single = "pointer:click:left"
+
+[buttons.menu]
+single = "pointer:click:right"
+```
+
 校验会拒绝未知按键、语音键、未知按键名称、组合键中重复的按键、格式错误的操作、
-超出范围的增益或手势值，以及 `allow_exec = false` 时的 `exec:` 操作。错误信息会
-指出按键、槽位和值。
+超出 1–255 的指针单位、原始 `BTN_*` 按键、超出范围的增益或手势值，以及
+`allow_exec = false` 时的 `exec:` 操作。错误信息会指出按键、槽位和值。
 
 ## `exec:` 策略
 
@@ -119,16 +147,22 @@ atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
+atvvctl config set --button ok --trigger single --action pointer:click:left
+atvvctl config set --button up --trigger single --action pointer:move:up:1
+atvvctl config set --button up --trigger double --action pointer:move:up:10
+atvvctl config set --button up --trigger long --action pointer:move:up:50
 atvvctl config set --button up --trigger single --action none
 atvvctl config set --button up --trigger single --action default
 atvvctl reload
 atvvctl map test --button up --trigger single
 atvvctl map test --action "combo:ctrl+alt+v"
+atvvctl map test --action "pointer:click:left"
 atvvctl capture --timeout 30    # 一次按下；打印逻辑按键和槽位
 ```
 
 `atvvctl map test` 解析活动文档或单个操作字符串。它从不执行 `exec:`；只校验并
-打印按键程序。
+打印按键程序。指针操作报告 `kind: pointer`，没有按键程序。`atvvctl status`
+在 `input.pointer` 中报告指针设备是否活动；纯键盘映射为 false。
 
 `atvvctl capture` 启动捕获模式，等待一次逻辑按键按下，然后结束。捕获会报告输入
 运行时识别出的逻辑按键和手势槽位。它本身不独占 evdev，也不暴露原始按键码。

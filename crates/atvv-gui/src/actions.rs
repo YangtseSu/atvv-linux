@@ -3,7 +3,7 @@
 //! Action editor state: parse a grammar string into editable fields and back.
 
 use atvv_config::parse_checked_action;
-use atvv_input::{Action, DictationMode, parse_action};
+use atvv_input::{Action, DictationMode, PointerAction, PointerAxis, PointerButton, parse_action};
 
 use crate::i18n::tr;
 
@@ -15,15 +15,17 @@ pub enum ActionKind {
     Combo,
     Exec,
     Dictation,
+    Pointer,
 }
 
 impl ActionKind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::None,
         Self::Key,
         Self::Combo,
         Self::Exec,
         Self::Dictation,
+        Self::Pointer,
     ];
 
     #[must_use]
@@ -34,6 +36,7 @@ impl ActionKind {
             Self::Combo => tr("Key combination"),
             Self::Exec => tr("Run a command"),
             Self::Dictation => tr("Dictation"),
+            Self::Pointer => tr("Pointer"),
         }
     }
 
@@ -44,6 +47,7 @@ impl ActionKind {
             2 => Self::Combo,
             3 => Self::Exec,
             4 => Self::Dictation,
+            5 => Self::Pointer,
             _ => Self::None,
         }
     }
@@ -56,6 +60,7 @@ impl ActionKind {
             Self::Combo => 2,
             Self::Exec => 3,
             Self::Dictation => 4,
+            Self::Pointer => 5,
         }
     }
 
@@ -67,6 +72,110 @@ impl ActionKind {
             Self::Combo => "ctrl+alt+v",
             Self::Exec => "",
             Self::Dictation => "",
+            Self::Pointer => "pointer:click:left",
+        }
+    }
+}
+
+/// Pointer sub-type shown by the editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerKind {
+    Click,
+    Move,
+}
+
+impl PointerKind {
+    pub const ALL: [Self; 2] = [Self::Click, Self::Move];
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Click => tr("Click"),
+            Self::Move => tr("Move"),
+        }
+    }
+
+    #[must_use]
+    pub const fn from_index(index: u32) -> Self {
+        match index {
+            1 => Self::Move,
+            _ => Self::Click,
+        }
+    }
+
+    #[must_use]
+    pub const fn index(self) -> u32 {
+        match self {
+            Self::Click => 0,
+            Self::Move => 1,
+        }
+    }
+}
+
+/// Every pointer button, in selector order.
+pub const POINTER_BUTTONS: [PointerButton; 8] = PointerButton::ALL;
+/// Every pointer direction, in selector order.
+pub const POINTER_AXES: [PointerAxis; 4] = PointerAxis::ALL;
+
+/// Localized label for one pointer button.
+#[must_use]
+pub fn pointer_button_label(button: PointerButton) -> &'static str {
+    match button {
+        PointerButton::Left => tr("Left click"),
+        PointerButton::Right => tr("Right click"),
+        PointerButton::Middle => tr("Middle click"),
+        PointerButton::Side => tr("Side button"),
+        PointerButton::Extra => tr("Extra button"),
+        PointerButton::Forward => tr("Forward button"),
+        PointerButton::Back => tr("Back button"),
+        PointerButton::Task => tr("Task button"),
+    }
+}
+
+/// Localized label for one pointer direction.
+#[must_use]
+pub fn pointer_axis_label(axis: PointerAxis) -> &'static str {
+    match axis {
+        PointerAxis::Up => tr("Up"),
+        PointerAxis::Down => tr("Down"),
+        PointerAxis::Left => tr("Left"),
+        PointerAxis::Right => tr("Right"),
+    }
+}
+
+/// Selector index of a pointer button.
+#[must_use]
+pub fn pointer_button_index(button: PointerButton) -> u32 {
+    POINTER_BUTTONS
+        .iter()
+        .position(|candidate| *candidate == button)
+        .and_then(|index| u32::try_from(index).ok())
+        .unwrap_or(0)
+}
+
+/// Selector index of a pointer direction.
+#[must_use]
+pub fn pointer_axis_index(axis: PointerAxis) -> u32 {
+    POINTER_AXES
+        .iter()
+        .position(|candidate| *candidate == axis)
+        .and_then(|index| u32::try_from(index).ok())
+        .unwrap_or(0)
+}
+
+/// Board label for a pointer action, without the grammar prefix.
+#[must_use]
+pub fn pointer_action_label(action: PointerAction) -> String {
+    match action {
+        PointerAction::Click(button) => pointer_button_label(button).to_string(),
+        PointerAction::Move { direction, units } => {
+            let label = match direction {
+                PointerAxis::Up => tr("Pointer up"),
+                PointerAxis::Down => tr("Pointer down"),
+                PointerAxis::Left => tr("Pointer left"),
+                PointerAxis::Right => tr("Pointer right"),
+            };
+            format!("{label} {units}")
         }
     }
 }
@@ -127,6 +236,7 @@ pub struct ActionDraft {
     pub chord: String,
     pub command: String,
     pub dictation: DictationChoice,
+    pub pointer: PointerAction,
 }
 
 impl Default for ActionDraft {
@@ -137,6 +247,7 @@ impl Default for ActionDraft {
             chord: String::new(),
             command: String::new(),
             dictation: DictationChoice::Toggle,
+            pointer: PointerAction::Click(PointerButton::Left),
         }
     }
 }
@@ -172,6 +283,10 @@ impl ActionDraft {
                     DictationMode::Toggle => DictationChoice::Toggle,
                 };
             }
+            Ok(Action::Pointer(pointer)) => {
+                draft.kind = ActionKind::Pointer;
+                draft.pointer = pointer;
+            }
             Err(_) => {
                 draft.kind = ActionKind::Key;
                 draft.key = raw.trim().to_string();
@@ -190,6 +305,7 @@ impl ActionDraft {
             ActionKind::Dictation => {
                 format!("dictation:{}", self.dictation.to_raw())
             }
+            ActionKind::Pointer => self.pointer.to_string(),
         }
     }
 
@@ -234,8 +350,44 @@ mod tests {
             "dictation:start",
             "dictation:stop",
             "dictation:toggle",
+            "pointer:click:left",
+            "pointer:click:task",
+            "pointer:move:up:1",
+            "pointer:move:left:255",
         ] {
             assert_eq!(ActionDraft::from_raw(raw).to_raw(), raw);
+        }
+    }
+
+    #[test]
+    fn pointer_draft_keeps_the_button_and_units() {
+        let click = ActionDraft::from_raw("pointer:click:back");
+        assert_eq!(click.kind, ActionKind::Pointer);
+        assert_eq!(click.pointer, PointerAction::Click(PointerButton::Back));
+
+        let move_draft = ActionDraft::from_raw("pointer:move:down:42");
+        assert_eq!(
+            move_draft.pointer,
+            PointerAction::Move {
+                direction: PointerAxis::Down,
+                units: 42,
+            }
+        );
+        assert!(move_draft.validate(false).is_ok());
+        assert!(
+            ActionDraft::from_raw("pointer:move:down:256")
+                .validate(false)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn kind_indices_round_trip() {
+        for kind in ActionKind::ALL {
+            assert_eq!(ActionKind::from_index(kind.index()), kind);
+        }
+        for kind in PointerKind::ALL {
+            assert_eq!(PointerKind::from_index(kind.index()), kind);
         }
     }
 

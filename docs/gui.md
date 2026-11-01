@@ -46,7 +46,8 @@ The window is a three-column board around the original RC003 vector diagram:
 
 Every card shows its three gesture slots, **Single**, **Double**, and
 **Long**, with the resolved action in compact form (`Return`, `F13`,
-`Ctrl+Alt+V`, `Command…`, `Start dictation`, or `None`). The selected card and
+`Ctrl+Alt+V`, `Left click`, `Pointer up 1`, `Command…`, `Start dictation`, or
+`None`). The selected card and
 slot use the system accent color. A slot with no action is dimmed, and a card
 whose slot sends the same action as another card in the same gesture is
 outlined in amber.
@@ -91,6 +92,9 @@ information instead of a device list.
    - *Key combination* emits a chord, for example `ctrl+alt+v`.
    - *Run a command* runs `exec:<command>` through the daemon.
    - *Dictation* starts, stops, or toggles the ATVV microphone.
+   - *Pointer* clicks a mouse button (left, right, middle, side, extra,
+     forward, back, or task) or moves the pointer up, down, left, or right by
+     1–255 relative counts.
 3. Type the value, use **Learn Key**, or use **Choose…** for a searchable
    list of every key the input backend supports, with its friendly label and
    kernel name. The picker inserts the
@@ -102,6 +106,14 @@ information instead of a device list.
    become part of the chord in the order `ctrl`, `alt`, `shift`, `super`.
 4. Click **Update**. The dialog closes, the board shows the new action, and
    **Apply** in the header becomes active.
+
+A **Pointer** action selects a click button or a movement direction and unit
+count; units are relative counts, and the desktop's pointer acceleration and
+speed settings still apply. Use the three gesture slots for distance, for
+example `Up` → Single `Pointer up 1`, Double `Pointer up 10`, Long
+`Pointer up 50`. The daemon creates `atvv-virtual-pointer` only while the
+saved map contains a pointer action. Raw `BTN_*` values are rejected; use the
+pointer editor.
 
 **Learn remote…** starts the daemon's capture mode; pressing a physical remote
 key retargets the dialog to that button and gesture. **Reset** restores the

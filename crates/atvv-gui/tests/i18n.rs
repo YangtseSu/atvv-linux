@@ -11,7 +11,7 @@ use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
 use atvv_gui::client::{Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo};
 use atvv_gui::i18n::{self, Language};
-use atvv_gui::model::{GuiModel, trigger_label};
+use atvv_gui::model::{GuiModel, action_label, trigger_label};
 use atvv_input::Trigger;
 use atvv_protocol::RC003;
 use atvv_protocol::profile::RemoteButton;
@@ -108,6 +108,8 @@ fn chinese_window() {
             .slot_text(RemoteButton::Power, Trigger::Single),
         Some("无".to_string())
     );
+    assert_eq!(action_label(Some("pointer:click:left")).text, "左键单击");
+    assert_eq!(action_label(Some("pointer:move:up:3")).text, "指针上移 3");
 
     // The action dialog keeps the translated controls.
     assert_eq!(
@@ -117,6 +119,10 @@ fn chinese_window() {
     assert_eq!(
         combo_text(window.editor().type_row(), 4).as_deref(),
         Some("听写")
+    );
+    assert_eq!(
+        combo_text(window.editor().type_row(), 5).as_deref(),
+        Some("指针")
     );
     assert_eq!(
         window.editor().update_button().label().as_deref(),

@@ -11,6 +11,7 @@ use atvv_config::{ConfigDocument, parse_checked_action};
 use atvv_input::{Action, ActionMap, Trigger, parse_action};
 use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
 
+use crate::actions::pointer_action_label;
 use crate::i18n::tr;
 
 /// Resolve a profile id from the daemon document.
@@ -116,6 +117,10 @@ pub fn action_label(raw: Option<&str>) -> ActionLabel {
                 atvv_input::DictationMode::Toggle => tr("Toggle dictation"),
             }
             .to_string(),
+            none: false,
+        },
+        Ok(Action::Pointer(pointer)) => ActionLabel {
+            text: pointer_action_label(pointer),
             none: false,
         },
         Err(_) => ActionLabel {
@@ -575,6 +580,13 @@ mod tests {
         assert_eq!(
             action_label(Some("dictation:toggle")).text,
             "Toggle dictation"
+        );
+        assert_eq!(action_label(Some("pointer:click:left")).text, "Left click");
+        assert_eq!(action_label(Some("pointer:click:back")).text, "Back button");
+        assert_eq!(action_label(Some("pointer:move:up:1")).text, "Pointer up 1");
+        assert_eq!(
+            action_label(Some("pointer:move:right:24")).text,
+            "Pointer right 24"
         );
         let unknown = action_label(Some("bogus-value"));
         assert_eq!(unknown.text, "bogus-value");

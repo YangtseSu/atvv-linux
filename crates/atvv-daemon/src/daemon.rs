@@ -296,6 +296,7 @@ impl Daemon {
             enabled: config.config.input,
             available: input.is_some(),
             keyboard: input.as_ref().is_some_and(InputRuntime::keyboard_available),
+            pointer: input.as_ref().is_some_and(InputRuntime::pointer_available),
             grabbed: grabbed_paths(&input),
             degraded: input_degraded.clone(),
             last_button: None,
@@ -797,16 +798,16 @@ impl Daemon {
 
     /// Execute one already-checked action for the GUI's test mode.
     ///
-    /// Key and chord actions use the running input runtime, `exec` enters the
-    /// serial command worker, and dictation drives the ATVV session. The GUI
-    /// never emits keys or runs commands itself.
+    /// Key, chord, and pointer actions use the running input runtime, `exec`
+    /// enters the serial command worker, and dictation drives the ATVV
+    /// session. The GUI never emits input or runs commands itself.
     fn run_action(&mut self, raw: &str) -> Result<(), String> {
         let action = atvv_config::parse_checked_action(raw, self.config.allow_exec)
             .map_err(|error| error.to_string())?;
         self.trace(format!("run action {action}"));
         match action {
             Action::None => Ok(()),
-            Action::Key { .. } | Action::Combo { .. } => self
+            Action::Key { .. } | Action::Combo { .. } | Action::Pointer(_) => self
                 .input
                 .as_ref()
                 .ok_or_else(|| "the input runtime is not available".to_string())?
@@ -1311,6 +1312,10 @@ impl Daemon {
                 .input
                 .as_ref()
                 .is_some_and(InputRuntime::keyboard_available),
+            pointer: self
+                .input
+                .as_ref()
+                .is_some_and(InputRuntime::pointer_available),
             grabbed: grabbed_paths(&self.input),
             degraded: self.input_degraded.clone(),
             last_button: self.last_button.clone(),

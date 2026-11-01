@@ -7,10 +7,12 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 203 passed, 5 ignored tests (two
-  kernel-uinput input tests, one fake-remote live-map test, the real-device
-  GUI test, and a locale-detection test; the first three pass with
-  `/dev/uinput` access, and the locale test runs under `LANG=zh_CN.UTF-8`).
+- Tests: `cargo test --workspace` under `xvfb-run` → 212 passed, 8 ignored
+  tests (four kernel-uinput input tests, the real RC003 pointer test, one
+  daemon live test, the real-device GUI test, and a locale-detection test;
+  the kernel tests pass with `/dev/uinput` access, the pointer test also needs
+  the RC003 and physical presses, and the locale test runs under
+  `LANG=zh_CN.UTF-8`).
   The GUI XTest suite needs `GDK_BACKEND=x11` and an X screen at least as large
   as the window; it skips the pointer section otherwise.
 
@@ -243,6 +245,27 @@ per-session copies; `docs/plans/` remains the canonical plan.
   The page shows the fcitx5 name mapping and warns when `vinput` is `dbus` or
   `off`. GUI status now parses `contract` and `vinput`; UI/i18n tests cover
   declared selection, `none`, custom `F23`, and the Chinese hint.
+- **22 pointer actions (complete and verified)**: `atvv-input` now opens a
+  dedicated `atvv-virtual-pointer` uinput device (`REL_X`/`REL_Y`,
+  `INPUT_PROP_POINTER`, and eight mouse buttons; vendor `0x1209`, product
+  `0x0003`) only when the action map contains a `pointer:` action. New
+  grammar: `pointer:click:left|right|middle|side|extra|forward|back|task` and
+  `pointer:move:up|down|left|right:<units>` with units 1–255; raw
+  `key:BTN_*` is rejected with an error that names `pointer:click`. The three
+  gesture slots choose the distance (`Up` Single 1, Double 10, Long 50 works).
+  Test/capture mode suppresses pointer output through the existing
+  `actions_enabled` flag; `RunAction` and `InputRuntime::tap_action` support
+  pointer actions. `InputView.pointer` exposes the device state in
+  `atvvctl status`. The GUI editor has a *Pointer* type with Click/Move,
+  button, direction, and unit rows; the board renders `Left click` and
+  `Pointer up N` in English and Chinese. Kernel tests observed BTN_LEFT
+  press/release, REL_X/REL_Y, and the fake-remote dispatch path. Real RC003
+  run (2026-11-01, `C0:5D:39:F8:2D:4C`): physical OK and Up presses produced
+  `REL_Y -5`, `BTN_LEFT PRESSED`, and `BTN_LEFT RELEASED` on
+  `/dev/input/event27`; the final run with `INPUT_PROP_POINTER` passed in
+  7.93 s and `atvvd` was restarted.
+  `docs/configuration*.md` and `docs/gui*.md` document the relative-unit and
+  pointer-acceleration limitation. See `docs/plans/22-pointer-actions.md`.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -644,13 +667,21 @@ no PKGBUILD. See `docs/plans/20-release-and-external-packaging.md`.
 **Step 15 (mapping board) is complete and verified.** The single-key inspector
 is gone: `atvv-config` shows twelve per-button cards around the RC003 diagram,
 a modal action editor, a test bar, and a header device chip; see
-`docs/plans/15-mapping-board.md`. The next UI step is **step 17 (layout
-profiles)**: Default is a template, board edits are staged, and Apply saves
-them as a new layout. Its selector UI (header chip, popover, manager dialog)
-is decided in `docs/plans/15-mapping-board.html`; the board does not have the
-chip yet. Step 21's device popover and per-device maps also preview there.
-B01 (recording-key press/release actions) is backlog and does not block step
-17.
+`docs/plans/15-mapping-board.md`.
+
+**Step 22 (pointer actions) is complete and verified.** Remote buttons can
+emit mouse clicks and relative pointer motion through `atvv-virtual-pointer`;
+the three gesture slots choose the distance, and the result was observed on
+the real RC003; see `docs/plans/22-pointer-actions.md`. This closes the
+keyboard-only action limitation; raw `BTN_*` is intentionally rejected in
+favor of the pointer editor.
+
+The next UI step is **step 17 (layout profiles)**: Default is a template,
+board edits are staged, and Apply saves them as a new layout. Its selector UI
+(header chip, popover, manager dialog) is decided in
+`docs/plans/15-mapping-board.html`; the board does not have the chip yet.
+Step 21's device popover and per-device maps also preview there. B01
+(recording-key press/release actions) is backlog and does not block step 17.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
@@ -694,7 +725,11 @@ cargo run -q -p atvv-cli -- config set --allow-exec
 cargo run -q -p atvv-cli -- capture --timeout 10
 cargo run -q -p atvv-cli -- map test --button up --trigger single
 cargo run -q -p atvv-cli -- map test --action "combo:ctrl+alt+v"
+cargo run -q -p atvv-cli -- map test --action "pointer:click:left"
 cargo run -q -p atvv-cli -- doctor
+systemctl --user stop atvvd
+cargo test -p atvv-input --test real_pointer -- --ignored --nocapture
+systemctl --user start atvvd
 cargo test -p atvv-gui
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
   cargo test -p atvv-gui --test ui                     # 36 slot + 13 hotspot clicks

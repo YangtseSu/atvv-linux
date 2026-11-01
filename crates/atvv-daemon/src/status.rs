@@ -106,6 +106,10 @@ pub struct InputView {
     pub enabled: bool,
     pub available: bool,
     pub keyboard: bool,
+    /// Set when the action map uses pointer actions and the uinput pointer is
+    /// available. It stays false for keyboard-only maps.
+    #[serde(default)]
+    pub pointer: bool,
     pub grabbed: Vec<String>,
     pub degraded: Vec<String>,
     pub last_button: Option<String>,
@@ -231,6 +235,7 @@ mod tests {
             enabled,
             available,
             keyboard,
+            pointer: false,
             grabbed: Vec::new(),
             degraded: Vec::new(),
             last_button: None,

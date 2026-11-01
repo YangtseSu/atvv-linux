@@ -234,6 +234,51 @@ fn window_smoke() {
     window.editor().cancel_button().emit_clicked();
     pump(30);
 
+    // Pointer mappings are edited structurally: button for a click, direction
+    // and units for a move, with no raw BTN_* typing.
+    window
+        .board()
+        .slot(RemoteButton::Up, Trigger::Long)
+        .expect("up long")
+        .emit_clicked();
+    window.editor().type_row().set_selected(5);
+    window.editor().pointer_kind_row().set_selected(0);
+    window.editor().pointer_button_row().set_selected(1);
+    window.editor().update_button().emit_clicked();
+    pump(30);
+    assert_eq!(
+        window.document().expect("document").buttons["up"]
+            .long
+            .as_deref(),
+        Some("pointer:click:right")
+    );
+    assert_eq!(
+        window.board().slot_text(RemoteButton::Up, Trigger::Long),
+        Some("Right click".to_string())
+    );
+
+    window
+        .board()
+        .slot(RemoteButton::Up, Trigger::Long)
+        .expect("up long")
+        .emit_clicked();
+    window.editor().type_row().set_selected(5);
+    window.editor().pointer_kind_row().set_selected(1);
+    window.editor().pointer_direction_row().set_selected(0);
+    window.editor().pointer_units_row().set_value(7.0);
+    window.editor().update_button().emit_clicked();
+    pump(30);
+    assert_eq!(
+        window.document().expect("document").buttons["up"]
+            .long
+            .as_deref(),
+        Some("pointer:move:up:7")
+    );
+    assert_eq!(
+        window.board().slot_text(RemoteButton::Up, Trigger::Long),
+        Some("Pointer up 7".to_string())
+    );
+
     // A hotspot selects the card and its single slot.
     window
         .diagram()

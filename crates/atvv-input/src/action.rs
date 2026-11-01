@@ -10,11 +10,14 @@
 //! combo:<mod>+<mod>+<name>
 //! exec:<command>
 //! dictation:start|stop|toggle
+//! pointer:click:left|right|middle|side|extra|forward|back|task
+//! pointer:move:up|down|left|right:<units>
 //! ```
 //!
 //! Key names are resolved by [`crate::keymap::KeyResolver`]. The map never
-//! emits anything itself; the runtime compiles key actions into uinput frames
-//! and forwards `exec`/`dictation` actions to the daemon.
+//! emits anything itself; the runtime compiles key actions into uinput frames,
+//! pointer actions into events on a dedicated pointer device, and forwards
+//! `exec`/`dictation` actions to the daemon.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -53,6 +56,107 @@ pub enum DictationMode {
     Toggle,
 }
 
+/// Pointer button emitted by `pointer:click:<button>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerButton {
+    Left,
+    Right,
+    Middle,
+    Side,
+    Extra,
+    Forward,
+    Back,
+    Task,
+}
+
+impl PointerButton {
+    /// Every supported button, in configuration and UI order.
+    pub const ALL: [Self; 8] = [
+        Self::Left,
+        Self::Right,
+        Self::Middle,
+        Self::Side,
+        Self::Extra,
+        Self::Forward,
+        Self::Back,
+        Self::Task,
+    ];
+
+    /// Stable configuration name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Middle => "middle",
+            Self::Side => "side",
+            Self::Extra => "extra",
+            Self::Forward => "forward",
+            Self::Back => "back",
+            Self::Task => "task",
+        }
+    }
+
+    /// Parse a configuration name, case-insensitively.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        let name = name.trim();
+        Self::ALL
+            .into_iter()
+            .find(|button| button.name().eq_ignore_ascii_case(name))
+    }
+}
+
+/// Relative pointer direction for `pointer:move:<direction>:<units>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerAxis {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl PointerAxis {
+    /// Every direction, in configuration and UI order.
+    pub const ALL: [Self; 4] = [Self::Up, Self::Down, Self::Left, Self::Right];
+
+    /// Stable configuration name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+
+    /// Parse a configuration name, case-insensitively.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        let name = name.trim();
+        Self::ALL
+            .into_iter()
+            .find(|axis| axis.name().eq_ignore_ascii_case(name))
+    }
+}
+
+/// One pointer action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerAction {
+    /// Press and release one pointer button.
+    Click(PointerButton),
+    /// Move the pointer by `units` relative counts in `direction`.
+    Move { direction: PointerAxis, units: u16 },
+}
+
+impl PointerAction {
+    /// Smallest accepted relative movement.
+    pub const MIN_UNITS: u16 = 1;
+    /// Largest accepted relative movement.
+    pub const MAX_UNITS: u16 = 255;
+}
+
 /// One mapped action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
@@ -66,6 +170,8 @@ pub enum Action {
     Exec { command: String },
     /// Drive the ATVV dictation path.
     Dictation(DictationMode),
+    /// Emit a pointer button or relative motion.
+    Pointer(PointerAction),
 }
 
 impl fmt::Display for Action {
@@ -84,6 +190,18 @@ impl fmt::Display for Action {
             Self::Dictation(DictationMode::Start) => f.write_str("dictation:start"),
             Self::Dictation(DictationMode::Stop) => f.write_str("dictation:stop"),
             Self::Dictation(DictationMode::Toggle) => f.write_str("dictation:toggle"),
+            Self::Pointer(pointer) => pointer.fmt(f),
+        }
+    }
+}
+
+impl fmt::Display for PointerAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Click(button) => write!(f, "pointer:click:{}", button.name()),
+            Self::Move { direction, units } => {
+                write!(f, "pointer:move:{}:{units}", direction.name())
+            }
         }
     }
 }
@@ -107,6 +225,18 @@ pub enum ActionError {
     UnknownKey(String),
     #[error("action carries no key program")]
     NotEmittable,
+    #[error(
+        "{0} is a pointer button; use pointer:click:<left|right|middle|side|extra|forward|back|task>"
+    )]
+    PointerKey(String),
+    #[error("bad pointer action: {0}")]
+    BadPointer(String),
+    #[error("unknown pointer button: {0}")]
+    UnknownPointerButton(String),
+    #[error("unknown pointer direction: {0}")]
+    UnknownPointerDirection(String),
+    #[error("pointer move units must be 1-255: {0}")]
+    PointerUnits(String),
 }
 
 fn key_or_combo(rest: &str) -> Result<Action, ActionError> {
@@ -117,6 +247,13 @@ fn key_or_combo(rest: &str) -> Result<Action, ActionError> {
     if tokens.iter().any(|token| token.trim().is_empty()) {
         return Err(ActionError::EmptyModifier);
     }
+    if let Some(token) = tokens
+        .iter()
+        .map(|token| token.trim())
+        .find(|token| token.to_ascii_uppercase().starts_with("BTN_"))
+    {
+        return Err(ActionError::PointerKey(token.to_string()));
+    }
     let mut mods: Vec<String> = tokens
         .iter()
         .map(|token| token.trim().to_string())
@@ -126,6 +263,53 @@ fn key_or_combo(rest: &str) -> Result<Action, ActionError> {
         Ok(Action::Key { name: key })
     } else {
         Ok(Action::Combo { mods, key })
+    }
+}
+
+fn pointer_action(rest: &str) -> Result<PointerAction, ActionError> {
+    let mut parts = rest.split(':');
+    let command = parts.next().unwrap_or_default().trim();
+    match command.to_ascii_lowercase().as_str() {
+        "click" => {
+            let Some(name) = parts.next() else {
+                return Err(ActionError::BadPointer("missing click button".to_string()));
+            };
+            if parts.next().is_some() {
+                return Err(ActionError::BadPointer(rest.to_string()));
+            }
+            let name = name.trim();
+            PointerButton::parse(name)
+                .map(PointerAction::Click)
+                .ok_or_else(|| ActionError::UnknownPointerButton(name.to_string()))
+        }
+        "move" => {
+            let Some(direction) = parts.next() else {
+                return Err(ActionError::BadPointer(
+                    "missing move direction".to_string(),
+                ));
+            };
+            let Some(units) = parts.next() else {
+                return Err(ActionError::BadPointer("missing move units".to_string()));
+            };
+            if parts.next().is_some() {
+                return Err(ActionError::BadPointer(rest.to_string()));
+            }
+            let direction = direction.trim();
+            let axis = PointerAxis::parse(direction)
+                .ok_or_else(|| ActionError::UnknownPointerDirection(direction.to_string()))?;
+            let units = units.trim();
+            let value: u16 = units
+                .parse()
+                .map_err(|_| ActionError::PointerUnits(units.to_string()))?;
+            if !(PointerAction::MIN_UNITS..=PointerAction::MAX_UNITS).contains(&value) {
+                return Err(ActionError::PointerUnits(units.to_string()));
+            }
+            Ok(PointerAction::Move {
+                direction: axis,
+                units: value,
+            })
+        }
+        _ => Err(ActionError::BadPointer(rest.to_string())),
     }
 }
 
@@ -160,6 +344,9 @@ pub fn parse_action(input: &str) -> Result<Action, ActionError> {
     }
     if kind.eq_ignore_ascii_case("key") || kind.eq_ignore_ascii_case("combo") {
         return key_or_combo(rest);
+    }
+    if kind.eq_ignore_ascii_case("pointer") {
+        return pointer_action(rest).map(Action::Pointer);
     }
     Err(ActionError::UnknownKind(kind.to_string()))
 }
@@ -348,6 +535,24 @@ mod tests {
             action("dictation:TOGGLE"),
             Action::Dictation(DictationMode::Toggle)
         );
+        assert_eq!(
+            action("pointer:click:LEFT"),
+            Action::Pointer(PointerAction::Click(PointerButton::Left))
+        );
+        assert_eq!(
+            action("pointer:move:up:1"),
+            Action::Pointer(PointerAction::Move {
+                direction: PointerAxis::Up,
+                units: 1,
+            })
+        );
+        assert_eq!(
+            action("pointer:move:right:255"),
+            Action::Pointer(PointerAction::Move {
+                direction: PointerAxis::Right,
+                units: 255,
+            })
+        );
     }
 
     #[test]
@@ -367,6 +572,38 @@ mod tests {
             Err(ActionError::BadDictation("sideways".into()))
         );
         assert!(parse_action("return").is_err());
+        assert_eq!(
+            parse_action("key:BTN_LEFT"),
+            Err(ActionError::PointerKey("BTN_LEFT".into()))
+        );
+        assert!(matches!(
+            parse_action("pointer:click:sideways"),
+            Err(ActionError::UnknownPointerButton(_))
+        ));
+        assert!(matches!(
+            parse_action("pointer:move:diagonal:1"),
+            Err(ActionError::UnknownPointerDirection(_))
+        ));
+        assert_eq!(
+            parse_action("pointer:move:up:0"),
+            Err(ActionError::PointerUnits("0".into()))
+        );
+        assert_eq!(
+            parse_action("pointer:move:up:256"),
+            Err(ActionError::PointerUnits("256".into()))
+        );
+        assert!(matches!(
+            parse_action("pointer:move:up"),
+            Err(ActionError::BadPointer(_))
+        ));
+        assert!(matches!(
+            parse_action("pointer:click"),
+            Err(ActionError::BadPointer(_))
+        ));
+        assert!(matches!(
+            parse_action("pointer:wheel:up"),
+            Err(ActionError::BadPointer(_))
+        ));
     }
 
     #[test]
@@ -379,6 +616,12 @@ mod tests {
             "dictation:start",
             "dictation:stop",
             "dictation:toggle",
+            "pointer:click:left",
+            "pointer:click:task",
+            "pointer:move:up:1",
+            "pointer:move:down:10",
+            "pointer:move:left:255",
+            "pointer:move:right:3",
         ] {
             assert_eq!(parse_action(input).unwrap().to_string(), input);
         }
@@ -449,6 +692,44 @@ mod tests {
         let policy = map.policy(RemoteButton::Down, &timing);
         assert!(policy.double_click);
         assert_eq!(policy.repeat, None);
+    }
+
+    #[test]
+    fn pointer_actions_use_gesture_slots_without_keyboard_repeat() {
+        let timing = atvv_protocol::RC003.gesture_timing;
+        let mut map = ActionMap::defaults();
+        map.set(
+            RemoteButton::Up,
+            Trigger::Single,
+            action("pointer:move:up:1"),
+        )
+        .unwrap();
+        map.set(
+            RemoteButton::Up,
+            Trigger::Double,
+            action("pointer:move:up:10"),
+        )
+        .unwrap();
+        map.set(
+            RemoteButton::Up,
+            Trigger::Long,
+            action("pointer:move:up:50"),
+        )
+        .unwrap();
+        let policy = map.policy(RemoteButton::Up, &timing);
+        assert!(policy.double_click);
+        assert!(policy.long_press);
+        assert_eq!(policy.repeat, None);
+
+        let mut single = ActionMap::defaults();
+        single
+            .set(
+                RemoteButton::Up,
+                Trigger::Single,
+                action("pointer:move:up:1"),
+            )
+            .unwrap();
+        assert_eq!(single.policy(RemoteButton::Up, &timing).repeat, None);
     }
 
     #[test]

@@ -789,6 +789,7 @@ fn action_kind(action: &atvv_input::Action) -> &'static str {
         atvv_input::Action::Combo { .. } => "combo",
         atvv_input::Action::Exec { .. } => "exec",
         atvv_input::Action::Dictation(_) => "dictation",
+        atvv_input::Action::Pointer(_) => "pointer",
     }
 }
 

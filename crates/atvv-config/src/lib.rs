@@ -391,7 +391,7 @@ pub fn parse_checked_action(raw: &str, allow_exec: bool) -> Result<Action, Actio
             }
             KeyResolver.program(&action)?;
         }
-        Action::None | Action::Dictation(_) => {}
+        Action::None | Action::Dictation(_) | Action::Pointer(_) => {}
     }
     Ok(action)
 }
@@ -1090,6 +1090,32 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn pointer_actions_validate_and_reject_raw_btn_names() {
+        for raw in [
+            "pointer:click:left",
+            "pointer:click:task",
+            "pointer:move:up:1",
+            "pointer:move:left:255",
+        ] {
+            let action = parse_checked_action(raw, false).unwrap();
+            assert_eq!(action.to_string(), raw);
+        }
+        for raw in [
+            "pointer:move:up:0",
+            "pointer:move:up:256",
+            "pointer:click:sideways",
+            "pointer:move:diagonal:1",
+        ] {
+            assert!(parse_checked_action(raw, false).is_err(), "{raw}");
+        }
+        let error = parse_checked_action("key:BTN_LEFT", false).unwrap_err();
+        assert!(
+            error.to_string().contains("pointer:click"),
+            "raw BTN_* must point at the pointer grammar: {error}"
+        );
     }
 
     #[test]
