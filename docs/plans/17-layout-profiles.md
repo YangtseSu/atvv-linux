@@ -69,9 +69,11 @@ single = "key:KEY_UP"
   devices is blocked while the document is dirty.
 - A layout has `name` (required, unique case-insensitively), optional
   `description`, optional `buttons`, and optional `gesture` overrides.
-- Layout ids are lowercase ASCII `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the
-  preset ids from step 18 (`media`, `coding`, `slides`) are reserved. The
-  examples here use `editor` for that reason.
+- Layout ids are lowercase ASCII `[a-z0-9][a-z0-9_-]{0,31}`; `default` is
+  reserved. Step 17 also reserved the placeholder preset ids `media`,
+  `coding`, and `slides`; step 18 replaced that set with `mpv`, `slides`, and
+  `omp` (ADR 0010), so `media` and `coding` are available again. The examples
+  here use `editor`.
 - Global fields (`device`, `adapter`, `gain_db`, `input`, `vinput`,
   `trigger_key`, `allow_exec`) stay global. A layout changes only actions and
   gesture timing, never the exec policy or the device.
@@ -338,3 +340,6 @@ unit was restored afterwards.
 - 2026-11-01 — recorded the real RC003 hardware item: `KEY_F13` on `editor`,
   `KEY_UP` on `default`, and persistence across a daemon restart; the
   installed `atvvd` unit was restored. Step complete.
+- 2026-11-02 — step 18 replaced the placeholder preset id reservation:
+  `media` and `coding` are user layout ids again; `mpv`, `slides`, and `omp`
+  are reserved (ADR 0010).

@@ -8,8 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use atvv_config::{
-    ConfigDocument, DEFAULT_LAYOUT, DEFAULT_LAYOUT_NAME, LayoutDocument, LayoutSummary,
-    MAX_LAYOUT_NAME, parse_checked_action, slug_layout_id, unique_layout_id, unique_layout_name,
+    ConfigDocument, DEFAULT_LAYOUT, DEFAULT_LAYOUT_NAME, LayoutDocument, LayoutPreset,
+    LayoutSummary, MAX_LAYOUT_NAME, parse_checked_action, slug_layout_id, unique_layout_id,
+    unique_layout_name,
 };
 use atvv_input::{Action, ActionMap, Trigger, parse_action};
 use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
@@ -433,6 +434,29 @@ impl GuiModel {
         Ok(id)
     }
 
+    /// Create a user layout from a built-in preset without switching to it.
+    pub fn create_layout_from_preset(
+        &mut self,
+        preset: &LayoutPreset,
+        name: &str,
+    ) -> Result<String, String> {
+        let name = name.trim();
+        self.check_name(name, None)?;
+        let mut next = self.document.clone();
+        let mut layout = preset.layout();
+        layout.name = name.to_string();
+        let id = unique_layout_id(
+            &slug_layout_id(name),
+            next.layouts.keys().map(String::as_str),
+        );
+        next.layouts.insert(id.clone(), layout);
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        self.dirty = true;
+        Ok(id)
+    }
+
     /// Persist the staged template slots as a new active layout.
     pub fn save_as_layout(
         &mut self,
@@ -524,6 +548,41 @@ impl GuiModel {
                 .ok_or_else(|| format!("unknown layout {id:?}"))?;
             layout.buttons.clear();
             layout.gesture = None;
+        }
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        if self.document.active_layout == id {
+            self.working = working_layout(&self.document)?;
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Replace one user layout's slots with a built-in preset.
+    ///
+    /// The layout keeps its name and description; the active layout does not
+    /// change.
+    pub fn reset_layout_to_preset(
+        &mut self,
+        id: &str,
+        preset: &LayoutPreset,
+    ) -> Result<(), String> {
+        if id == DEFAULT_LAYOUT {
+            return Err(tr("Default is a template.").to_string());
+        }
+        let mut next = self.document.clone();
+        {
+            let layout = next
+                .layouts
+                .get_mut(id)
+                .ok_or_else(|| format!("unknown layout {id:?}"))?;
+            let name = layout.name.clone();
+            let description = layout.description.clone();
+            let mut replacement = preset.layout();
+            replacement.name = name;
+            replacement.description = description;
+            *layout = replacement;
         }
         next.validate(&self.profile)
             .map_err(|error| error.to_string())?;
@@ -862,10 +921,7 @@ mod tests {
         let id = model
             .save_as_layout("Coding", Some("Editor shortcuts"))
             .unwrap();
-        assert_eq!(
-            id, "coding-layout",
-            "reserved preset ids get a suffix instead of colliding"
-        );
+        assert_eq!(id, "coding", "the layout id is derived from the name");
         assert!(!model.template());
         assert!(!model.template_changed());
         assert_eq!(model.active_layout(), id);
@@ -885,8 +941,8 @@ mod tests {
     #[test]
     fn switching_layouts_is_blocked_while_dirty() {
         let mut model = model();
-        let id = model.create_layout("Media", None, None).unwrap();
-        assert_eq!(id, "media-layout");
+        let id = model.create_layout("mpv", None, None).unwrap();
+        assert_eq!(id, "mpv-layout");
         model.mark_saved();
         assert!(model.switch_layout(&id).unwrap());
         assert_eq!(model.active_layout(), id);
@@ -1023,5 +1079,57 @@ mod tests {
         }
         assert_eq!(trigger_from_name("release"), None);
         assert_eq!(trigger_label(Trigger::Double), "Double");
+    }
+
+    #[test]
+    fn preset_creation_stages_an_inactive_layout() {
+        let mut model = model();
+        let preset = atvv_config::layout_preset("omp").expect("omp preset");
+        let id = model
+            .create_layout_from_preset(preset, "omp")
+            .expect("create");
+        assert_eq!(id, "omp-layout");
+        assert_eq!(model.active_layout(), DEFAULT_LAYOUT);
+        assert!(model.dirty);
+        assert_eq!(
+            model.document.layouts[&id].slot(RemoteButton::Power, Trigger::Single),
+            Some("combo:alt+r")
+        );
+        assert_eq!(
+            model.document.layouts[&id].slot(RemoteButton::Tv, Trigger::Single),
+            Some("combo:ctrl+o")
+        );
+        assert_eq!(
+            model.document.layouts[&id].slot(RemoteButton::VolumeUp, Trigger::Single),
+            Some("key:KEY_VOLUMEUP")
+        );
+    }
+
+    #[test]
+    fn preset_reset_keeps_the_layout_name_and_active_state() {
+        let mut model = model();
+        let preset = atvv_config::layout_preset("mpv").expect("mpv preset");
+        let id = model
+            .create_layout_from_preset(preset, "movie")
+            .expect("create");
+        model.document.active_layout = id.clone();
+        model.working = working_layout(&model.document).expect("working");
+        model.dirty = false;
+        let slides = atvv_config::layout_preset("slides").expect("slides preset");
+        model
+            .reset_layout_to_preset(&id, slides)
+            .expect("reset to preset");
+        assert_eq!(model.active_layout(), id);
+        assert_eq!(model.document.layouts[&id].name, "movie");
+        assert_eq!(
+            model.working.slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_PAGEUP")
+        );
+        assert!(model.dirty);
+        assert!(
+            model
+                .reset_layout_to_preset(DEFAULT_LAYOUT, slides)
+                .is_err()
+        );
     }
 }

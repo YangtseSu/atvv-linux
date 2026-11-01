@@ -71,9 +71,9 @@ layout, leaving the template unchanged.
 
 A layout has a required name (unique case-insensitively), an optional
 description, optional per-button overrides, and optional gesture overrides. Ids
-match `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the preset ids `media`,
-`coding`, and `slides` are reserved. At most 32 user layouts are allowed; a name
-is 1–40 characters and a description at most 120.
+match `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the preset ids `mpv`, `slides`,
+and `omp` are reserved. At most 32 user layouts are allowed; a name is 1–40
+characters and a description at most 120.
 
 Global fields (`profile`, `device`, `adapter`, `gain_db`, `input`, `vinput`,
 `trigger_key`, `allow_exec`) are not part of a layout. Switching a layout never
@@ -82,6 +82,31 @@ stored, renamed, deleted, or reset, and it is not listed in `layouts`.
 
 Gesture overrides apply to the whole active layout, so switching a layout can
 change double/long behavior. `atvvctl layout show` prints the effective timing.
+
+### Presets
+
+Three built-in presets are read-only templates for a user layout:
+
+| id | Name | Verified with | Purpose |
+|---|---|---|---|
+| `mpv` | mpv | mpv 0.41.0 | Space pauses, `f` toggles fullscreen, arrows seek, `m` mutes, `q` quits |
+| `slides` | Slides | LibreOffice Impress 26.8.1, WPS Office 12.1.2 | PageUp/PageDown, B for a black screen, F5 starts, Esc ends |
+| `omp` | omp | omp 18.14.2 | Enter submits, Esc interrupts, Ctrl+R searches history, Ctrl+O expands tools, Shift+Tab changes thinking, Alt+R retries |
+
+Every preset maps all twelve action-mapped buttons on a single press and
+contains no `none`, `exec:`, or `dictation:`. Double and long presses stay at
+the profile defaults. The mappings were verified against each app's default
+bindings; user remaps in the app (mpv `input.conf`, omp
+`~/.omp/agent/keybindings.yml`, omp Vim mode) can change them.
+
+Presets are not live state. Applying one creates a user layout and leaves the
+active layout unchanged unless `--activate` is given; `default` is never
+edited. The preset ids are reserved, so applying `mpv` with the default name
+creates the layout id `mpv-layout`. Reset a user layout to a preset with
+`layout reset <id> --preset <preset>`; the layout keeps its name and
+description. The GUI exposes the same catalog as **New from preset…** and
+**Reset to preset…**. ATVV never detects the foreground app or switches
+layouts automatically; the resulting layout is editable like any other.
 
 ### Migration
 
@@ -198,6 +223,11 @@ atvvctl layout new editor --name Editor --from default
 atvvctl layout rename editor "Editor layout"
 atvvctl layout delete editor
 atvvctl layout reset editor
+atvvctl layout reset editor --preset omp
+atvvctl layout preset list
+atvvctl layout preset show omp
+atvvctl layout preset apply mpv
+atvvctl layout preset apply omp --as agent --activate
 atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
@@ -216,7 +246,8 @@ atvvctl capture --timeout 30    # one press; prints the logical button and slot
 ```
 
 `atvvctl layout use` sends `SetLayout`. `layout new` and `layout rename` do not
-switch the active layout. `layout delete` refuses the active layout, and
+switch the active layout. `layout preset apply` also stays inactive unless
+`--activate` is passed. `layout delete` refuses the active layout, and
 `layout delete`, `layout rename`, and `layout reset` refuse `default`. When the
 active layout is `default`, `config set --button` refuses and points at
 `atvvctl layout new <id> --from default`; pass `--layout <id>` to edit another

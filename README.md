@@ -35,8 +35,9 @@ Implemented:
   exercises the whole path without hardware.
 - `atvv-config`: the single `daemon.toml` schema parser, the versioned JSON
   configuration document, per-button action validation, gesture overrides,
-  and the `exec:` policy. Live changes are applied through `atvvctl config`
-  or the D-Bus `SetConfig` method.
+  the `exec:` policy, and named layouts with app-verified presets (mpv,
+  LibreOffice Impress/WPS Presentation, omp). Live changes are applied through
+  `atvvctl config` or the D-Bus `SetConfig` method.
 - `atvv-bluez`: BlueZ GATT transport (`bluer`), adapter/device selection,
   `AcquireNotify` with a `StartNotify` fallback, a pairing agent, and
   reconnect handling.
@@ -47,12 +48,14 @@ Implemented:
 - `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
   simulation, an audio-source smoke test, the fake input remote, plus
   `status`, `contract`, `mic start|stop|toggle`, `reload`, `config
-  get|set`, `capture`, `map test`, `pair`, `record`, `monitor`, and `doctor`.
+  get|set`, `capture`, `map test`, `layout list|show|use|preset`, `pair`,
+  `record`, `monitor`, and `doctor`.
 - `atvv-mcp`: stdio MCP server with `status`, `contract`, `voice_start`,
   `voice_stop`, `voice_toggle`, `list_devices`, and `reload`.
 - `atvv-gui` / `atvv-config`: GTK4 + libadwaita configuration app with a
-  clickable remote diagram, per-slot action editor, keyboard and remote key
-  learning, recording-key output selection, test mode, and a script policy.
+  clickable remote diagram, per-slot action editor, a layout manager with
+  app-verified presets, keyboard and remote key learning, recording-key
+  output selection, test mode, and a script policy.
   The interface follows the desktop locale: English, or Simplified Chinese
   for `zh*` locales. It is a D-Bus client only; see [`docs/gui.md`](docs/gui.md).
 

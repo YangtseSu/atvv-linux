@@ -12,8 +12,9 @@ use std::time::{Duration, Instant};
 
 use atvv_audio::{AudioSource, AudioSourceConfig};
 use atvv_config::{
-    ConfigDocument, DEFAULT_LAYOUT, LayoutDocument, VinputMode, layout_id_is_reserved,
-    layout_id_is_valid, parse_checked_action,
+    ConfigDocument, DEFAULT_LAYOUT, LAYOUT_PRESETS, LayoutDocument, VinputMode,
+    layout_id_is_reserved, layout_id_is_valid, layout_preset, parse_checked_action, slug_layout_id,
+    unique_layout_id,
 };
 use atvv_daemon::{Client, ContractView};
 use atvv_input::{
@@ -224,6 +225,47 @@ enum LayoutCommand {
     Reset {
         /// Layout id.
         id: String,
+        /// Replace the layout with a built-in preset instead of clearing it.
+        #[arg(long)]
+        preset: Option<String>,
+    },
+    /// List, inspect, or apply built-in app presets.
+    Preset {
+        #[command(subcommand)]
+        command: PresetCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum PresetCommand {
+    /// List the built-in presets.
+    List {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print one preset's slots and verification target.
+    Show {
+        /// Preset id.
+        preset: String,
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a user layout from a preset; the active layout stays unchanged
+    /// unless `--activate` is given.
+    Apply {
+        /// Preset id (`mpv`, `slides`, or `omp`).
+        preset: String,
+        /// New layout id; defaults to the preset id with a `-layout` suffix.
+        #[arg(long = "as")]
+        as_id: Option<String>,
+        /// Display name; defaults to the preset display name.
+        #[arg(long)]
+        name: Option<String>,
+        /// Switch to the new layout after creating it.
+        #[arg(long)]
+        activate: bool,
     },
 }
 
@@ -502,9 +544,9 @@ fn profile_for(document: &ConfigDocument) -> Result<atvv_protocol::profile::Devi
 }
 
 fn layout(command: LayoutCommand) -> Result<(), String> {
-    let client = daemon_client()?;
     match command {
         LayoutCommand::List { json } => {
+            let client = daemon_client()?;
             let document = client
                 .config()
                 .map_err(|error| format!("cannot read the configuration: {error}"))?;
@@ -543,6 +585,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             Ok(())
         }
         LayoutCommand::Show { id, json } => {
+            let client = daemon_client()?;
             let document = client
                 .config()
                 .map_err(|error| format!("cannot read the configuration: {error}"))?;
@@ -635,6 +678,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             Ok(())
         }
         LayoutCommand::Use { id } => {
+            let client = daemon_client()?;
             client
                 .set_layout(&id)
                 .map_err(|error| format!("cannot switch layouts: {error}"))?;
@@ -647,6 +691,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             description,
             from,
         } => {
+            let client = daemon_client()?;
             let mut document = client
                 .config()
                 .map_err(|error| format!("cannot read the configuration: {error}"))?;
@@ -695,6 +740,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             name,
             description,
         } => {
+            let client = daemon_client()?;
             if id == DEFAULT_LAYOUT {
                 return Err(
                     "layout \"default\" is the profile template and cannot be renamed".to_string(),
@@ -725,6 +771,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             Ok(())
         }
         LayoutCommand::Delete { id } => {
+            let client = daemon_client()?;
             if id == DEFAULT_LAYOUT {
                 return Err(
                     "layout \"default\" is the profile template and cannot be deleted".to_string(),
@@ -747,7 +794,8 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             println!("deleted layout {id}");
             Ok(())
         }
-        LayoutCommand::Reset { id } => {
+        LayoutCommand::Reset { id, preset } => {
+            let client = daemon_client()?;
             if id == DEFAULT_LAYOUT {
                 return Err(
                     "layout \"default\" is the profile template and cannot be reset".to_string(),
@@ -756,6 +804,19 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             let mut document = client
                 .config()
                 .map_err(|error| format!("cannot read the configuration: {error}"))?;
+            if let Some(preset_id) = preset {
+                let selected = layout_preset(&preset_id)
+                    .ok_or_else(|| format!("unknown preset {preset_id:?}"))?;
+                let profile = profile_for(&document)?;
+                selected
+                    .reset_to(&mut document, &id, &profile)
+                    .map_err(|error| format!("cannot reset the layout: {error}"))?;
+                client
+                    .set_config(&document)
+                    .map_err(|error| format!("cannot reset the layout: {error}"))?;
+                println!("reset layout {id} to preset {preset_id}");
+                return Ok(());
+            }
             {
                 let layout = document
                     .layouts
@@ -770,7 +831,130 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             println!("reset layout {id}");
             Ok(())
         }
+        LayoutCommand::Preset { command } => preset(command),
     }
+}
+
+fn preset(command: PresetCommand) -> Result<(), String> {
+    match command {
+        PresetCommand::List { json } => list_presets(json),
+        PresetCommand::Show { preset, json } => show_preset(&preset, json),
+        PresetCommand::Apply {
+            preset,
+            as_id,
+            name,
+            activate,
+        } => apply_preset(&preset, as_id.as_deref(), name.as_deref(), activate),
+    }
+}
+
+fn list_presets(json: bool) -> Result<(), String> {
+    if json {
+        let entries: Vec<_> = LAYOUT_PRESETS
+            .iter()
+            .map(|preset| {
+                serde_json::json!({
+                    "id": preset.id,
+                    "name": preset.name,
+                    "description": preset.description,
+                    "verified_with": preset.verified_with,
+                    "long_press_ms": preset.long_press_ms,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?
+        );
+    } else {
+        for preset in &LAYOUT_PRESETS {
+            println!(
+                "{:<8} {:<10} {:<46} {}",
+                preset.id, preset.name, preset.verified_with, preset.description
+            );
+        }
+    }
+    Ok(())
+}
+
+fn show_preset(id: &str, json: bool) -> Result<(), String> {
+    let preset = layout_preset(id)
+        .ok_or_else(|| format!("unknown preset {id:?}; run `atvvctl layout preset list`"))?;
+    if json {
+        let slots: serde_json::Map<String, serde_json::Value> = preset
+            .slots
+            .iter()
+            .map(|(button, action)| {
+                (
+                    (*button).to_string(),
+                    serde_json::json!({
+                        "single": action,
+                        "double": serde_json::Value::Null,
+                        "long": serde_json::Value::Null,
+                    }),
+                )
+            })
+            .collect();
+        let value = serde_json::json!({
+            "id": preset.id,
+            "name": preset.name,
+            "description": preset.description,
+            "verified_with": preset.verified_with,
+            "long_press_ms": preset.long_press_ms,
+            "slots": slots,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
+        );
+    } else {
+        println!("id:            {}", preset.id);
+        println!("name:          {}", preset.name);
+        println!("description:   {}", preset.description);
+        println!("verified_with: {}", preset.verified_with);
+        println!("slots:");
+        for (button, action) in preset.slots {
+            println!("  {button:<12} single={action}");
+        }
+    }
+    Ok(())
+}
+
+fn apply_preset(
+    id: &str,
+    as_id: Option<&str>,
+    name: Option<&str>,
+    activate: bool,
+) -> Result<(), String> {
+    let client = daemon_client()?;
+    let mut document = client
+        .config()
+        .map_err(|error| format!("cannot read the configuration: {error}"))?;
+    let preset = layout_preset(id)
+        .ok_or_else(|| format!("unknown preset {id:?}; run `atvvctl layout preset list`"))?;
+    let layout_id = match as_id {
+        Some(value) => value.to_string(),
+        None => unique_layout_id(
+            &slug_layout_id(preset.name),
+            document.layouts.keys().map(String::as_str),
+        ),
+    };
+    let profile = profile_for(&document)?;
+    preset
+        .apply(&mut document, &layout_id, name, &profile)
+        .map_err(|error| format!("cannot create the layout: {error}"))?;
+    if activate {
+        document.active_layout = layout_id.clone();
+    }
+    client
+        .set_config(&document)
+        .map_err(|error| format!("cannot create the layout: {error}"))?;
+    println!(
+        "created layout {layout_id} from preset {} ({})",
+        preset.id,
+        if activate { "active" } else { "inactive" }
+    );
+    Ok(())
 }
 
 fn config(command: ConfigCommand) -> Result<(), String> {

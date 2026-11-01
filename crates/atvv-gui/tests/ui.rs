@@ -480,11 +480,11 @@ fn window_smoke() {
     window.layout_form_submit().emit_clicked();
     pump(30);
     assert!(!window.layout_form_is_visible());
-    assert_eq!(window.active_layout_id().as_deref(), Some("coding-layout"));
+    assert_eq!(window.active_layout_id().as_deref(), Some("coding"));
     assert_eq!(window.layout_chip_text(), "Coding");
     assert!(!window.template_active());
     assert_eq!(
-        window.document().expect("document").layouts["coding-layout"]
+        window.document().expect("document").layouts["coding"]
             .slot(RemoteButton::Up, Trigger::Single),
         Some("key:KEY_F13")
     );
@@ -501,7 +501,7 @@ fn window_smoke() {
             .title(),
         "Default"
     );
-    assert!(window.layout_manager_row("coding-layout").is_some());
+    assert!(window.layout_manager_row("coding").is_some());
     for action in ["rename", "delete", "reset"] {
         assert!(
             !window
@@ -530,14 +530,14 @@ fn window_smoke() {
     pump(30);
     libadwaita::prelude::ActionRowExt::activate(&window.layout_manager_row("default").unwrap());
     pump(30);
-    assert_eq!(window.active_layout_id().as_deref(), Some("coding-layout"));
+    assert_eq!(window.active_layout_id().as_deref(), Some("coding"));
     window.mark_saved_for_test();
 
     // Rename, duplicate, delete, and reset through the manager.
     window.present_layout_manager();
     pump(30);
     window
-        .layout_manager_action("coding-layout", "rename")
+        .layout_manager_action("coding", "rename")
         .unwrap()
         .emit_clicked();
     pump(30);
@@ -546,11 +546,11 @@ fn window_smoke() {
     window.layout_form_submit().emit_clicked();
     pump(30);
     assert_eq!(
-        window.layout_manager_row("coding-layout").unwrap().title(),
+        window.layout_manager_row("coding").unwrap().title(),
         "Editor"
     );
     window
-        .layout_manager_action("coding-layout", "duplicate")
+        .layout_manager_action("coding", "duplicate")
         .unwrap()
         .emit_clicked();
     pump(30);
@@ -563,12 +563,12 @@ fn window_smoke() {
     assert!(window.layout_manager_row("editor-copy").is_none());
     assert!(
         !window
-            .layout_manager_action("coding-layout", "delete")
+            .layout_manager_action("coding", "delete")
             .unwrap()
             .is_sensitive()
     );
     window
-        .layout_manager_action("coding-layout", "reset")
+        .layout_manager_action("coding", "reset")
         .unwrap()
         .emit_clicked();
     pump(30);
@@ -580,6 +580,67 @@ fn window_smoke() {
         Some("key:KEY_UP")
     );
     assert_eq!(window.layout_chip_text(), "Editor");
+
+    // Preset picker: preview omp and create an inactive layout.
+    window.open_preset_dialog_for_test(None);
+    pump(30);
+    assert!(window.preset_dialog_is_open());
+    window.select_preset_for_test("omp");
+    pump(20);
+    assert_eq!(window.preset_name_row().text(), "omp");
+    assert_eq!(
+        window
+            .preset_preview_row("power")
+            .unwrap()
+            .subtitle()
+            .as_deref(),
+        Some("Alt+R")
+    );
+    assert_eq!(
+        window
+            .preset_preview_row("tv")
+            .unwrap()
+            .subtitle()
+            .as_deref(),
+        Some("Ctrl+O")
+    );
+    window.preset_submit_button().emit_clicked();
+    pump(400);
+    assert_eq!(window.preset_selection(), Some("omp"));
+    window.close_preset_dialog_for_test();
+    pump(50);
+    assert_eq!(window.active_layout_id().as_deref(), Some("coding"));
+    let document = window.document().expect("document");
+    let layout = document.layouts.get("omp-layout").expect("preset layout");
+    assert_eq!(
+        layout.slot(RemoteButton::Power, Trigger::Single),
+        Some("combo:alt+r")
+    );
+    assert_eq!(
+        layout.slot(RemoteButton::Tv, Trigger::Single),
+        Some("combo:ctrl+o")
+    );
+    window.mark_saved_for_test();
+
+    // Reset-to-preset shows the affected layout and the preset preview.
+    window.open_preset_dialog_for_test(Some("coding"));
+    pump(20);
+    assert_eq!(
+        window.preset_warning_text(),
+        "This replaces every slot of “Editor”. The layout keeps its name and description."
+    );
+    window.select_preset_for_test("mpv");
+    pump(10);
+    assert_eq!(
+        window
+            .preset_preview_row("power")
+            .unwrap()
+            .subtitle()
+            .as_deref(),
+        Some("Q")
+    );
+    window.close_preset_dialog_for_test();
+    pump(20);
     window.close_layout_manager();
     pump(400);
 

@@ -57,8 +57,118 @@ pub const MAX_LAYOUTS: usize = 32;
 pub const MAX_LAYOUT_NAME: usize = 40;
 /// Longest layout description in characters.
 pub const MAX_LAYOUT_DESCRIPTION: usize = 120;
-/// Ids that user layouts may not take: the template and the step 18 presets.
-pub const RESERVED_LAYOUT_IDS: [&str; 4] = [DEFAULT_LAYOUT, "media", "coding", "slides"];
+/// Ids that user layouts may not take: the template and the built-in presets.
+pub const RESERVED_LAYOUT_IDS: [&str; 4] = [DEFAULT_LAYOUT, "mpv", "slides", "omp"];
+
+/// One built-in, read-only layout preset.
+///
+/// A preset is a template: applying it creates a user layout and never makes
+/// the preset itself active. Every preset maps all twelve action-mapped
+/// buttons on a single press; no slot is `none`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayoutPreset {
+    /// Stable id; also reserved against user layout ids.
+    pub id: &'static str,
+    /// Display name. App names such as `mpv` and `omp` stay untranslated.
+    pub name: &'static str,
+    /// One sentence shown in the picker.
+    pub description: &'static str,
+    /// Apps and versions the mappings were verified against.
+    pub verified_with: &'static str,
+    /// One action per action-mapped button, in [`RemoteButton::LOGICAL`] order.
+    pub slots: [(&'static str, &'static str); 12],
+    /// Optional long-press timing override.
+    pub long_press_ms: Option<u16>,
+}
+
+/// Media playback with mpv's default key bindings.
+///
+/// Verified against mpv 0.41.0 default `input.conf`: Space pauses, `f` toggles
+/// fullscreen, `m` mutes, the arrows seek, Enter advances the playlist, Esc
+/// leaves fullscreen, and `q` quits.
+pub const MPV_PRESET: LayoutPreset = LayoutPreset {
+    id: "mpv",
+    name: "mpv",
+    description: "Media playback with mpv's default key bindings.",
+    verified_with: "mpv 0.41.0",
+    long_press_ms: None,
+    slots: [
+        ("power", "key:KEY_Q"),
+        ("ok", "key:KEY_SPACE"),
+        ("back", "key:KEY_ESC"),
+        ("up", "key:KEY_UP"),
+        ("down", "key:KEY_DOWN"),
+        ("left", "key:KEY_LEFT"),
+        ("right", "key:KEY_RIGHT"),
+        ("home", "key:KEY_HOME"),
+        ("menu", "key:KEY_M"),
+        ("tv", "key:KEY_F"),
+        ("volume_up", "key:KEY_VOLUMEUP"),
+        ("volume_down", "key:KEY_VOLUMEDOWN"),
+    ],
+};
+
+/// Presentation control shared by LibreOffice Impress and WPS Presentation.
+///
+/// PageUp/PageDown, B (black screen), F5 (start), Esc (end), and Home/End are
+/// the standard presentation keys in both apps.
+pub const SLIDES_PRESET: LayoutPreset = LayoutPreset {
+    id: "slides",
+    name: "Slides",
+    description: "Presentation control for LibreOffice Impress and WPS Presentation.",
+    verified_with: "LibreOffice Impress 26.8.1, WPS Office 12.1.2",
+    long_press_ms: None,
+    slots: [
+        ("power", "key:KEY_END"),
+        ("ok", "key:KEY_SPACE"),
+        ("back", "key:KEY_ESC"),
+        ("up", "key:KEY_PAGEUP"),
+        ("down", "key:KEY_PAGEDOWN"),
+        ("left", "key:KEY_LEFT"),
+        ("right", "key:KEY_RIGHT"),
+        ("home", "key:KEY_HOME"),
+        ("menu", "key:KEY_B"),
+        ("tv", "key:KEY_F5"),
+        ("volume_up", "key:KEY_VOLUMEUP"),
+        ("volume_down", "key:KEY_VOLUMEDOWN"),
+    ],
+};
+
+/// Coding-agent session control with omp's default key bindings.
+///
+/// Verified against omp 18.14.2: Enter submits, Esc interrupts, `Ctrl+R`
+/// searches prompt history, `Ctrl+O` expands tool output, `Shift+Tab` cycles
+/// the thinking level, and `Alt+R` retries the last failed turn.
+pub const OMP_PRESET: LayoutPreset = LayoutPreset {
+    id: "omp",
+    name: "omp",
+    description: "Coding-agent session control with omp's default key bindings.",
+    verified_with: "omp 18.14.2",
+    long_press_ms: None,
+    slots: [
+        ("power", "combo:alt+r"),
+        ("ok", "key:KEY_ENTER"),
+        ("back", "key:KEY_ESC"),
+        ("up", "key:KEY_UP"),
+        ("down", "key:KEY_DOWN"),
+        ("left", "key:KEY_LEFT"),
+        ("right", "key:KEY_RIGHT"),
+        ("home", "combo:ctrl+r"),
+        ("menu", "combo:shift+tab"),
+        ("tv", "combo:ctrl+o"),
+        ("volume_up", "key:KEY_VOLUMEUP"),
+        ("volume_down", "key:KEY_VOLUMEDOWN"),
+    ],
+};
+
+/// The built-in preset catalog, in picker order.
+pub const LAYOUT_PRESETS: [LayoutPreset; 3] = [MPV_PRESET, SLIDES_PRESET, OMP_PRESET];
+
+/// Find a preset by its stable id.
+#[must_use]
+pub fn layout_preset(id: &str) -> Option<&'static LayoutPreset> {
+    LAYOUT_PRESETS.iter().find(|preset| preset.id == id)
+}
 
 /// How the daemon reaches fcitx5-vinput.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -1134,6 +1244,105 @@ impl ConfigDocument {
     }
 }
 
+impl LayoutPreset {
+    /// Build a user layout from this preset.
+    ///
+    /// The layout carries every action-mapped button on its single-press
+    /// slot. Double and long presses keep the profile defaults so the preset
+    /// does not add gesture latency.
+    #[must_use]
+    pub fn layout(&self) -> LayoutDocument {
+        let buttons = self
+            .slots
+            .iter()
+            .map(|(button, action)| {
+                (
+                    (*button).to_string(),
+                    ButtonDocument {
+                        single: Some((*action).to_string()),
+                        double: None,
+                        long: None,
+                    },
+                )
+            })
+            .collect();
+        LayoutDocument {
+            name: self.name.to_string(),
+            description: Some(self.description.to_string()),
+            gesture: self.long_press_ms.map(|long_press_ms| GestureOverrides {
+                long_press_ms: Some(long_press_ms),
+                ..GestureOverrides::default()
+            }),
+            buttons,
+        }
+    }
+
+    /// Create a user layout from this preset without switching to it.
+    ///
+    /// `name` defaults to the preset display name. The document is only
+    /// changed after the result validates against `profile`.
+    pub fn apply(
+        &self,
+        document: &mut ConfigDocument,
+        id: &str,
+        name: Option<&str>,
+        profile: &DeviceProfile,
+    ) -> Result<(), ConfigError> {
+        if !layout_id_is_valid(id) {
+            return Err(ConfigError::LayoutId(id.to_string()));
+        }
+        if layout_id_is_reserved(id) {
+            return Err(ConfigError::LayoutReserved(id.to_string()));
+        }
+        if document.layouts.contains_key(id) {
+            return Err(ConfigError::LayoutExists(id.to_string()));
+        }
+        if document.layouts.len() >= MAX_LAYOUTS {
+            return Err(ConfigError::TooManyLayouts);
+        }
+        let mut next = document.clone();
+        let mut layout = self.layout();
+        if let Some(name) = name {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(ConfigError::LayoutName(id.to_string()));
+            }
+            layout.name = name.to_string();
+        }
+        next.layouts.insert(id.to_string(), layout);
+        next.validate(profile)?;
+        *document = next;
+        Ok(())
+    }
+
+    /// Replace one user layout's slots with this preset.
+    ///
+    /// The layout keeps its name and description; the active layout does not
+    /// change. `default` and unknown ids are rejected.
+    pub fn reset_to(
+        &self,
+        document: &mut ConfigDocument,
+        id: &str,
+        profile: &DeviceProfile,
+    ) -> Result<(), ConfigError> {
+        if id == DEFAULT_LAYOUT {
+            return Err(ConfigError::LayoutReserved(id.to_string()));
+        }
+        let mut next = document.clone();
+        let existing = next
+            .layouts
+            .get(id)
+            .ok_or_else(|| ConfigError::UnknownLayout(id.to_string()))?;
+        let mut replacement = self.layout();
+        replacement.name = existing.name.clone();
+        replacement.description = existing.description.clone();
+        next.layouts.insert(id.to_string(), replacement);
+        next.validate(profile)?;
+        *document = next;
+        Ok(())
+    }
+}
+
 fn layout_to_toml(layout: &LayoutDocument, profile: &DeviceProfile) -> LayoutToml {
     let defaults = ActionMap::defaults();
     let mut buttons = BTreeMap::new();
@@ -1298,6 +1507,8 @@ pub enum ConfigError {
     LayoutId(String),
     #[error("layout id {0:?} is reserved")]
     LayoutReserved(String),
+    #[error("layout {0:?} already exists")]
+    LayoutExists(String),
     #[error("layout {0:?}: the name must be 1-{MAX_LAYOUT_NAME} characters")]
     LayoutName(String),
     #[error("layout {0:?}: the name Default is reserved for the template")]
@@ -1508,9 +1719,9 @@ mod tests {
         assert!(matches!(
             invalid(&|document| {
                 document.layouts.insert(
-                    "media".to_string(),
+                    "mpv".to_string(),
                     LayoutDocument {
-                        name: "Media".to_string(),
+                        name: "MPV".to_string(),
                         ..LayoutDocument::default()
                     },
                 );
@@ -1884,7 +2095,11 @@ mod tests {
         assert!(!layout_id_is_valid("-editor"));
         assert!(!layout_id_is_valid("x".repeat(33).as_str()));
         assert!(layout_id_is_reserved("default"));
-        assert!(layout_id_is_reserved("media"));
+        assert!(layout_id_is_reserved("mpv"));
+        assert!(layout_id_is_reserved("slides"));
+        assert!(layout_id_is_reserved("omp"));
+        assert!(!layout_id_is_reserved("media"));
+        assert!(!layout_id_is_reserved("coding"));
         assert_eq!(slug_layout_id("My Layout!"), "my-layout");
         assert_eq!(slug_layout_id("默认"), "layout");
         assert_eq!(
@@ -1903,5 +2118,190 @@ mod tests {
             unique_layout_name("Default", Vec::<&str>::new().iter().copied()),
             "Default 2"
         );
+    }
+
+    #[test]
+    fn preset_catalog_covers_every_action_button_without_none() {
+        for preset in &LAYOUT_PRESETS {
+            assert!(layout_id_is_valid(preset.id), "{}", preset.id);
+            assert!(layout_id_is_reserved(preset.id), "{}", preset.id);
+            assert!(!preset.name.trim().is_empty());
+            assert!(preset.name.chars().count() <= MAX_LAYOUT_NAME);
+            assert!(!preset.description.trim().is_empty());
+            assert!(preset.description.chars().count() <= MAX_LAYOUT_DESCRIPTION);
+            assert!(!preset.verified_with.trim().is_empty());
+            let mut seen = BTreeSet::new();
+            for (button, raw) in preset.slots {
+                let button = button_by_name(button).unwrap_or_else(|| panic!("unknown {button}"));
+                assert_ne!(button, RemoteButton::Voice);
+                assert!(seen.insert(button), "{}: {button} appears twice", preset.id);
+                let action = parse_checked_action(raw, false)
+                    .unwrap_or_else(|error| panic!("{} {button}: {error}", preset.id));
+                assert_ne!(action, Action::None, "{} {button} maps none", preset.id);
+                assert!(
+                    matches!(action, Action::Key { .. } | Action::Combo { .. }),
+                    "{} {button} must be a key action",
+                    preset.id
+                );
+            }
+            assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
+            for button in RemoteButton::LOGICAL {
+                assert!(seen.contains(&button), "{} misses {button}", preset.id);
+            }
+        }
+    }
+
+    #[test]
+    fn preset_catalog_matches_the_reviewed_snapshot() {
+        let expected = [
+            "[mpv] mpv | Media playback with mpv's default key bindings. | mpv 0.41.0",
+            "  power = key:KEY_Q",
+            "  ok = key:KEY_SPACE",
+            "  back = key:KEY_ESC",
+            "  up = key:KEY_UP",
+            "  down = key:KEY_DOWN",
+            "  left = key:KEY_LEFT",
+            "  right = key:KEY_RIGHT",
+            "  home = key:KEY_HOME",
+            "  menu = key:KEY_M",
+            "  tv = key:KEY_F",
+            "  volume_up = key:KEY_VOLUMEUP",
+            "  volume_down = key:KEY_VOLUMEDOWN",
+            "[slides] Slides | Presentation control for LibreOffice Impress and WPS Presentation. | LibreOffice Impress 26.8.1, WPS Office 12.1.2",
+            "  power = key:KEY_END",
+            "  ok = key:KEY_SPACE",
+            "  back = key:KEY_ESC",
+            "  up = key:KEY_PAGEUP",
+            "  down = key:KEY_PAGEDOWN",
+            "  left = key:KEY_LEFT",
+            "  right = key:KEY_RIGHT",
+            "  home = key:KEY_HOME",
+            "  menu = key:KEY_B",
+            "  tv = key:KEY_F5",
+            "  volume_up = key:KEY_VOLUMEUP",
+            "  volume_down = key:KEY_VOLUMEDOWN",
+            "[omp] omp | Coding-agent session control with omp's default key bindings. | omp 18.14.2",
+            "  power = combo:alt+r",
+            "  ok = key:KEY_ENTER",
+            "  back = key:KEY_ESC",
+            "  up = key:KEY_UP",
+            "  down = key:KEY_DOWN",
+            "  left = key:KEY_LEFT",
+            "  right = key:KEY_RIGHT",
+            "  home = combo:ctrl+r",
+            "  menu = combo:shift+tab",
+            "  tv = combo:ctrl+o",
+            "  volume_up = key:KEY_VOLUMEUP",
+            "  volume_down = key:KEY_VOLUMEDOWN",
+        ]
+        .join("\n")
+            + "\n";
+        let mut actual = String::new();
+        for preset in &LAYOUT_PRESETS {
+            actual.push_str(&format!(
+                "[{}] {} | {} | {}\n",
+                preset.id, preset.name, preset.description, preset.verified_with
+            ));
+            for (button, action) in preset.slots {
+                actual.push_str(&format!("  {button} = {action}\n"));
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn applying_a_preset_creates_an_inactive_valid_layout() {
+        let mut document = defaults();
+        MPV_PRESET
+            .apply(&mut document, "movie", Some("Movie"), &RC003)
+            .unwrap();
+        assert_eq!(document.active_layout, DEFAULT_LAYOUT);
+        let layout = &document.layouts["movie"];
+        assert_eq!(layout.name, "Movie");
+        assert_eq!(layout.description.as_deref(), Some(MPV_PRESET.description));
+        for button in RemoteButton::LOGICAL {
+            assert!(layout.slot(button, Trigger::Single).is_some(), "{button}");
+        }
+        assert_eq!(
+            layout.slot(RemoteButton::Power, Trigger::Single),
+            Some("key:KEY_Q")
+        );
+        assert_eq!(
+            layout.slot(RemoteButton::Ok, Trigger::Single),
+            Some("key:KEY_SPACE")
+        );
+        let config = document.validate(&RC003).unwrap();
+        assert_eq!(config.active_layout, DEFAULT_LAYOUT);
+        assert_eq!(
+            config.layouts["movie"].slot(RemoteButton::Tv, Trigger::Single),
+            Some("key:KEY_F")
+        );
+    }
+
+    #[test]
+    fn preset_apply_rejects_reserved_and_existing_ids() {
+        let mut document = defaults();
+        assert!(matches!(
+            MPV_PRESET.apply(&mut document, "mpv", None, &RC003),
+            Err(ConfigError::LayoutReserved(_))
+        ));
+        assert!(matches!(
+            MPV_PRESET.apply(&mut document, "Default", None, &RC003),
+            Err(ConfigError::LayoutId(_))
+        ));
+        OMP_PRESET
+            .apply(&mut document, "agent", None, &RC003)
+            .unwrap();
+        assert!(matches!(
+            OMP_PRESET.apply(&mut document, "agent", None, &RC003),
+            Err(ConfigError::LayoutExists(_))
+        ));
+        assert_eq!(document.layouts["agent"].name, "omp");
+    }
+
+    #[test]
+    fn preset_reset_replaces_slots_and_keeps_identity() {
+        let mut document = defaults();
+        let mut layout = LayoutDocument {
+            name: "Mine".to_string(),
+            description: Some("keep me".to_string()),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Ok,
+            Trigger::Single,
+            Some("key:KEY_F13".to_string()),
+        );
+        document.layouts.insert("mine".to_string(), layout);
+        document.active_layout = "mine".to_string();
+        SLIDES_PRESET
+            .reset_to(&mut document, "mine", &RC003)
+            .unwrap();
+        let layout = &document.layouts["mine"];
+        assert_eq!(layout.name, "Mine");
+        assert_eq!(layout.description.as_deref(), Some("keep me"));
+        assert_eq!(
+            layout.slot(RemoteButton::Up, Trigger::Single),
+            Some("key:KEY_PAGEUP")
+        );
+        assert_eq!(
+            layout.slot(RemoteButton::Ok, Trigger::Single),
+            Some("key:KEY_SPACE")
+        );
+        assert_eq!(document.active_layout, "mine");
+        document.validate(&RC003).unwrap();
+    }
+
+    #[test]
+    fn preset_reset_rejects_template_and_unknown_layouts() {
+        let mut document = defaults();
+        assert!(matches!(
+            MPV_PRESET.reset_to(&mut document, DEFAULT_LAYOUT, &RC003),
+            Err(ConfigError::LayoutReserved(_))
+        ));
+        assert!(matches!(
+            MPV_PRESET.reset_to(&mut document, "missing", &RC003),
+            Err(ConfigError::UnknownLayout(_))
+        ));
     }
 }

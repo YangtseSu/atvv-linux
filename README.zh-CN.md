@@ -29,8 +29,9 @@ ATVV 源并手动添加声明的触发键；见
   uinput 虚拟键盘，以及为被独占的语音键配置合成触发键/组合键。
   `atvvctl input fake-remote` 无需硬件即可走完整条路径。
 - `atvv-config`：唯一的 `daemon.toml` 模式解析器、带版本号的 JSON 配置文档、
-  按按键校验操作、手势覆盖和 `exec:` 策略。实时改动通过 `atvvctl config` 或
-  D-Bus `SetConfig` 方法应用。
+  按按键校验操作、手势覆盖、`exec:` 策略，以及带应用验证预设（mpv、
+  LibreOffice Impress/WPS 演示、omp）的命名布局。实时改动通过 `atvvctl config`
+  或 D-Bus `SetConfig` 方法应用。
 - `atvv-bluez`：BlueZ GATT 传输（`bluer`）、适配器/设备选择、带 `StartNotify`
   回退的 `AcquireNotify`、配对代理和重连处理。
 - `atvv-daemon` / `atvvd`：`Transport` trait 之后的会话编排、mock 与 BlueZ
@@ -38,14 +39,15 @@ ATVV 源并手动添加声明的触发键；见
   `org.fcitx.Vinput` 模式、输入层，以及 `org.atvv.Daemon` 上的 JSON 视图模型。
 - `atvvctl`：配置文件查看、CAPS 解码、无硬件的 RC003 会话模拟、音频源冒烟测试、
   假输入遥控器，以及 `status`、`contract`、`mic start|stop|toggle`、`reload`、
-  `config get|set`、`capture`、`map test`、`pair`、`record`、`monitor` 和
-  `doctor`。
+  `config get|set`、`capture`、`map test`、`layout list|show|use|preset`、`pair`、
+  `record`、`monitor` 和 `doctor`。
 - `atvv-mcp`：stdio MCP 服务器，提供 `status`、`contract`、`voice_start`、
   `voice_stop`、`voice_toggle`、`list_devices` 和 `reload`。
 - `atvv-gui` / `atvv-config`：GTK4 + libadwaita 配置应用，包含可点击的遥控器
-  示意图、按槽位的操作编辑器、键盘和遥控器按键学习、录音键输出选择、测试模式
-  和脚本策略。界面跟随桌面语言环境：英文，`zh*` 语言环境使用简体中文。它只是
-  D-Bus 客户端；见 [`docs/gui.zh-CN.md`](docs/gui.zh-CN.md)。
+  示意图、按槽位的操作编辑器、带应用验证预设的布局管理器、键盘和遥控器按键学习、
+  录音键输出选择、测试模式和脚本策略。界面跟随桌面语言环境：英文，`zh*` 语言环境
+  使用简体中文。它只是 D-Bus 客户端；见
+  [`docs/gui.zh-CN.md`](docs/gui.zh-CN.md)。
 
 第一个配置文件是小米蓝牙语音遥控器 2 Pro（`miremote-rc003`，ATVV v1.0，
 16 kHz ADPCM，120 字节帧）。2026-10-30 的运行（`C0:5D:39:F8:2D:4C`）验证了

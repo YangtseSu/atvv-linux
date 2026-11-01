@@ -98,12 +98,23 @@ Default active.
 
 User layouts can be created, renamed, duplicated, reset, and deleted from the
 manager. Names are unique case-insensitively and 1–40 characters long;
-`Default` and the preset ids `media`, `coding`, and `slides` are reserved. At
-most 32 user layouts fit. Clicking a manager row switches layouts; the trailing
-menu offers Duplicate, Rename, Delete, and Reset. Default offers Duplicate only,
-and Delete is disabled for the active layout. Rename and **New layout…** use an
-inline name/description form. While the document is dirty the footer shows
-**Revert** and **Apply**.
+`Default` and the preset ids `mpv`, `slides`, and `omp` are reserved. At most
+32 user layouts fit. Clicking a manager row switches layouts; the trailing
+menu offers Duplicate, Rename, Delete, Reset, and Reset to preset. Default
+offers Duplicate only, and Delete is disabled for the active layout. Rename
+and **New layout…** use an inline name/description form. While the document is
+dirty the footer shows **Revert** and **Apply**.
+
+**New from preset…** opens the built-in catalog: mpv, Slides (LibreOffice
+Impress and WPS Presentation), and omp, each with the app version it was
+verified against. Selecting a preset previews all twelve button actions and
+pre-fills a unique name. **Create** stages an inactive user layout; the
+current layout stays active and the document stays dirty until **Apply** and
+then **Use**. **Reset to preset…** in a user layout's menu opens the same
+picker, names the affected layout, and asks for confirmation before replacing
+its slots; the layout keeps its name and description. Default does not offer
+reset, and preset rows are never edited or deleted. ATVV does not detect the
+foreground app or switch layouts automatically.
 
 Switching is blocked while the document is dirty: apply or revert first.
 Switching calls `SetLayout`, applies the map and gesture timing live, and keeps

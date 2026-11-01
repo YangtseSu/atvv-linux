@@ -7,7 +7,7 @@ Updated: 2026-11-01
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` under `xvfb-run` → 222 passed, 8 ignored
+- Tests: `cargo test --workspace` under `xvfb-run` → 230 passed, 8 ignored
   tests (four kernel-uinput input tests, the real RC003 pointer test, one
   daemon live test, the real-device GUI test, and a locale-detection test;
   the kernel tests pass with `/dev/uinput` access, the pointer test also needs
@@ -38,8 +38,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   design artifact, not shipped code. The device popover and per-device maps
   preview step 21; the second remote is illustrative. It also contains the
   decided step 17 layout UI: header layout chip, layout popover, manager
-  dialog, template Default, and the manager's Apply/Revert footer. Step 17
-  implementation is still pending, and the board has no layout chip yet.
+  dialog, template Default, and the manager's Apply/Revert footer. Steps 17
+  and 18 are implemented; the board has the layout chip. The preset dialog is
+  not part of the HTML reference.
 
 ## Completed
 
@@ -280,7 +281,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `active_layout` and `[layouts.<id>]` records with raw slots and gesture
   overrides. `default` is synthesized, never stored, and is a template: GUI
   slot edits are staged and Apply saves them as a new user layout. The v1 flat
-  map migrates to `custom`; `default`, `media`, `coding`, and `slides` are
+  map migrates to `custom`; `default`, `mpv`, `slides`, and `omp` are
   reserved; limits are 32 layouts, 40-character names, and 120-character
   descriptions. The daemon exposes `SetLayout`/`LayoutChanged`, applies the
   active layout live with runtime rollback, and reports `StatusView.layout`.
@@ -293,6 +294,19 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `layout use default` the next press emitted `KEY_UP` (code 103) without a
   daemon restart; `layout.id=editor` survived a restart. Docs and screenshots
   updated in English and Chinese. See `docs/plans/17-layout-profiles.md`.
+- **18 layout presets (complete and verified)**: `atvv-config` carries a
+  static `LayoutPreset` catalog (`mpv`, `slides`, `omp`) with verified app
+  versions and all twelve single-press slots; no `none`, `exec:`, or
+  `dictation:`. Preset ids are reserved; applying creates an inactive user
+  layout and reset keeps the layout's name and description. CLI
+  `layout preset list|show|apply` and `layout reset <id> --preset <preset>`;
+  GUI **New from preset…** with a slot preview and **Reset to preset…** with
+  confirmation; English and Chinese strings. Recorded runs: mpv 0.41.0
+  (Space/`f`/Esc/`m`/seek/Home), Impress 26.8.1 and WPS 12.1.2 (F5,
+  PageUp/PageDown, arrows, Home/End, B black screen, Esc), omp 18.14.2
+  (Enter, Esc, Ctrl+R, Shift+Tab, Alt+R retry). See
+  `docs/plans/18-layout-presets.md` and
+  `docs/decisions/0010-app-verified-presets.md`.
 - **12 provider contract (complete and verified)**: `StatusView.contract` is
   the single source of truth (version, profile, source, media class, format,
   declared keys, active key, input/keyboard readiness, D-Bus/MCP endpoints,
@@ -376,10 +390,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and #495 are drafts. See `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **18 layout presets (planned)**: ship static `media`, `coding`, and
-  `slides` templates that create editable user layouts; presets never become
-  live state and never contain `exec:`. Depends on 17; see
-  `docs/plans/18-layout-presets.md`.
 - **21 multi-device switching (planned)**: one active device at a time, a
   known-device registry, `SelectDevice`/`GetDevices`/`DeviceChanged`, and
   per-device layouts. The step 15 reference previews the device chip/popover.
@@ -712,19 +722,23 @@ the real RC003; see `docs/plans/22-pointer-actions.md`. This closes the
 keyboard-only action limitation; raw `BTN_*` is intentionally rejected in
 favor of the pointer editor.
 
-The next step is **step 18 (layout presets)**: ship `media`, `coding`, and
-`slides` templates that create editable user layouts. The layout selector UI
-is implemented from `docs/plans/15-mapping-board.html`; the board has the
-header layout chip, popover, and manager. Step 21's device popover and
-per-device maps also preview there. B01 (recording-key press/release actions)
-is backlog and does not block step 18.
+**Step 18 (layout presets) is complete and verified.** The built-in catalog
+is `mpv`, `slides` (Impress/WPS), and `omp`; applying one creates an inactive
+user layout, and reset keeps the layout's name and description. Real-app runs
+are recorded in `docs/plans/18-layout-presets.md`; see ADR 0010.
+
+The next scheduled step is **step 21 (multi-device)**: a single-active
+known-device registry, `SelectDevice`/`GetDevices`/`DeviceChanged`, and
+per-device layouts. The board and device chip already preview the UI in
+`docs/plans/15-mapping-board.html`. B01 (recording-key press/release actions)
+is backlog and does not block step 21.
 
 **Step 10 vinput-zero-config is blocked** on upstream review/merge: ATVV is
 the provider and vinput is the consumer. Issues #491 and #492 are open; PR
 #493 is ready, PRs #494 and #495 are drafts. `vinput = "trigger"` stays the
 default; `vinput = "dbus"` is an explicit fallback.
 
-Immediate action: start step 18. In parallel, wait for upstream review on PR
+Immediate action: start step 21. In parallel, wait for upstream review on PR
 #493; after it merges, rebase PR #494 onto `main`, then PR #495, rebuild
 vinput, and record the real auto-bind acceptance.
 
@@ -762,6 +776,10 @@ cargo run -q -p atvv-cli -- capture --timeout 10
 cargo run -q -p atvv-cli -- map test --button up --trigger single
 cargo run -q -p atvv-cli -- map test --action "combo:ctrl+alt+v"
 cargo run -q -p atvv-cli -- map test --action "pointer:click:left"
+cargo run -q -p atvv-cli -- layout preset list
+cargo run -q -p atvv-cli -- layout preset show omp
+cargo run -q -p atvv-cli -- layout preset apply omp --as agent --activate
+cargo run -q -p atvv-cli -- layout reset agent --preset slides
 cargo run -q -p atvv-cli -- doctor
 systemctl --user stop atvvd
 cargo test -p atvv-input --test real_pointer -- --ignored --nocapture

@@ -66,8 +66,8 @@ ATVV 麦克风和 vinput 触发。
 在映射板上编辑它后点击“应用”，会把更改另存为新的用户布局，模板本身保持不变。
 
 布局必须有名称（不区分大小写地唯一）、可选描述、可选的按键覆盖和可选手势覆盖。
-布局 id 匹配 `[a-z0-9][a-z0-9_-]{0,31}`；`default` 以及预设 id `media`、`coding`、
-`slides` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
+布局 id 匹配 `[a-z0-9][a-z0-9_-]{0,31}`；`default` 以及预设 id `mpv`、`slides`、
+`omp` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
 
 全局字段（`profile`、`device`、`adapter`、`gain_db`、`input`、`vinput`、
 `trigger_key`、`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、设备或
@@ -75,6 +75,28 @@ ATVV 麦克风和 vinput 触发。
 
 手势覆盖作用于整个活动布局，因此切换布局可能改变双击/长按行为。
 `atvvctl layout show` 会打印实际生效的时序。
+
+### 预设
+
+三个内置预设是用户布局的只读模板：
+
+| id | 名称 | 验证版本 | 用途 |
+|---|---|---|---|
+| `mpv` | mpv | mpv 0.41.0 | Space 暂停，`f` 切换全屏，方向键跳转，`m` 静音，`q` 退出 |
+| `slides` | Slides | LibreOffice Impress 26.8.1、WPS Office 12.1.2 | PageUp/PageDown 翻页，B 黑屏，F5 开始放映，Esc 结束 |
+| `omp` | omp | omp 18.14.2 | Enter 提交，Esc 中断，Ctrl+R 搜索历史，Ctrl+O 展开工具输出，Shift+Tab 切换思考等级，Alt+R 重试 |
+
+每个预设都在单次按下槽位映射全部十二个可操作按键，不含 `none`、`exec:` 或
+`dictation:`。双击和长按保持设备配置文件默认值。映射按各应用的默认键位验证；
+应用内自定义（mpv 的 `input.conf`、omp 的 `~/.omp/agent/keybindings.yml`、omp 的
+Vim 模式）可能改变这些按键。
+
+预设不是活动状态。应用预设会创建一个用户布局；除非传入 `--activate`，活动布局
+保持不变，`default` 永远不会被修改。预设 id 是保留 id，因此用默认名称应用 `mpv`
+会创建 id 为 `mpv-layout` 的布局。用
+`layout reset <id> --preset <预设>` 把用户布局重置为预设，布局名称和描述保持不变。
+GUI 通过“从预设新建…”和“重置为预设…”提供同一目录。ATVV 不会检测前台应用或自动
+切换布局；生成的布局可以像其他布局一样编辑。
 
 ### 迁移
 
@@ -177,6 +199,11 @@ atvvctl layout new editor --name Editor --from default
 atvvctl layout rename editor "Editor layout"
 atvvctl layout delete editor
 atvvctl layout reset editor
+atvvctl layout reset editor --preset omp
+atvvctl layout preset list
+atvvctl layout preset show omp
+atvvctl layout preset apply mpv
+atvvctl layout preset apply omp --as agent --activate
 atvvctl config set --layout editor --button up --trigger single --action key:KEY_F13
 atvvctl config set --button up --trigger single --action key:KEY_F13
 atvvctl config set --button ok --trigger long --action combo:ctrl+alt+v
@@ -195,9 +222,10 @@ atvvctl capture --timeout 30    # 一次按下；打印逻辑按键和槽位
 ```
 
 `atvvctl layout use` 发送 `SetLayout`。`layout new` 和 `layout rename` 不会切换
-活动布局。`layout delete` 拒绝活动布局，`layout delete`、`layout rename` 和
-`layout reset` 拒绝 `default`。活动布局为 `default` 时，`config set --button`
-会拒绝并提示使用 `atvvctl layout new <id> --from default`；使用 `--layout <id>`
+活动布局；`layout preset apply` 除非传入 `--activate`，也不会切换。`layout delete`
+拒绝活动布局，`layout delete`、`layout rename` 和 `layout reset` 拒绝 `default`。
+活动布局为 `default` 时，`config set --button` 会拒绝并提示使用
+`atvvctl layout new <id> --from default`；使用 `--layout <id>`
 可编辑其他用户布局。
 
 `atvvctl map test` 默认解析活动布局，也可用 `--layout <id>` 或单个操作字符串。

@@ -11,7 +11,9 @@ use std::collections::BTreeMap;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
-use atvv_config::{ConfigDocument, LayoutSummary, unique_layout_name};
+use atvv_config::{
+    ConfigDocument, LAYOUT_PRESETS, LayoutPreset, LayoutSummary, unique_layout_name,
+};
 use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
 use gtk::glib::variant::ToVariant;
@@ -609,6 +611,7 @@ fn layout_manager_row(
         ("rename", "Rename"),
         ("delete", "Delete"),
         ("reset", "Reset"),
+        ("preset-reset", "Reset to preset…"),
     ] {
         let button = gtk::Button::with_label(tr(label));
         button.add_css_class("flat");
@@ -647,6 +650,13 @@ enum LayoutFormMode {
     New,
     Rename,
     Save,
+}
+
+/// Which action the preset dialog performs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PresetMode {
+    New,
+    Reset,
 }
 
 #[derive(Debug, Clone)]
@@ -688,11 +698,26 @@ pub struct AppWindow {
     layout_form_submit: gtk::Button,
     layout_form_cancel: gtk::Button,
     layout_manager_new: gtk::Button,
+    layout_manager_preset_new: gtk::Button,
     layout_manager_apply: gtk::Button,
     layout_manager_revert: gtk::Button,
     layout_manager_close: gtk::Button,
     layout_form_mode: Cell<LayoutFormMode>,
     layout_form_target: RefCell<Option<String>>,
+    preset_dialog: adw::Dialog,
+    preset_dialog_title: adw::WindowTitle,
+    preset_list: gtk::ListBox,
+    preset_rows: RefCell<BTreeMap<&'static str, adw::ActionRow>>,
+    preset_preview_rows: RefCell<BTreeMap<&'static str, adw::ActionRow>>,
+    preset_name_row: adw::EntryRow,
+    preset_name_list: gtk::ListBox,
+    preset_warning: gtk::Label,
+    preset_error: gtk::Label,
+    preset_submit: gtk::Button,
+    preset_cancel: gtk::Button,
+    preset_mode: Cell<PresetMode>,
+    preset_target: RefCell<Option<String>>,
+    preset_selected: Cell<Option<&'static LayoutPreset>>,
     this: RefCell<Weak<AppWindow>>,
     board: MappingBoard,
     board_scroll: gtk::ScrolledWindow,
@@ -938,6 +963,8 @@ impl AppWindow {
         layout_manager_footer.set_margin_end(12);
         let layout_manager_new = gtk::Button::with_label(tr("New layout…"));
         layout_manager_new.add_css_class("flat");
+        let layout_manager_preset_new = gtk::Button::with_label(tr("New from preset…"));
+        layout_manager_preset_new.add_css_class("flat");
         let footer_spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer_spacer.set_hexpand(true);
         let layout_manager_revert = gtk::Button::with_label(tr("Revert"));
@@ -949,6 +976,7 @@ impl AppWindow {
         let layout_manager_close = gtk::Button::with_label(tr("Close"));
         layout_manager_close.add_css_class("flat");
         layout_manager_footer.append(&layout_manager_new);
+        layout_manager_footer.append(&layout_manager_preset_new);
         layout_manager_footer.append(&footer_spacer);
         layout_manager_footer.append(&layout_manager_revert);
         layout_manager_footer.append(&layout_manager_apply);
@@ -958,6 +986,101 @@ impl AppWindow {
         layout_dialog.set_content_width(520);
         layout_dialog.set_content_height(560);
         layout_dialog.set_child(Some(&layout_dialog_toolbar));
+
+        // Preset dialog: pick a built-in template, preview every slot, then
+        // create a user layout or replace one.
+        let preset_dialog_title = adw::WindowTitle::new(tr("New from preset"), "");
+        let preset_header = adw::HeaderBar::new();
+        preset_header.set_title_widget(Some(&preset_dialog_title));
+        let preset_list = gtk::ListBox::new();
+        preset_list.add_css_class("boxed-list");
+        preset_list.set_selection_mode(gtk::SelectionMode::Single);
+        let mut preset_rows = BTreeMap::new();
+        for preset in &LAYOUT_PRESETS {
+            let row = adw::ActionRow::builder()
+                .title(tr(preset.name))
+                .subtitle(format!(
+                    "{} · {}",
+                    tr(preset.description),
+                    preset.verified_with
+                ))
+                .activatable(true)
+                .build();
+            row.set_widget_name(&format!("preset-row-{}", preset.id));
+            preset_list.append(&row);
+            preset_rows.insert(preset.id, row);
+        }
+        let preset_preview = gtk::ListBox::new();
+        preset_preview.add_css_class("boxed-list");
+        preset_preview.set_selection_mode(gtk::SelectionMode::None);
+        let mut preset_preview_rows = BTreeMap::new();
+        for button in RemoteButton::LOGICAL {
+            let row = adw::ActionRow::builder()
+                .title(button_label(button))
+                .build();
+            row.set_widget_name(&format!("preset-preview-{}", button.name()));
+            preset_preview.append(&row);
+            preset_preview_rows.insert(button.name(), row);
+        }
+        let preset_preview_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .min_content_height(220)
+            .vexpand(true)
+            .child(&preset_preview)
+            .build();
+        let preset_preview_title = gtk::Label::new(Some(tr("Slots")));
+        preset_preview_title.add_css_class("heading");
+        preset_preview_title.set_xalign(0.0);
+        let preset_name_row = adw::EntryRow::builder().title(tr("Name")).build();
+        let preset_name_list = gtk::ListBox::new();
+        preset_name_list.add_css_class("boxed-list");
+        preset_name_list.set_selection_mode(gtk::SelectionMode::None);
+        preset_name_list.append(&preset_name_row);
+        let preset_warning = gtk::Label::new(None);
+        preset_warning.add_css_class("dim-label");
+        preset_warning.add_css_class("caption");
+        preset_warning.set_xalign(0.0);
+        preset_warning.set_wrap(true);
+        preset_warning.set_visible(false);
+        let preset_error = gtk::Label::new(None);
+        preset_error.add_css_class("error");
+        preset_error.set_xalign(0.0);
+        preset_error.set_wrap(true);
+        preset_error.set_visible(false);
+        let preset_body = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        preset_body.set_margin_top(18);
+        preset_body.set_margin_bottom(18);
+        preset_body.set_margin_start(18);
+        preset_body.set_margin_end(18);
+        preset_body.append(&preset_list);
+        preset_body.append(&preset_preview_title);
+        preset_body.append(&preset_preview_scroll);
+        preset_body.append(&preset_name_list);
+        preset_body.append(&preset_warning);
+        preset_body.append(&preset_error);
+        let preset_toolbar = adw::ToolbarView::new();
+        preset_toolbar.add_top_bar(&preset_header);
+        preset_toolbar.set_content(Some(&preset_body));
+        let preset_cancel = gtk::Button::with_label(tr("Cancel"));
+        preset_cancel.add_css_class("flat");
+        let preset_submit = gtk::Button::with_label(tr("Create"));
+        preset_submit.add_css_class("suggested-action");
+        let preset_footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        preset_footer.set_margin_top(8);
+        preset_footer.set_margin_bottom(8);
+        preset_footer.set_margin_start(12);
+        preset_footer.set_margin_end(12);
+        let preset_footer_spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        preset_footer_spacer.set_hexpand(true);
+        preset_footer.append(&preset_cancel);
+        preset_footer.append(&preset_footer_spacer);
+        preset_footer.append(&preset_submit);
+        preset_toolbar.add_bottom_bar(&preset_footer);
+        let preset_dialog = adw::Dialog::new();
+        preset_dialog.set_content_width(560);
+        preset_dialog.set_content_height(620);
+        preset_dialog.set_child(Some(&preset_toolbar));
 
         let unavailable = adw::StatusPage::builder()
             .icon_name("network-offline-symbolic")
@@ -1031,11 +1154,26 @@ impl AppWindow {
             layout_form_submit,
             layout_form_cancel,
             layout_manager_new,
+            layout_manager_preset_new,
             layout_manager_apply,
             layout_manager_revert,
             layout_manager_close,
             layout_form_mode: Cell::new(LayoutFormMode::New),
             layout_form_target: RefCell::new(None),
+            preset_dialog,
+            preset_dialog_title,
+            preset_list,
+            preset_rows: RefCell::new(preset_rows),
+            preset_preview_rows: RefCell::new(preset_preview_rows),
+            preset_name_row,
+            preset_name_list,
+            preset_warning,
+            preset_error,
+            preset_submit,
+            preset_cancel,
+            preset_mode: Cell::new(PresetMode::New),
+            preset_target: RefCell::new(None),
+            preset_selected: Cell::new(None),
             this: RefCell::new(Weak::new()),
             board,
             board_scroll,
@@ -1110,6 +1248,29 @@ impl AppWindow {
         ui.layout_manager_new
             .connect_clicked(move |_| this.show_layout_form(LayoutFormMode::New, None));
         let this = Rc::clone(ui);
+        ui.layout_manager_preset_new
+            .connect_clicked(move |_| this.open_preset_dialog(PresetMode::New, None));
+        let this = Rc::clone(ui);
+        ui.preset_cancel.connect_clicked(move |_| {
+            this.preset_dialog.force_close();
+        });
+        let this = Rc::clone(ui);
+        ui.preset_submit
+            .connect_clicked(move |_| this.submit_preset());
+        let this = Rc::clone(ui);
+        ui.preset_list.connect_row_selected(move |_, row| {
+            let Some(row) = row else {
+                return;
+            };
+            let name = row.widget_name();
+            let Some(id) = name.strip_prefix("preset-row-") else {
+                return;
+            };
+            if let Some(preset) = atvv_config::layout_preset(id) {
+                this.select_preset(preset);
+            }
+        });
+        let this = Rc::clone(ui);
         ui.layout_form_cancel
             .connect_clicked(move |_| this.hide_layout_form());
         let this = Rc::clone(ui);
@@ -1132,6 +1293,7 @@ impl AppWindow {
             "layout-rename",
             "layout-delete",
             "layout-reset",
+            "layout-preset-reset",
         ] {
             let action = gio::SimpleAction::new(name, Some(glib::VariantTy::STRING));
             let this = Rc::clone(ui);
@@ -1148,6 +1310,9 @@ impl AppWindow {
                     }
                     "layout-delete" => this.delete_layout(id),
                     "layout-reset" => this.reset_layout(id),
+                    "layout-preset-reset" => {
+                        this.open_preset_dialog(PresetMode::Reset, Some(id.to_string()));
+                    }
                     _ => {}
                 }
             });
@@ -1647,6 +1812,142 @@ impl AppWindow {
     fn open_layout_manager(&self) {
         self.layout_popover.popdown();
         self.layout_dialog.present(Some(&self.window));
+    }
+
+    fn open_preset_dialog(&self, mode: PresetMode, target: Option<String>) {
+        self.preset_mode.set(mode);
+        *self.preset_target.borrow_mut() = target.clone();
+        self.preset_dialog_title.set_title(match mode {
+            PresetMode::New => tr("New from preset"),
+            PresetMode::Reset => tr("Reset to preset"),
+        });
+        self.preset_submit.set_label(match mode {
+            PresetMode::New => tr("Create"),
+            PresetMode::Reset => tr("Reset"),
+        });
+        self.preset_name_row.set_visible(mode == PresetMode::New);
+        self.preset_name_list.set_visible(mode == PresetMode::New);
+        self.preset_warning.set_visible(mode == PresetMode::Reset);
+        self.preset_error.set_visible(false);
+        self.preset_error.set_text("");
+        if mode == PresetMode::Reset {
+            let name = target.as_deref().map_or_else(String::new, |id| {
+                self.model
+                    .borrow()
+                    .as_ref()
+                    .map_or_else(|| id.to_string(), |model| model.layout_name(id))
+            });
+            self.preset_warning.set_text(&tr_args(
+                "This replaces every slot of “{name}”. The layout keeps its name and description.",
+                &[("name", name.as_str())],
+            ));
+        }
+        if let Some(preset) = LAYOUT_PRESETS.first() {
+            self.select_preset(preset);
+            if let Some(row) = self.preset_rows.borrow().get(preset.id) {
+                self.preset_list.select_row(Some(row));
+            }
+        }
+        self.preset_dialog.present(Some(&self.window));
+    }
+
+    fn select_preset(&self, preset: &'static LayoutPreset) {
+        self.preset_selected.set(Some(preset));
+        for (button, action) in preset.slots {
+            if let Some(row) = self.preset_preview_rows.borrow().get(button) {
+                row.set_subtitle(&action_label(Some(action)).text);
+            }
+        }
+        if self.preset_mode.get() == PresetMode::New {
+            let existing: Vec<String> =
+                self.model.borrow().as_ref().map_or_else(Vec::new, |model| {
+                    model
+                        .document
+                        .layouts
+                        .values()
+                        .map(|layout| layout.name.clone())
+                        .collect()
+                });
+            let name = unique_layout_name(tr(preset.name), existing.iter().map(String::as_str));
+            self.preset_name_row.set_text(&name);
+        }
+    }
+
+    fn submit_preset(&self) {
+        let Some(preset) = self.preset_selected.get() else {
+            return;
+        };
+        match self.preset_mode.get() {
+            PresetMode::New => {
+                let name = self.preset_name_row.text().to_string();
+                let result = self
+                    .model
+                    .borrow_mut()
+                    .as_mut()
+                    .ok_or_else(|| tr("no configuration loaded").to_string())
+                    .and_then(|model| model.create_layout_from_preset(preset, &name));
+                match result {
+                    Ok(_) => {
+                        self.preset_dialog.force_close();
+                        self.refresh_all();
+                        self.toast(tr("Layout created"));
+                    }
+                    Err(error) => {
+                        self.preset_error.set_text(&error);
+                        self.preset_error.set_visible(true);
+                    }
+                }
+            }
+            PresetMode::Reset => {
+                let Some(target) = self.preset_target.borrow().clone() else {
+                    return;
+                };
+                let name = self
+                    .model
+                    .borrow()
+                    .as_ref()
+                    .map_or_else(|| target.clone(), |model| model.layout_name(&target));
+                let body = tr_args(
+                    "This replaces every slot of “{name}”. The layout keeps its name and description.",
+                    &[("name", name.as_str())],
+                );
+                let dialog =
+                    adw::AlertDialog::new(Some(tr("Reset to preset?")), Some(body.as_str()));
+                dialog.add_response("cancel", tr("Cancel"));
+                dialog.add_response("reset", tr("Reset"));
+                dialog.set_response_appearance("reset", adw::ResponseAppearance::Destructive);
+                dialog.set_default_response(Some("cancel"));
+                dialog.set_close_response("cancel");
+                let this = self.this.borrow().clone();
+                let preset_id = preset.id;
+                dialog.connect_response(None, move |_, response| {
+                    if response != "reset" {
+                        return;
+                    }
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
+                    let Some(preset) = atvv_config::layout_preset(preset_id) else {
+                        return;
+                    };
+                    let result = this
+                        .model
+                        .borrow_mut()
+                        .as_mut()
+                        .ok_or_else(|| tr("no configuration loaded").to_string())
+                        .and_then(|model| model.reset_layout_to_preset(&target, preset));
+                    match result {
+                        Ok(()) => {
+                            this.preset_dialog.force_close();
+                            this.refresh_all();
+                            this.toast(tr("Layout reset"));
+                        }
+                        Err(error) => this.toast(&error),
+                    }
+                });
+                dialog.present(Some(&self.window));
+            }
+        }
     }
 
     fn hide_layout_form(&self) {
@@ -2421,6 +2722,82 @@ impl AppWindow {
     #[must_use]
     pub fn layout_manager_new_button(&self) -> &gtk::Button {
         &self.layout_manager_new
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn layout_manager_preset_new_button(&self) -> &gtk::Button {
+        &self.layout_manager_preset_new
+    }
+
+    #[doc(hidden)]
+    pub fn open_preset_dialog_for_test(&self, target: Option<&str>) {
+        let mode = if target.is_some() {
+            PresetMode::Reset
+        } else {
+            PresetMode::New
+        };
+        self.open_preset_dialog(mode, target.map(str::to_string));
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_dialog_is_open(&self) -> bool {
+        self.preset_dialog.is_visible()
+    }
+
+    #[doc(hidden)]
+    pub fn close_preset_dialog_for_test(&self) {
+        self.preset_dialog.force_close();
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_row(&self, id: &str) -> Option<adw::ActionRow> {
+        self.preset_rows.borrow().get(id).cloned()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_name_row(&self) -> &adw::EntryRow {
+        &self.preset_name_row
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_preview_row(&self, button: &str) -> Option<adw::ActionRow> {
+        self.preset_preview_rows.borrow().get(button).cloned()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_warning_text(&self) -> String {
+        self.preset_warning.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_error_text(&self) -> String {
+        self.preset_error.text().to_string()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_selection(&self) -> Option<&'static str> {
+        self.preset_selected.get().map(|preset| preset.id)
+    }
+
+    #[doc(hidden)]
+    pub fn select_preset_for_test(&self, id: &str) {
+        if let Some(preset) = atvv_config::layout_preset(id) {
+            self.select_preset(preset);
+        }
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn preset_submit_button(&self) -> &gtk::Button {
+        &self.preset_submit
     }
 
     #[doc(hidden)]

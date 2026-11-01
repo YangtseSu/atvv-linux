@@ -90,8 +90,10 @@ ATVV maps the same idea onto its existing action grammar
   in the public tree; the real implementation lives in a private repository.
 - The public `preset_apps_probe` / `preset_inject_probe` examples show
   presets are oriented toward app-targeted injection.
-- Takeaway: app-targeted presets are not a good fit for ATVV's provider
-  contract; presets must stay explicit and app-neutral.
+- Takeaway: app-targeted *injection* is not a good fit for ATVV's provider
+  contract. The 2026-11-02 decision allows static, user-selected templates
+  verified against named apps; it still forbids detection or automatic
+  switching (ADR 0010).
 
 ### sayall-omarchy
 
@@ -129,8 +131,11 @@ ATVV maps the same idea onto its existing action grammar
 6. **Persistence is versioned and atomic.** Schema v2, migration from v1,
    atomic writes, invalid-file quarantine, and a bounded import path follow
    the mi-ao model without copying it.
-7. **Generic presets.** Presets use `key:`/`combo:`/`none` only. No
-   app-specific actions, no dangerous shortcuts, no automatic `allow_exec`.
+7. **Presets.** Presets use `key:`/`combo:`/`none` only and never enable
+   `allow_exec`. The 2026-10-31 conclusion that preset content must be
+   app-neutral was superseded on 2026-11-02: presets are static templates
+   verified against named apps (ADR 0010). Foreground detection and automatic
+   switching remain out of scope.
 8. **NFC is not part of the core.** No reference project implements the
    RC003 NFC tag. Any use requires an external reader and a separate
    investigation (B02); the daemon must not gain an NFC dependency.
@@ -160,3 +165,18 @@ Unknown until a real tag is measured:
 Linux tooling: `libnfc` with a PN532 or ACR122U reader (`nfc-list`,
 `nfc-mfultralight`, `nfc-ndef`) is the least invasive path; `neard` is an
 alternative D-Bus daemon with a smaller device list. Both are userspace only.
+
+## 5. Preset decision update (2026-11-02)
+
+The generic `media`/`coding`/`slides` draft from 2026-10-31 was not
+shippable: `coding.home = combo:super+l` is GNOME's default screen lock, and
+the other chords had no verifiable target. ADR 0010 replaces it with three
+static, app-verified presets (`mpv`, `slides`, `omp`). Each preset maps all
+twelve action buttons, contains no `exec:`, `dictation:`, or `none`, and is
+verified against the app version recorded in its description. The provider
+still does not detect the foreground app or switch layouts automatically;
+the user chooses a template and edits the resulting user layout.
+
+Recorded app runs: mpv 0.41.0 (pause, fullscreen, mute, seek), LibreOffice
+Impress 26.8.1 and WPS Presentation 12.1.2 (F5, navigation, black screen,
+Esc), omp 18.14.2 (Enter, Esc, Ctrl+R, Shift+Tab, Alt+R retry).

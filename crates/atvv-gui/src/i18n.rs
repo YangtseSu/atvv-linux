@@ -392,6 +392,23 @@ fn zh(text: &str) -> Option<&'static str> {
         "Layout duplicated" => "已复制布局",
         "no layout selected" => "未选择布局",
         "Actions for {name}" => "{name}的操作",
+        "New from preset…" => "从预设新建…",
+        "New from preset" => "从预设新建",
+        "Reset to preset…" => "重置为预设…",
+        "Reset to preset" => "重置为预设",
+        "Reset to preset?" => "重置为预设？",
+        "Slots" => "按键",
+        "This replaces every slot of “{name}”. The layout keeps its name and description." => {
+            "这会替换“{name}”的所有按键。布局名称和描述保持不变。"
+        }
+        "Media playback with mpv's default key bindings." => "使用 mpv 默认按键的媒体播放。",
+        "Presentation control for LibreOffice Impress and WPS Presentation." => {
+            "LibreOffice Impress 与 WPS 演示的放映控制。"
+        }
+        "Coding-agent session control with omp's default key bindings." => {
+            "使用 omp 默认按键的编码代理会话控制。"
+        }
+        "Slides" => "演示",
         "Layout: {name}" => "布局：{name}",
         "Switch layout · {name}" => "切换布局 · {name}",
         "Cannot switch layouts: {error}" => "无法切换布局：{error}",
