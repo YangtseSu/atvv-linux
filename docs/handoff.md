@@ -467,12 +467,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **ATVV spec conformance gaps**: `MIC_OPEN_ERROR(0x0F80)` currently moves a
-  `Streaming` session to `Ready`; the spec says it must not interrupt an
-  ongoing PTT/HTT stream. Dynamic-bandwidth `AUDIO_SYNC` codec changes are
-  ignored, and `AUDIO_SYNC` sequence numbers are not used for gap
-  diagnostics. See `docs/research/google-atvv-1.0-spec.md` §7. No code change
-  yet; the existing device profiles are fixed 16 kHz.
+- **ATVV spec conformance gaps (scheduled as step 25)**:
+  `MIC_OPEN_ERROR(0x0F80)` currently moves a `Streaming` session to `Ready`;
+  the spec says it must not interrupt an ongoing PTT/HTT stream.
+  Dynamic-bandwidth `AUDIO_SYNC` codec changes are ignored, and `AUDIO_SYNC`
+  sequence numbers are not used for gap diagnostics. See
+  `docs/research/google-atvv-1.0-spec.md` §7 and
+  `docs/plans/25-atvv-spec-conformance.md`; the existing device profiles are
+  fixed 16 kHz.
 - **10 vinput zero-config (blocked)**: ATVV is the provider; vinput owns
   source selection and trigger binding (ADR 0007). The consumer-side feature
   is a capture-device auto-selection/priority list and auto-binding of the
@@ -866,16 +868,19 @@ refactor and said auto-selection and recording-key binding are in its
 follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
-**Steps 23–24 are planned, not started.** Step 23
+**Steps 23–25 are planned, not started.** Step 23
 (`docs/plans/23-audio-feedback.md`) adds the live level, GUI gain, and the
 session-boundary PCM flush. Step 24
 (`docs/plans/24-first-run-and-troubleshooting.md`) adds the generic
 **Getting started** checklist, the bilingual troubleshooting page, and the
-README known-limitations sections. B03
+README known-limitations sections. Step 25
+(`docs/plans/25-atvv-spec-conformance.md`) fixes `MIC_OPEN_ERROR` handling,
+rebuilds the resampler on a valid mid-session `AUDIO_SYNC` codec change, and
+adds sequence-gap diagnostics. B03
 (`docs/plans/B03-preopen-mic.md`) is the hardware-gated keep-open experiment
 and stays in the backlog. Step 21 remains in-progress; if the next session is
-the consumer-polish work instead of the two-device hardware run, start step
-23, then 24.
+not the two-device hardware run, start 23 and 24 for consumer polish or 25
+for the conformance fixes.
 
 Immediate action: connect the RC003 and Chromecast to this host and record the
 two-device switch and back with a real audio stream. Then rebuild the `-git`

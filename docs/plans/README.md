@@ -85,14 +85,15 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | K — Device management | 21 | **in-progress**: single-active device registry and switching, per-device layouts, Chromecast profile; real two-device run pending |
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 | M — Consumer polish | 23–24 | 23 **not started**: live level/gain and a session-scoped PCM queue; 24 **not started**: first-run checklist and recovery docs |
+| N — ATVV v1.0 conformance | 25 | **not started**: `MIC_OPEN_ERROR`/`AUDIO_SYNC` handling, dynamic-rate resampler rebuild, sequence-gap diagnostics |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
 upstream's own implementation; steps 11–18 are complete. Step 17 is complete
 and verified with the real RC003; step 18 is complete with recorded app runs
 on mpv, Impress, WPS Presentation, and omp. Steps 23–24 are the planned
-consumer polish from the `sayall-linux` comparison; B03 is the hardware-gated
-keep-open experiment.
+consumer polish from the `sayall-linux` comparison; step 25 is the ATVV v1.0
+conformance fixes; B03 is the hardware-gated keep-open experiment.
 
 ## Step files
 
@@ -107,6 +108,7 @@ verified; they are not reopened. Live work is listed first.
 | 21 | K | [multi-device](21-multi-device.md) | 🚧 in-progress | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 | 23 | M | [audio-feedback](23-audio-feedback.md) | ⬜ not-started | 04, 06, 14, 19 | status/GUI show the live level and gain, and a new session clears the PCM queue |
 | 24 | M | [first-run-and-troubleshooting](24-first-run-and-troubleshooting.md) | ⬜ not-started | 12, 14, 19, 23 | a generic checklist finds the missing layer and the bilingual recovery docs are linked |
+| 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ⬜ not-started | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
 
 ### Completed steps
 
@@ -196,10 +198,6 @@ blockers, and the next action. This index does not repeat it.
 - Structured `app:` action (shell-free desktop launch) once user demand exists;
   see [`sayall-linux-comparison.md`](../research/sayall-linux-comparison.md)
   §3.6.
-- ATVV v1.0 spec conformance: ignore `MIC_OPEN_ERROR` while `Streaming`, name
-  the error codes, decide the dynamic 8/16 kHz behavior, and add
-  sequence-gap diagnostics; see
-  [`google-atvv-1.0-spec.md`](../research/google-atvv-1.0-spec.md) §7.
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Real two-device switch validation with the RC003 and Chromecast on one host.

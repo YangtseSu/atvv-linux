@@ -204,6 +204,10 @@ interaction, `MIC_OPEN` should fail with `0x0F02`.
 
 ### Real gaps
 
+These three gaps are scheduled as
+[step 25](../plans/25-atvv-spec-conformance.md); the notes below describe the
+current code, not the target state.
+
 - **`MIC_OPEN_ERROR` while streaming.** The session currently moves to
   `Ready` on any `MIC_OPEN_ERROR`, including `0x0F80` while an HTT stream is
   active. The spec says that error must not interrupt the ongoing stream.
