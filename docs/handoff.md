@@ -84,9 +84,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `DeviceProfile.buttons`: the Chromecast shows Mute, YouTube, Netflix, and
   Input, hides Menu, and the preset preview drops slots the device lacks.
   Capture/test mode publishes the session-driven Assistant edge as a `voice`
-  `ButtonEvent` instead of holding the configured trigger. The r17 `-git`
-  packages predate this fix; rebuild after the commit is pushed. Pending: the
-  real RC003+Chromecast switch.
+  `ButtonEvent` instead of holding the configured trigger. The r19 `-git`
+  packages were built from this commit (see the package record below).
+  Pending: the real RC003+Chromecast switch.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -426,6 +426,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   SVG; `namcap` reports only the expected implicit-library/runtime notes. The
   installed r10 pair remains active. Both packages are in
   `~/projects/arch-pkgs/atvv-git/`.
+- **Profile-driven board `-git` packages (built, not installed)**: `atvv-git
+  0.2.0.r19.ge3da3c6-1` (6,241,630 bytes; sha256
+  `ac17c17d1bce207c88339848ddd261ef4da7156d93a6166194a99b45b7ad4a30`) and
+  `atvv-gui-git 0.2.0.r19.ge3da3c6-1` (1,436,300 bytes; sha256
+  `e1ef97324cb443ed2ba97feaa654b00f6834e5dcfd35cd09679469408224e3c6`) were
+  built from local commit `e3da3c6` with the split recipe temporarily pointed
+  at the local repository; the recipe is restored to the GitHub source and
+  the build clone's origin is back on GitHub. The packaged `atvv-config`
+  embeds the profile-driven board cards and the YouTube/Netflix/Mute
+  hotspots, and the packaged docs carry the new button contract. `namcap`
+  reports only the expected implicit-library/runtime notes. The installed r17
+  pair remains active until the operator installs these.
 
 ## Not implemented
 

@@ -179,7 +179,7 @@ released` around two real presses. See
   two-remote HID run is still pending.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ✅ The `-git` package contains the GUI; GTK stays out of the base package.
-  `atvv-git`/`atvv-gui-git 0.2.0.r12.g7ec5357-1` are built.
+  `atvv-git`/`atvv-gui-git 0.2.0.r19.ge3da3c6-1` are built.
 
 ## Risks
 
@@ -213,6 +213,10 @@ released` around two real presses. See
   documented A0 firmware. Recorded in
   `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
   pending.
+- 2026-11-02 — built the profile-driven board `-git` packages from commit
+  `e3da3c6` for operator installation with the split recipe pointed at the
+  local repository; the recipe is restored. `docs/handoff.md` carries the
+  sizes and sha256 values.
 - 2026-11-02 — profile-driven board: `RemoteButton` gained `mute`, `youtube`,
   and `netflix`; `DeviceProfile` now declares its physical `buttons` and
   label overrides, and the Chromecast maps `KEY_MUTE`,
