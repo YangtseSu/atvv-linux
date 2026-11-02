@@ -142,9 +142,10 @@ atvvctl doctor
 ```
 
 A `dbus-run-session` smoke run with `atvvd --mock` and two devices printed both
-devices, switched the active device, changed the source to
-`atvv-google-chromecast`, reloaded layout `second`, and persisted
-`active_device = "02:00:00:00:00:02"` in the TOML file.
+devices, renamed one, switched the active device, changed the source to
+`atvv-google-chromecast`, reloaded layout `second`, switched that device to
+`default`, and persisted `active_device = "02:00:00:00:00:02"` plus the label
+and layout in the TOML file.
 
 Real Chromecast run (2026-11-02, `74:46:B3:22:2D:D5`): `atvvctl pair`
 inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
