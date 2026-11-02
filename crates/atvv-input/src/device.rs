@@ -112,6 +112,13 @@ fn is_pointer(device: &Evdev) -> bool {
         .is_ok_and(|keys| pointer.iter().any(|button| keys.contains(*button)))
 }
 
+fn address_matches(unique: Option<&str>, filter: Option<&str>) -> bool {
+    match filter {
+        None => true,
+        Some(filter) => unique.is_some_and(|unique| unique.eq_ignore_ascii_case(filter)),
+    }
+}
+
 /// Enumerate evdev nodes and select the profile's keyboard/consumer nodes.
 ///
 /// `evdevil::enumerate()` yields one error per unreadable or vanished node;
@@ -138,7 +145,7 @@ pub fn discover(profile: &DeviceProfile, keymap: &KeyMap, address: Option<&str>)
         };
         if let Some(address) = address {
             let unique = device.unique_id().ok().flatten();
-            if !unique.is_some_and(|unique| unique.eq_ignore_ascii_case(address)) {
+            if !address_matches(unique.as_deref(), Some(address)) {
                 continue;
             }
         }
@@ -210,5 +217,20 @@ mod tests {
             None
         );
         assert_eq!(match_quality(&RC003, 0x2717, 0x0000, "AT keyboard"), None);
+    }
+
+    #[test]
+    fn discovery_can_be_scoped_to_one_address() {
+        assert!(address_matches(None, None));
+        assert!(address_matches(Some("74:46:b3:22:2d:d5"), None));
+        assert!(address_matches(
+            Some("74:46:b3:22:2d:d5"),
+            Some("74:46:B3:22:2D:D5")
+        ));
+        assert!(!address_matches(
+            Some("C0:5D:39:F8:2D:4C"),
+            Some("74:46:B3:22:2D:D5")
+        ));
+        assert!(!address_matches(None, Some("74:46:B3:22:2D:D5")));
     }
 }
