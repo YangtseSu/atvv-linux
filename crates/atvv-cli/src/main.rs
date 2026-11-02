@@ -1524,7 +1524,9 @@ fn pair(
         return Ok(());
     }
     let path = atvv_config::default_path();
-    atvv_config::save_device(&path, &report.address, profile, adapter.as_deref())
+    // A schema-1/2 file predates the second profile: its single device is an
+    // RC003. `--profile` only names the device being paired.
+    atvv_config::save_device(&path, &report.address, profile, &RC003, adapter.as_deref())
         .map_err(|error| error.to_string())?;
     println!(
         "config: {} device={} profile={}",

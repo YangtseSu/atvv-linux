@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 244 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 245 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -71,7 +71,7 @@ per-session copies; `docs/plans/` remains the canonical plan.
   picker and BlueZ alias, and the CAPS-rate fix. The stable AUR
   `atvv`/`atvv-gui` `0.2.0-1` were built from this archive and published;
   `.SRCINFO` matches and `namcap PKGBUILD` is clean.
-- **Step 21 multi-device (in progress)**: schema v3 adds `active_device` and a
+- **Step 21 multi-device (complete and verified)**: schema v3 adds `active_device` and a
   `[devices.<address>]` registry with per-device layouts. `atvvctl pair`
   infers the profile from the BlueZ PnP ids and sets the device active;
   `SelectDevice` swaps transport, session, input, and source (recreating
@@ -99,9 +99,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `DeviceProfile.buttons`: the Chromecast shows Mute, YouTube, Netflix, and
   Input, hides Menu, and the preset preview drops slots the device lacks.
   Capture/test mode publishes the session-driven Assistant edge as a `voice`
-  `ButtonEvent` instead of holding the configured trigger. The r21 `-git`
-  packages were built from the physical-order commit (see the package record
-  below). Pending: the real RC003+Chromecast switch.
+  `ButtonEvent` instead of holding the configured trigger. The real RC003 +
+  Chromecast run on one host passed: both devices stayed known, the source and
+  grab followed the active device, the RC003 streamed from physical voice-key
+  presses after switching back, and capture mode ended on a switch. Pairing a
+  second device into a schema-2 file now keeps the existing device's profile.
+  See `docs/plans/21-multi-device.md`.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -854,12 +857,11 @@ is `mpv`, `slides` (Impress/WPS), and `omp`; applying one creates an inactive
 user layout, and reset keeps the layout's name and description. Real-app runs
 are recorded in `docs/plans/18-layout-presets.md`; see ADR 0010.
 
-**Step 21 (multi-device) is in progress.** The registry, schema v3 migration,
-`SelectDevice`/`GetDevices`/`DeviceChanged`, per-device layouts, the
-`google-chromecast` profile, CLI/MCP/GUI switching, and synthetic tests are
-implemented. The Chromecast ATVV audio/keepalive/pairing run is recorded in
-`docs/research/chromecast-hardware-evidence.md`. B01 (recording-key
-press/release actions) is backlog and does not block step 21.
+**Step 21 (multi-device) is complete and verified.** The registry, schema v3
+migration, `SelectDevice`/`GetDevices`/`DeviceChanged`, per-device layouts,
+the `google-chromecast` profile, CLI/MCP/GUI switching, and the real two-device
+run are recorded in `docs/plans/21-multi-device.md`. Pairing a second device
+into a schema-2 file now preserves the existing device's profile.
 
 **Step 10 vinput-zero-config is blocked** on upstream's own implementation:
 ATVV is the provider and vinput is the consumer. The maintainer closed PRs
@@ -878,14 +880,11 @@ README known-limitations sections. Step 25
 rebuilds the resampler on a valid mid-session `AUDIO_SYNC` codec change, and
 adds sequence-gap diagnostics. B03
 (`docs/plans/B03-preopen-mic.md`) is the hardware-gated keep-open experiment
-and stays in the backlog. Step 21 remains in-progress; if the next session is
-not the two-device hardware run, start 23 and 24 for consumer polish or 25
-for the conformance fixes.
+and stays in the backlog. Step 21 is complete; the next step is 23 (audio
+feedback), then 24 and 25. Step 10 stays blocked on upstream.
 
-Immediate action: connect the RC003 and Chromecast to this host and record the
-two-device switch and back with a real audio stream. Then rebuild the `-git`
-package with the final Chromecast key map and session-trigger change and close
-step 21. In parallel, watch upstream releases; when one ships its own
+Immediate action: start step 23 (`docs/plans/23-audio-feedback.md`). In
+parallel, watch upstream releases; when one ships its own
 auto-selection/declared-key binding, rebuild vinput and record the zero-config
 RC003 run. Do not reopen the PRs.
 

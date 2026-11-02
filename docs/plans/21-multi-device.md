@@ -1,6 +1,6 @@
 # Step 21 — Multi-device switching
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: 06, 13, 15, 17
 Touches: `crates/atvv-protocol/`, `crates/atvv-config/`, `crates/atvv-input/`,
 `crates/atvv-bluez/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
@@ -17,18 +17,6 @@ are per device. Simultaneous devices are out of scope for v1.
 The step 15 interface reference previews the header device chip and the
 known-device popover (`docs/plans/15-mapping-board.html`); the second remote
 there is illustrative, not verified hardware.
-
-## Next action
-
-Connect the RC003 and Chromecast to this host and record the two-device switch
-(and back) with a real audio stream.
-
-## Current gap
-
-- The two-device switch has synthetic coverage and a mock-D-Bus smoke run, but
-  no recorded RC003 + Chromecast run on one host.
-- `GetDevices` does not track a last-seen timestamp; it reports the registry,
-  active/connected state, layout, name, label, profile, and battery.
 
 ## Decision
 
@@ -116,7 +104,8 @@ consumer-side capture selection would need a per-device source and routing.
 - [hardware] Real RC003: switch to a second device and back; the active RC003
   still streams and the source survives. The second device path needs real
   hardware; a fake remote proves only the code path. No hardware claim without
-  a recorded run.
+  a recorded run. Recorded 2026-11-02 with the RC003 and Chromecast; see
+  Verification.
 
 ## Verification
 
@@ -160,6 +149,88 @@ directly; the daemon logged `session trigger held` / `session trigger
 released` around two real presses. See
 `docs/research/chromecast-hardware-evidence.md`.
 
+### Two-device switch (2026-11-02)
+
+Both devices were connected to this host: RC003 `C0:5D:39:F8:2D:4C` and
+Chromecast `74:46:B3:22:2D:D5`. The existing schema-2 file held only the
+RC003. `atvvctl pair 74:46:B3:22:2D:D5` migrated it to schema 3 and preserved
+the per-device profiles:
+
+```text
+schema_version = 3
+active_device = "74:46:B3:22:2D:D5"
+
+[devices."74:46:B3:22:2D:D5"]
+profile = "google-chromecast"
+layout = "default"
+
+[devices."C0:5D:39:F8:2D:4C"]
+profile = "miremote-rc003"
+layout = "custom"
+```
+
+The daemon ran from the packaged `atvv-git 0.2.0.r26.g2f788b5-1` binary with
+`--verbose`. On the Chromecast:
+
+```text
+$ atvvctl device list
+active: 74:46:B3:22:2D:D5
+* 74:46:B3:22:2D:D5 Chromecast Remote            google-chromecast      default          connected 94%
+  C0:5D:39:F8:2D:4C Xiaomi Bluetooth Remote 2 Pro (RC003) miremote-rc003         custom           offline
+
+status: ready 74:46:B3:22:2D:D5 google-chromecast atvv-google-chromecast
+input.grabbed: ["/dev/input/event25"]
+EVIOCGRAB probe: event25 GRABBED (EBUSY); event26 free
+
+$ atvvctl mic start   # manual MIC_OPEN
+audio frames=81 samples=38880 streaming=true dropped=0
+$ atvvctl record --wav /tmp/chromecast-4s.wav --seconds 4 --trigger
+recording 4s at 16000 Hz ... captured
+# WAV: 64,000 frames, 4.000 s, 49.3% non-zero, peak 32768
+```
+
+Capture mode was verified while the Chromecast was active: `atvvctl capture
+--timeout 10` plus `atvvctl mic start` printed
+`button: voice trigger: single pressed: true` and exited 0.
+
+Switching to the RC003:
+
+```text
+$ atvvctl device use C0:5D:39:F8:2D:4C
+active: C0:5D:39:F8:2D:4C
+atvvd: device switched to C0:5D:39:F8:2D:4C (miremote-rc003 ...)
+atvvd: control [0b, 01, 00, 02, 03, 00, 78, 00, 00]; caps frame=120
+state: ready; source: atvv-miremote-rc003; layout: custom
+input.grabbed: ["/dev/input/event26"]
+EVIOCGRAB probe: event26 GRABBED; event25 free
+```
+
+Manual `MIC_OPEN` on the RC003 returned `AUDIO_START` but no frames and hit
+`audio frame timeout`, so the firmware opens the microphone only from its own
+voice key. Two physical presses produced `control [04, 03, 02, 57]` /
+`[04, 03, 02, 58]`, `voice key pressed` / `voice key released`, and
+`frames=236 samples=56640` (7.08 s) with `dropped_frames=0` and a 32768 peak.
+
+Capture teardown across a switch was tested with the Chromecast's
+session-driven voice edge as the control: `atvvctl capture --timeout 15` was
+started on the RC003, the device was switched to the Chromecast, and
+`atvvctl mic start` produced no `ButtonEvent`; capture printed
+`no button pressed within 15s` (exit 1). The control run above emitted the
+same edge while capture was live, so the switch ended capture mode.
+
+Switching back restored `atvv-miremote-rc003`, grabbed only
+`/dev/input/event26`, and `atvvctl doctor` reported `registry ok 2 known;
+active C0:5D:39:F8:2D:4C` with every check ok. The config persisted both
+registry entries and `active_device = "C0:5D:39:F8:2D:4C"`; a systemd user
+service restart came up on the RC003 with the same source and grab.
+
+The pairing path had a schema-2 migration defect: `save_device` used the new
+device's profile as the fallback for the file's existing single device, so
+pairing the Chromecast rewrote the RC003 entry as `google-chromecast`. It now
+takes the legacy profile explicitly (`RC003` is the only profile a schema-2
+file can hold), with a regression test that pairs a second device into a
+schema-2 file.
+
 ## Out of scope
 
 - Simultaneous devices and per-device sources (`atvv-<address>`).
@@ -173,10 +244,10 @@ released` around two real presses. See
   profile; a failed switch restores the old device.
 - ✅ Per-device layouts load into the board/input runtime; dirty switching is
   blocked.
-- ⬜ Only the active device's HID node is grabbed; capture/test ends on switch.
-  Address filtering and capture/test teardown are implemented and unit-tested;
-  the Chromecast node was grabbed alone and its key map recorded, but the real
-  two-remote HID run is still pending.
+- ✅ Only the active device's HID node is grabbed; capture/test ends on switch.
+  Recorded 2026-11-02 with both remotes connected: `status.input.grabbed` and
+  an external `EVIOCGRAB` probe showed only the active node (event25 for the
+  Chromecast, event26 for the RC003), and capture mode ended on the switch.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ✅ The `-git` package contains the GUI; GTK stays out of the base package.
   `atvv-git`/`atvv-gui-git 0.2.0.r21.g9721e88-1` are built.
@@ -246,3 +317,19 @@ released` around two real presses. See
   `CHROMECAST_LAYOUT` hotspots updated to the new geometry.
   `cargo test --workspace` (239 passed, 9 ignored) and
   `cargo clippy --workspace --all-targets -- -D warnings` passed.
+- 2026-11-02 — fixed the schema-2 → 3 pairing path: `save_device` used the
+  profile of the device being paired as the fallback for the file's existing
+  single device, so pairing the Chromecast rewrote the RC003 entry as
+  `google-chromecast`. Migration now takes the legacy device's profile
+  explicitly (`RC003` is the only profile a schema-2 file can hold), with a
+  regression test that pairs a second device into a schema-2 file.
+  `cargo test --workspace` → 245 passed, 9 ignored; workspace clippy clean.
+- 2026-11-02 — real two-device run with the RC003 (`C0:5D:39:F8:2D:4C`) and
+  the Chromecast (`74:46:B3:22:2D:D5`) on one host: paired/migrated to schema 3
+  with both entries, started on the Chromecast (`atvv-google-chromecast`,
+  event25 grabbed, 81 frames / 38,880 samples, a 4 s WAV with 49.3% non-zero),
+  switched to the RC003 (`atvv-miremote-rc003`, event26 grabbed, physical voice
+  presses → 236 frames / 56,640 samples), switched back, and confirmed capture
+  mode ended on a switch. Both devices stayed known and the service restarted
+  on the RC003. The RC003 accepted `AUDIO_START` for a manual `MIC_OPEN` but
+  sent no frames; it opens the microphone only from its own voice key.

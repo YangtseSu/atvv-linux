@@ -11,7 +11,7 @@ transports prove the code path, not the device.
 | Device | USB/HID ids | Profile | ATVV | Audio | State | Evidence |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz, 120 B frames | Verified 2026-10-30 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
-| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Partial 2026-11-02: ATVV audio, stream-id close/keepalive, pairing, reconnect, and HID map verified; two-device switch pending | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Verified 2026-11-02: ATVV audio, stream-id close/keepalive, pairing, reconnect, HID map, and the two-device switch with the RC003 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | Google Chromecast Voice Remote / DIS A0, firmware 26.7 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 160 B frames (upstream) | Not run on Linux; same profile, frame size from `CAPS_RESP`, stream-id close/keepalive | [`zolo1978/google-remote-voice-mac@e57c0a4`](https://github.com/zolo1978/google-remote-voice-mac/tree/e57c0a47cece2014734f5bc74f4b5a81bc4e54f9) |
 | Xiaomi RC family, other firmware | vendor `2717`, name `MI RC*` | none | unknown | unknown | Not supported; needs a profile and a run | — |
 | ATVV v1.0 remotes without a profile | unknown | none | v1.0 | profile-dependent | Not supported; add a `DeviceProfile` | — |

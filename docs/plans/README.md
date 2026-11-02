@@ -82,7 +82,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | H — Layout profiles | 17–18 | 17 **done**: named user layouts with a template default, live switching, CLI/GUI/D-Bus support, v1 migration, and recorded RC003 key changes. 18 **done**: app-verified presets for mpv, Impress/WPS presentation, and omp |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
-| K — Device management | 21 | **in-progress**: single-active device registry and switching, per-device layouts, Chromecast profile; real two-device run pending |
+| K — Device management | 21 | **done**: single-active device registry and switching, per-device layouts, Chromecast profile, and a recorded real two-device switch |
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 | M — Consumer polish | 23–24 | 23 **not started**: live level/gain and a session-scoped PCM queue; 24 **not started**: first-run checklist and recovery docs |
 | N — ATVV v1.0 conformance | 25 | **not started**: `MIC_OPEN_ERROR`/`AUDIO_SYNC` handling, dynamic-rate resampler rebuild, sequence-gap diagnostics |
@@ -91,7 +91,8 @@ M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
 upstream's own implementation; steps 11–18 are complete. Step 17 is complete
 and verified with the real RC003; step 18 is complete with recorded app runs
-on mpv, Impress, WPS Presentation, and omp. Steps 23–24 are the planned
+on mpv, Impress, WPS Presentation, and omp. Step 21 is complete with the
+recorded RC003 + Chromecast two-device switch. Steps 23–24 are the planned
 consumer polish from the `sayall-linux` comparison; step 25 is the ATVV v1.0
 conformance fixes; B03 is the hardware-gated keep-open experiment.
 
@@ -105,7 +106,6 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 21 | K | [multi-device](21-multi-device.md) | 🚧 in-progress | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 | 23 | M | [audio-feedback](23-audio-feedback.md) | ⬜ not-started | 04, 06, 14, 19 | status/GUI show the live level and gain, and a new session clears the PCM queue |
 | 24 | M | [first-run-and-troubleshooting](24-first-run-and-troubleshooting.md) | ⬜ not-started | 12, 14, 19, 23 | a generic checklist finds the missing layer and the bilingual recovery docs are linked |
 | 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ⬜ not-started | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
@@ -133,6 +133,7 @@ verified; they are not reopened. Live work is listed first.
 | 18 | H | [layout-presets](18-layout-presets.md) | ✅ done | 17 | app-verified presets create editable user layouts and never become live state |
 | 19 | I | [i18n-and-bilingual-docs](19-i18n-and-bilingual-docs.md) | ✅ done | 14 | the GUI is English and Simplified Chinese by locale; user docs have linked Chinese versions |
 | 20 | J | [release-and-external-packaging](20-release-and-external-packaging.md) | ✅ done | 19 | v0.1.0 is released; AUR and VCS recipes live outside the repository |
+| 21 | K | [multi-device](21-multi-device.md) | ✅ done | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 | 22 | L | [pointer-actions](22-pointer-actions.md) | ✅ done | 05, 13, 14, 15 | pointer clicks and relative motion on a dedicated uinput device, verified with the RC003 |
 
 ## Architecture contract

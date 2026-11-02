@@ -1305,12 +1305,15 @@ pub fn load(path: &Path, profile: &DeviceProfile) -> Result<LoadedConfig, Config
 ///
 /// The device becomes active. An existing entry keeps its label and layout;
 /// only the profile is refreshed. The file is migrated to the current schema
-/// in the same write. A malformed existing file is an error: the daemon
-/// should not silently replace a typo with defaults.
+/// in the same write; `legacy_profile` is the profile of the single device a
+/// schema-1/2 file stores, and is ignored for schema 3. A malformed existing
+/// file is an error: the daemon should not silently replace a typo with
+/// defaults.
 pub fn save_device(
     path: &Path,
     device: &str,
     profile: &DeviceProfile,
+    legacy_profile: &DeviceProfile,
     adapter: Option<&str>,
 ) -> Result<(), ConfigError> {
     let address = normalize_address(device)?;
@@ -1323,7 +1326,10 @@ pub fn save_device(
             path: path.to_path_buf(),
             source,
         })?;
-        file.migrated(profile)?
+        // A schema-1/2 file stores one device without a profile. Migration
+        // must use that device's profile, not the one being paired: pairing a
+        // second device must not relabel the first.
+        file.migrated(legacy_profile)?
     } else {
         FileConfig {
             schema_version: Some(SCHEMA_VERSION),
@@ -2433,7 +2439,7 @@ mod tests {
             "schema_version = 1\ngain_db = 6\ninput = false\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
         )
         .unwrap();
-        save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, Some("hci0")).unwrap();
+        save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, &RC003, Some("hci0")).unwrap();
 
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("schema_version = 3"), "{text}");
@@ -2451,17 +2457,48 @@ mod tests {
     }
 
     #[test]
+    fn save_device_keeps_the_legacy_profile_when_pairing_another_device() {
+        let path = path("second-device");
+        std::fs::write(
+            &path,
+            "schema_version = 2\n\
+             device = \"C0:5D:39:F8:2D:4C\"\n\
+             active_layout = \"custom\"\n\n\
+             [layouts.custom]\n\
+             name = \"Custom\"\n\n\
+             [layouts.custom.buttons.up]\n\
+             single = \"key:KEY_F13\"\n",
+        )
+        .unwrap();
+        save_device(&path, "74:46:B3:22:2D:D5", &CHROMECAST, &RC003, None).unwrap();
+
+        let loaded = load(&path, &CHROMECAST).unwrap();
+        assert_eq!(
+            loaded.config.active_device.as_deref(),
+            Some("74:46:B3:22:2D:D5")
+        );
+        assert_eq!(loaded.config.devices["C0:5D:39:F8:2D:4C"].profile, RC003.id);
+        assert_eq!(
+            loaded.config.devices["74:46:B3:22:2D:D5"].profile,
+            CHROMECAST.id
+        );
+        assert_eq!(loaded.config.devices["C0:5D:39:F8:2D:4C"].layout, "custom");
+        assert_eq!(loaded.config.active_profile().unwrap().id, CHROMECAST.id);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
     fn save_device_refuses_a_malformed_or_future_file() {
         let path = path("malformed");
         std::fs::write(&path, "gaiN_db = 3\n").unwrap();
         assert!(matches!(
-            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, None),
+            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, &RC003, None),
             Err(ConfigError::Parse { .. })
         ));
 
         std::fs::write(&path, "schema_version = 4\n").unwrap();
         assert!(matches!(
-            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, None),
+            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, &RC003, None),
             Err(ConfigError::SchemaVersion { found: 4 })
         ));
         let _ = std::fs::remove_file(&path);
