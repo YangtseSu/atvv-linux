@@ -28,6 +28,11 @@ not a second plan and it does not override `docs/plans/`.
   PipeWire behavior, the step 08 trigger/compositor run and the automated
   fcitx/source check, and the fixes found. The combined real-press fcitx
   recording was not observed; its legs were verified separately.
+- [`chromecast-hardware-evidence.md`](chromecast-hardware-evidence.md) — real
+  Google Chromecast Remote run (2026-11-02, `74:46:B3:22:2D:D5`): DIS/PnP
+  identity and authenticity limits, ten-byte `CAPS_RESP` with 240-byte
+  frames, `MIC_OPEN`/`MIC_CLOSE`, bare keepalive, source contract, and the
+  pending button/reconnect checks.
 
 ## Evidence rules
 
@@ -58,6 +63,7 @@ not a second plan and it does not override `docs/plans/`.
 | 12 integration contract | `../integrations/provider-contract.md`, `../decisions/0007-integration-direction.md` |
 | 17 layout profiles | `layout-profiles-presets.md` §1–§3, `../configuration.md` §Schema |
 | 18 layout presets | `layout-profiles-presets.md` §2–§3, the step 17 file |
+| 21 multi-device | `chromecast-hardware-evidence.md`, `protocol-and-device.md` §7 |
 | B02 NFC | `layout-profiles-presets.md` §4, `rc003-hardware-evidence.md` |
 
 ## Current deltas after the research snapshot
@@ -80,6 +86,11 @@ implementation direction:
   (ADR 0005).
 - **Hardware state.** Step 07 ran on a real RC003 (`C0:5D:39:F8:2D:4C`) on
   2026-10-30. Steps 01–09 and 11 are complete; step 10 remains in progress.
+  A second real device, the Google Chromecast Remote
+  (`74:46:B3:22:2D:D5`, profile `google-chromecast`), passed ATVV audio,
+  keepalive, and a profile-inference pairing run on 2026-11-02. See
+  [`chromecast-hardware-evidence.md`](chromecast-hardware-evidence.md); its
+  HID press map and two-device switch remain pending.
   Step 09's root package install, post-reboot run, and end-to-end fcitx text
   commit are recorded in
   [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).

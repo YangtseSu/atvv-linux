@@ -121,7 +121,51 @@ impl DaemonInterface {
 
     /// Configured device addresses.
     fn list_devices(&self) -> Vec<String> {
-        vec![self.address.clone()]
+        let config = lock_config(&self.config);
+        if config.devices.is_empty() {
+            return vec![self.address.clone()];
+        }
+        config.devices.keys().cloned().collect()
+    }
+
+    /// Known devices and their runtime state as JSON.
+    fn get_devices(&self) -> String {
+        let config = lock_config(&self.config);
+        let status = crate::status::lock(&self.status).clone();
+        let devices: Vec<serde_json::Value> = config
+            .devices
+            .iter()
+            .map(|(address, device)| {
+                let active = config.active_device.as_deref() == Some(address.as_str());
+                let profile_name = atvv_protocol::profile::find(&device.profile)
+                    .map(|profile| profile.display_name.to_string());
+                serde_json::json!({
+                    "address": address,
+                    "label": device.label,
+                    "profile": device.profile,
+                    "layout": if active { &config.active_layout } else { &device.layout },
+                    "active": active,
+                    "connected": active && status.connected,
+                    "name": if active { Some(status.device.name.clone()) } else { profile_name },
+                    "battery_percent": if active { status.hardware.battery_percent } else { None },
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "active_device": config.active_device,
+            "devices": devices,
+        })
+        .to_string()
+    }
+
+    /// Make a known device active.
+    fn select_device(&self, address: &str) -> zbus::fdo::Result<()> {
+        let (reply, result) = mpsc::channel();
+        self.send(Command::SelectDevice {
+            address: address.to_string(),
+            reply,
+        })?;
+        wait(result)
     }
 
     /// Open the remote microphone with `MIC_OPEN`.
@@ -163,6 +207,9 @@ impl DaemonInterface {
 
     #[zbus(signal)]
     async fn layout_changed(emitter: &SignalEmitter<'_>, id: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn device_changed(emitter: &SignalEmitter<'_>, address: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     async fn voice_started(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
@@ -245,6 +292,9 @@ impl EventSink for DbusSink {
             DaemonEvent::LayoutChanged(id) => {
                 zbus::block_on(DaemonInterface::layout_changed(&self.emitter, &id))
             }
+            DaemonEvent::DeviceChanged(address) => {
+                zbus::block_on(DaemonInterface::device_changed(&self.emitter, &address))
+            }
             DaemonEvent::VoiceStarted => {
                 zbus::block_on(DaemonInterface::voice_started(&self.emitter))
             }
@@ -298,6 +348,8 @@ pub trait DaemonApi {
     fn begin_capture(&self) -> zbus::Result<()>;
     fn end_capture(&self) -> zbus::Result<()>;
     fn list_devices(&self) -> zbus::Result<Vec<String>>;
+    fn get_devices(&self) -> zbus::Result<String>;
+    fn select_device(&self, address: &str) -> zbus::Result<()>;
     fn start_voice(&self) -> zbus::Result<()>;
     fn stop_voice(&self) -> zbus::Result<()>;
     fn toggle_voice(&self) -> zbus::Result<()>;
@@ -309,6 +361,9 @@ pub trait DaemonApi {
 
     #[zbus(signal)]
     fn layout_changed(&self, id: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn device_changed(&self, address: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn voice_started(&self) -> zbus::Result<()>;
@@ -388,6 +443,15 @@ impl Client {
 
     pub fn devices(&self) -> Result<Vec<String>, ClientError> {
         Ok(zbus::block_on(self.proxy()?.list_devices())?)
+    }
+
+    pub fn device_list(&self) -> Result<serde_json::Value, ClientError> {
+        let raw = zbus::block_on(self.proxy()?.get_devices())?;
+        Ok(serde_json::from_str(&raw)?)
+    }
+
+    pub fn select_device(&self, address: &str) -> Result<(), ClientError> {
+        Ok(zbus::block_on(self.proxy()?.select_device(address))?)
     }
 
     pub fn start_voice(&self) -> Result<(), ClientError> {

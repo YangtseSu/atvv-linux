@@ -14,6 +14,8 @@ pub trait Backend: Send {
     fn voice_stop(&mut self) -> Result<(), String>;
     fn voice_toggle(&mut self) -> Result<(), String>;
     fn list_devices(&mut self) -> Result<Vec<String>, String>;
+    fn devices(&mut self) -> Result<Value, String>;
+    fn select_device(&mut self, address: &str) -> Result<(), String>;
     fn reload(&mut self) -> Result<(), String>;
 }
 
@@ -81,6 +83,18 @@ impl Backend for DaemonBackend {
         self.client()?
             .devices()
             .map_err(|error| format!("ListDevices failed: {error}"))
+    }
+
+    fn devices(&mut self) -> Result<Value, String> {
+        self.client()?
+            .device_list()
+            .map_err(|error| format!("GetDevices failed: {error}"))
+    }
+
+    fn select_device(&mut self, address: &str) -> Result<(), String> {
+        self.client()?
+            .select_device(address)
+            .map_err(|error| format!("SelectDevice failed: {error}"))
     }
 
     fn reload(&mut self) -> Result<(), String> {

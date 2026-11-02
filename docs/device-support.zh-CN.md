@@ -10,6 +10,7 @@
 | 设备 | USB/HID ID | 设备配置文件 | ATVV | 音频 | 状态 | 证据 |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz，120 B 帧 | 2026-10-30 已验证 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz，240 B 帧 | 2026-11-02 部分验证：ATVV 音频、保活和配对已通过；HID 按键映射和双设备切换待完成 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | 小米 RC 系列，其他固件 | 厂商 `2717`，名称 `MI RC*` | 无 | 未知 | 未知 | 不支持；需要配置文件和运行记录 | — |
 | 没有配置文件的 ATVV v1.0 遥控器 | 未知 | 无 | v1.0 | 取决于配置文件 | 不支持；请添加 `DeviceProfile` | — |
 | ATVV v0.4 遥控器 | 未知 | 无 | v0.4 | — | 超出范围 | — |
@@ -28,11 +29,23 @@
   `KEY_GRAVE`。HID 描述符声明的是 `KEY_HOME` 和 `KEY_COMPOSE`，不是
   `KEY_HOMEPAGE`/`KEY_MENU`。
 
+## Chromecast 配置文件固定的事实
+
+- 直接 `AUDIO_START`，没有 `START_SEARCH`。
+- 短 `MIC_OPEN` `[0C 00]`、裸 `MIC_CLOSE` `[0D]`、裸 `MIC_EXTEND` `[0E]`。
+- 无头部 240 字节帧（16 kHz 下 480 个采样、30 ms），高半字节在前，16 kHz，
+  0 dB 增益。
+- `CAPS_RESP` 为 10 字节（`0b 01 00 02 03 00 f0 01 00 1a`），解析器忽略末尾的
+  `01 00 1a`。
+- HID 使用者控制：OK 是 `KEY_SELECT`，主页是 `KEY_HOMEPAGE`，语音/助手键是
+  `KEY_SEARCH`，电源是 `KEY_COFFEE`，TV 是 `KEY_TV`。
+
 ## 添加设备
 
 1. 在 `crates/atvv-protocol/src/profile.rs` 中添加 `DeviceProfile`，包含 id、
    名称前缀、编解码器、帧大小、命令变体、时序和按键。
-2. 仅当厂商/产品 ID 与 `2717:32b8` 不同时，添加匹配的 udev 规则。
+2. 仅当厂商/产品 ID 与现有配置文件不同时，添加匹配的 udev 规则（`.rules` 中
+   已有 RC003、Chromecast 和 `uinput` 的 `uaccess` 规则）。
 3. 先用 mock/模拟会话运行该配置文件，再用真实设备运行。
 4. 在 `docs/research/` 中记录运行，包括日期、地址、CAPS 字节、音频统计、保活
    和重连结果。

@@ -13,16 +13,23 @@ Location: `$XDG_CONFIG_HOME/atvv/daemon.toml`, or `~/.config/atvv/daemon.toml`.
 ## Schema
 
 ```toml
-schema_version = 2
-profile = "miremote-rc003"          # must match the build's profile
-device = "C0:5D:39:F8:2D:4C"        # written by `atvvctl pair`
+schema_version = 3
+active_device = "C0:5D:39:F8:2D:4C"  # written by `atvvctl pair`
 adapter = "hci0"                    # optional BlueZ adapter
 gain_db = 0                         # -24..=24
 input = true                        # evdev/uinput path
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # key or chord; none disables
 allow_exec = false                  # opt in to exec: actions
-active_layout = "editor"            # default or a user layout id
+
+[devices."C0:5D:39:F8:2D:4C"]
+label = "Living room"               # optional
+profile = "miremote-rc003"
+layout = "editor"                   # default or a user layout id
+
+[devices."74:46:B3:22:2D:D5"]
+profile = "google-chromecast"
+layout = "default"
 
 [layouts.editor]
 name = "Editor"
@@ -40,21 +47,30 @@ long = "combo:ctrl+alt+v"
 
 | Field | Default | Notes |
 |---|---|---|
-| `schema_version` | `2` | Version 1 migrates on load; higher versions are rejected. |
-| `profile` | active profile | A different id is rejected; the keymap is local to one profile. |
-| `device` | none | Bluetooth address; `atvvctl pair` writes it. Changes apply on the next start. |
+| `schema_version` | `3` | Version 1 and 2 migrate on load; higher versions are rejected. |
+| `active_device` | none | Bluetooth address of the active device; `atvvctl pair` writes it and makes the device active. |
+| `[devices.<address>]` | none | Known devices: optional `label`, required `profile`, and `layout`. Addresses are normalized to uppercase. |
 | `adapter` | BlueZ default | Adapter name such as `hci0`. |
 | `gain_db` | profile value | Clamped to ±24 dB; no AGC. |
 | `input` | `true` | Disables discovery, grab, and uinput when false. |
 | `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
 | `allow_exec` | `false` | Required for any `exec:` action. |
-| `active_layout` | `default` | The layout that drives the input runtime. |
 | `[layouts.<id>]` | none | User layouts: `name`, optional `description`, `[gesture]`, and `[buttons.<button>]`. |
+
+Only the active device owns the GATT session, the PipeWire source, the HID
+grab, and the board. `atvvctl device use <address>` switches between known
+devices without restarting the daemon; the old device is disconnected and its
+grab is released before the new one connects. Per-device layouts are stored in
+the device entry, so switching reloads the board with that device's layout.
+Known devices persist across daemon restarts. `atvvctl device rename <address>
+<label>` sets or clears the optional label; an empty label clears it.
 
 The twelve mappable buttons are `power`, `ok`, `back`, `up`, `down`, `left`,
 `right`, `home`, `menu`, `tv`, `volume_up`, and `volume_down`. The voice key is
-not mappable: it drives the ATVV microphone and the vinput trigger.
+not mappable: it drives the ATVV microphone and the vinput trigger. The
+`google-chromecast` profile uses `KEY_SELECT` for OK, `KEY_HOMEPAGE` for Home,
+and `KEY_SEARCH` for the voice key; unmapped app and mute keys pass through.
 
 Slots are `single`, `double`, and `long`. A missing slot means "use the profile
 default", not "unmapped". The default map re-emits the original key for every
@@ -75,10 +91,11 @@ match `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the preset ids `mpv`, `slides`,
 and `omp` are reserved. At most 32 user layouts are allowed; a name is 1–40
 characters and a description at most 120.
 
-Global fields (`profile`, `device`, `adapter`, `gain_db`, `input`, `vinput`,
-`trigger_key`, `allow_exec`) are not part of a layout. Switching a layout never
-changes the exec policy, the device, or the recording key. `default` cannot be
-stored, renamed, deleted, or reset, and it is not listed in `layouts`.
+Global fields (`adapter`, `gain_db`, `input`, `vinput`, `trigger_key`,
+`allow_exec`) are not part of a layout. Switching a layout never changes the
+exec policy, the active device, or the recording key. `default` cannot be
+stored, renamed, deleted, or reset, and it is not listed in `layouts`. The
+active device's `layout` entry is updated when a layout is switched.
 
 Gesture overrides apply to the whole active layout, so switching a layout can
 change double/long behavior. `atvvctl layout show` prints the effective timing.
@@ -111,14 +128,16 @@ layouts automatically; the resulting layout is editable like any other.
 ### Migration
 
 A version 1 file with top-level `[buttons]` or `[gesture]` tables is migrated
-on load to a user layout `custom` named "Custom" with
-`active_layout = "custom"`. A version 1 file without overrides becomes
-`active_layout = "default"`. The next save writes version 2 and drops the old
-tables. A version 2 file must not contain the top-level tables, and `SetConfig`
-accepts only version 2, so a stale client fails loudly instead of dropping
-layouts.
+on load to a user layout `custom` named "Custom"; a version 1 file without
+overrides uses the `default` template. A version 2 file must not contain the
+top-level tables. The next save writes version 3: the single `device` field
+becomes an `[devices.<address>]` entry with the file's profile and
+`active_layout`, `active_device` points at it, and the old top-level `profile`,
+`device`, and `active_layout` keys are dropped. A version 3 file keeps full
+control over its registry. `SetConfig` accepts only version 3, so a stale
+client fails loudly instead of dropping layouts.
 
-## Action grammar## Action grammar
+## Action grammar
 
 ```text
 none

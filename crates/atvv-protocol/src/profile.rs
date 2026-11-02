@@ -326,12 +326,119 @@ pub const RC003: DeviceProfile = DeviceProfile {
     },
 };
 
+/// Google Chromecast Remote (BLE HID, Google `18d1:9450`).
+///
+/// Observed on 2026-11-02 (`74:46:B3:22:2D:D5`, DIS model `A3`, firmware
+/// `26.0`): ATVV v1.0, ADPCM 16 kHz, hold-to-talk, 240-byte frames, short
+/// `MIC_OPEN`, bare `MIC_CLOSE`. The HID report descriptor is a consumer
+/// control array whose Linux key mapping provides `KEY_SELECT`, `KEY_BACK`,
+/// `KEY_HOMEPAGE`, `KEY_SEARCH`, `KEY_TV`, the arrow keys, and the volume
+/// keys; the remaining usages are app/extra keys and stay unmapped so they
+/// pass through to the compositor.
+pub const CHROMECAST: DeviceProfile = DeviceProfile {
+    id: "google-chromecast",
+    display_name: "Google Chromecast Voice Remote (A3)",
+    bluetooth_names: &["Chromecast Remote", "Google TV Remote"],
+    vendor_id: 0x18D1,
+    product_id: 0x9450,
+    model: "A3",
+    protocol: ProtocolVersion::V1_0,
+    codecs: &[Codec::Adpcm16k],
+    frame_size: 240,
+    nibble_order: NibbleOrder::HighFirst,
+    mic_open: MicOpenVariant::Short,
+    mic_close: MicCloseVariant::Bare,
+    keepalive: KeepaliveVariant::Bare,
+    post_stop_discard_ms: 300,
+    sample_rate: 16_000,
+    gain_db: 0,
+    button_keys: &[
+        // The power button's consumer usage maps to KEY_COFFEE in Linux
+        // hid-input; the physical label is recorded in the hardware evidence.
+        ButtonKey {
+            button: RemoteButton::Power,
+            key: "KEY_COFFEE",
+        },
+        ButtonKey {
+            button: RemoteButton::Ok,
+            key: "KEY_SELECT",
+        },
+        ButtonKey {
+            button: RemoteButton::Back,
+            key: "KEY_BACK",
+        },
+        ButtonKey {
+            button: RemoteButton::Up,
+            key: "KEY_UP",
+        },
+        ButtonKey {
+            button: RemoteButton::Down,
+            key: "KEY_DOWN",
+        },
+        ButtonKey {
+            button: RemoteButton::Left,
+            key: "KEY_LEFT",
+        },
+        ButtonKey {
+            button: RemoteButton::Right,
+            key: "KEY_RIGHT",
+        },
+        ButtonKey {
+            button: RemoteButton::Home,
+            key: "KEY_HOMEPAGE",
+        },
+        // The 2020/2024 remote has no menu key; the app/extra keys stay
+        // unmapped and pass through. Keep the logical slot bound to a key the
+        // descriptor advertises so a user layout does not reference a key the
+        // device never emits.
+        ButtonKey {
+            button: RemoteButton::Menu,
+            key: "KEY_PLAYPAUSE",
+        },
+        ButtonKey {
+            button: RemoteButton::Tv,
+            key: "KEY_TV",
+        },
+        ButtonKey {
+            button: RemoteButton::VolumeUp,
+            key: "KEY_VOLUMEUP",
+        },
+        ButtonKey {
+            button: RemoteButton::VolumeDown,
+            key: "KEY_VOLUMEDOWN",
+        },
+        // The Assistant key is an ordinary consumer Search usage on the HID
+        // side; holding it drives ATVV and the synthetic trigger.
+        ButtonKey {
+            button: RemoteButton::Voice,
+            key: "KEY_SEARCH",
+        },
+    ],
+    gesture_timing: GestureTiming {
+        double_click_ms: 300,
+        long_press_ms: 550,
+        repeat_start_ms: 350,
+        stable_release_ms: 0,
+        suppression_ms: 50,
+        repeat_interval_ms: 100,
+        back_repeat_interval_ms: 50,
+    },
+};
+
 /// Profiles compiled into this build.
-pub static PROFILES: &[DeviceProfile] = &[RC003];
+pub static PROFILES: &[DeviceProfile] = &[RC003, CHROMECAST];
 
 #[must_use]
 pub fn find(id: &str) -> Option<&'static DeviceProfile> {
     PROFILES.iter().find(|profile| profile.id == id)
+}
+
+/// Find the profile for a Bluetooth PnP vendor/product pair.
+#[must_use]
+pub fn find_by_ids(vendor_id: u16, product_id: u16) -> Option<&'static DeviceProfile> {
+    PROFILES
+        .iter()
+        .find(|profile| profile.vendor_id == vendor_id && profile.product_id == product_id)
 }
 
 #[cfg(test)]
@@ -369,15 +476,58 @@ mod tests {
     }
 
     #[test]
+    fn chromecast_profile_carries_observed_facts() {
+        assert_eq!(CHROMECAST.protocol, ProtocolVersion::V1_0);
+        assert_eq!(CHROMECAST.vendor_id, 0x18D1);
+        assert_eq!(CHROMECAST.product_id, 0x9450);
+        assert_eq!(CHROMECAST.frame_size, 240);
+        assert_eq!(CHROMECAST.sample_rate, 16_000);
+        assert_eq!(CHROMECAST.gain_db, 0);
+        assert_eq!(CHROMECAST.mic_open, MicOpenVariant::Short);
+        assert_eq!(CHROMECAST.mic_close, MicCloseVariant::Bare);
+        assert_eq!(CHROMECAST.keepalive, KeepaliveVariant::Bare);
+        assert!(CHROMECAST.matches_name("Chromecast Remote"));
+        assert!(!CHROMECAST.matches_name("Chromecast"));
+        assert_eq!(CHROMECAST.primary_key(RemoteButton::Ok), Some("KEY_SELECT"));
+        assert_eq!(
+            CHROMECAST.primary_key(RemoteButton::Home),
+            Some("KEY_HOMEPAGE")
+        );
+        assert_eq!(
+            CHROMECAST.primary_key(RemoteButton::Voice),
+            Some("KEY_SEARCH")
+        );
+        assert_eq!(CHROMECAST.primary_key(RemoteButton::Tv), Some("KEY_TV"));
+        assert_eq!(CHROMECAST.gesture_timing.stable_release_ms, 0);
+    }
+
+    #[test]
+    fn chromecast_every_logical_button_has_a_key() {
+        for button in RemoteButton::LOGICAL {
+            assert!(
+                CHROMECAST.primary_key(button).is_some(),
+                "{button} has no key"
+            );
+        }
+    }
+
+    #[test]
     fn profile_builds_commands() {
         assert_eq!(RC003.mic_open(), vec![0x0C, 0x00]);
         assert_eq!(RC003.mic_close(StreamId(3)), vec![0x0D]);
         assert_eq!(RC003.mic_extend(StreamId(3)), vec![0x0E]);
+        assert_eq!(CHROMECAST.mic_open(), vec![0x0C, 0x00]);
+        assert_eq!(CHROMECAST.mic_close(StreamId(3)), vec![0x0D]);
+        assert_eq!(CHROMECAST.mic_extend(StreamId(3)), vec![0x0E]);
     }
 
     #[test]
     fn lookup_is_by_stable_id() {
         assert_eq!(find("miremote-rc003"), Some(&RC003));
+        assert_eq!(find("google-chromecast"), Some(&CHROMECAST));
         assert_eq!(find("unknown"), None);
+        assert_eq!(find_by_ids(0x18D1, 0x9450), Some(&CHROMECAST));
+        assert_eq!(find_by_ids(0x2717, 0x32B8), Some(&RC003));
+        assert_eq!(find_by_ids(0x0000, 0x0000), None);
     }
 }

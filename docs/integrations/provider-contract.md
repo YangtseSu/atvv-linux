@@ -32,7 +32,10 @@ key; a host-side "start" cannot produce frames.
 ## Audio contract
 
 - Node: `Audio/Source`, name `atvv-<profile>` (for example
-  `atvv-miremote-rc003`).
+  `atvv-miremote-rc003` or `atvv-google-chromecast`). The name follows the
+  active device's profile; switching to a device with another profile replaces
+  the resident source. Switching between devices of the same profile keeps the
+  name.
 - Format: 16 kHz, mono, S16LE. `CAPS_RESP` is authoritative for the ATVV
   codec; the PipeWire node always presents 16 kHz mono.
 - Lifecycle: the source is resident for the daemon lifetime and outputs

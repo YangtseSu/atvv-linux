@@ -673,11 +673,13 @@ pub struct AppWindow {
     model: RefCell<Option<GuiModel>>,
     status: RefCell<Option<DaemonStatus>>,
     title: adw::WindowTitle,
-    device_chip: gtk::Button,
+    device_chip: gtk::MenuButton,
     device_chip_name: gtk::Label,
     device_chip_icon: gtk::Image,
     device_chip_battery: gtk::Label,
     device_chip_battery_icon: gtk::Image,
+    device_list: gtk::ListBox,
+    device_info_button: gtk::Button,
     layout_chip: gtk::MenuButton,
     layout_chip_name: gtk::Label,
     layout_popover: gtk::Popover,
@@ -766,8 +768,30 @@ impl AppWindow {
             .build();
         header.pack_start(&menu_button);
 
-        let device_chip = gtk::Button::builder()
-            .tooltip_text(tr("Device information"))
+        let device_popover = gtk::Popover::new();
+        device_popover.set_size_request(340, -1);
+        let device_pop_content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        device_pop_content.set_margin_top(10);
+        device_pop_content.set_margin_bottom(10);
+        device_pop_content.set_margin_start(10);
+        device_pop_content.set_margin_end(10);
+        let device_pop_title = gtk::Label::new(Some(tr("Devices")));
+        device_pop_title.add_css_class("heading");
+        device_pop_title.set_halign(gtk::Align::Start);
+        device_pop_content.append(&device_pop_title);
+        let device_list = gtk::ListBox::new();
+        device_list.set_selection_mode(gtk::SelectionMode::None);
+        device_list.add_css_class("boxed-list");
+        device_pop_content.append(&device_list);
+        device_pop_content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        let device_info_button = gtk::Button::with_label(tr("Device information…"));
+        device_info_button.add_css_class("flat");
+        device_pop_content.append(&device_info_button);
+        device_popover.set_child(Some(&device_pop_content));
+
+        let device_chip = gtk::MenuButton::builder()
+            .popover(&device_popover)
+            .tooltip_text(tr("Devices"))
             .build();
         device_chip.add_css_class("flat");
         device_chip.add_css_class("device-chip");
@@ -1134,6 +1158,8 @@ impl AppWindow {
             device_chip_icon,
             device_chip_battery,
             device_chip_battery_icon,
+            device_list,
+            device_info_button,
             layout_chip,
             layout_chip_name,
             layout_popover,
@@ -1236,8 +1262,38 @@ impl AppWindow {
         ui.board.connect_voice(move || this.open_voice());
 
         let this = Rc::clone(ui);
-        ui.device_chip
-            .connect_clicked(move |_| this.device_dialog.present(&this.window));
+        ui.device_info_button.connect_clicked(move |_| {
+            this.device_chip.popdown();
+            this.device_dialog.present(&this.window);
+        });
+
+        let this = Rc::clone(ui);
+        ui.device_list.connect_row_activated(move |_, row| {
+            let address = row.widget_name().to_string();
+            let address = address.strip_prefix("device-row-").unwrap_or_default();
+            if address.is_empty() {
+                return;
+            }
+            let dirty = this
+                .model
+                .borrow()
+                .as_ref()
+                .is_some_and(|model| model.dirty);
+            if dirty {
+                this.toast(tr("Apply or revert before switching devices."));
+                return;
+            }
+            let active = this
+                .model
+                .borrow()
+                .as_ref()
+                .and_then(|model| model.document.active_device.as_deref())
+                == Some(address);
+            this.device_chip.popdown();
+            if !active {
+                this.backend.select_device(address.to_string());
+            }
+        });
 
         let this = Rc::clone(ui);
         ui.layout_manage.connect_clicked(move |_| {
@@ -1552,6 +1608,22 @@ impl AppWindow {
                 if reload {
                     self.backend.load();
                 }
+            }
+            Event::DeviceSwitched(Ok(())) => {
+                self.force_capture_off();
+                self.toast(tr("Device switched"));
+                self.backend.load();
+            }
+            Event::DeviceSwitched(Err(error)) => {
+                self.show_error(&tr_args(
+                    "Cannot switch devices: {error}",
+                    &[("error", &error)],
+                ));
+                self.backend.load();
+            }
+            Event::DeviceChanged(_) => {
+                self.force_capture_off();
+                self.backend.load();
             }
             Event::LayoutSwitched(Err(error)) => {
                 self.show_error(&tr_args(
@@ -2601,11 +2673,70 @@ impl AppWindow {
         let accessible = tr_args("Device: {name}", &[("name", &label)]);
         self.device_chip
             .update_property(&[gtk::accessible::Property::Label(&accessible)]);
+        self.refresh_device_list();
     }
 
     fn refresh_device_dialog(&self) {
         let status = self.status.borrow();
         self.device_dialog.refresh(status.as_ref());
+    }
+
+    fn refresh_device_list(&self) {
+        while let Some(row) = self.device_list.first_child() {
+            self.device_list.remove(&row);
+        }
+        let model = self.model.borrow();
+        let Some(model) = model.as_ref() else {
+            return;
+        };
+        let status = self.status.borrow();
+        for (address, device) in &model.document.devices {
+            let active = model.document.active_device.as_deref() == Some(address.as_str());
+            let connected = active && status.as_ref().is_some_and(|status| status.connected);
+            let name = device
+                .label
+                .clone()
+                .or_else(|| {
+                    active
+                        .then(|| {
+                            status
+                                .as_ref()
+                                .map(|status| status.device.name.trim().to_string())
+                        })
+                        .flatten()
+                })
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| address.clone());
+            let subtitle = format!(
+                "{address} · {} · {}{}",
+                device.profile,
+                model.layout_name(&device.layout),
+                if connected {
+                    format!(" · {}", tr("Connected"))
+                } else {
+                    String::new()
+                },
+            );
+            let row = adw::ActionRow::builder()
+                .title(name)
+                .subtitle(subtitle)
+                .activatable(true)
+                .build();
+            row.set_widget_name(&format!("device-row-{address}"));
+            if active {
+                let check = gtk::Image::from_icon_name("object-select-symbolic");
+                check.add_css_class("accent");
+                row.add_suffix(&check);
+            }
+            self.device_list.append(&row);
+        }
+        if model.document.devices.is_empty() {
+            let row = adw::ActionRow::builder()
+                .title(tr("No known devices"))
+                .subtitle(tr("Run atvvctl pair to add one."))
+                .build();
+            self.device_list.append(&row);
+        }
     }
 
     fn refresh_voice_controls(&self) {

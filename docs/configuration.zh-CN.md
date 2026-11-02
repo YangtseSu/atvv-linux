@@ -12,16 +12,23 @@
 ## 模式
 
 ```toml
-schema_version = 2
-profile = "miremote-rc003"          # 必须与构建中的设备配置文件一致
-device = "C0:5D:39:F8:2D:4C"        # 由 `atvvctl pair` 写入
+schema_version = 3
+active_device = "C0:5D:39:F8:2D:4C"  # 由 `atvvctl pair` 写入
 adapter = "hci0"                    # 可选的 BlueZ 适配器
 gain_db = 0                         # -24..=24
 input = true                        # evdev/uinput 路径
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # 按键或组合键；none 表示禁用
 allow_exec = false                  # 启用 exec: 操作
-active_layout = "editor"            # default 或某个用户布局 id
+
+[devices."C0:5D:39:F8:2D:4C"]
+label = "客厅"                      # 可选
+profile = "miremote-rc003"
+layout = "editor"                   # default 或某个用户布局 id
+
+[devices."74:46:B3:22:2D:D5"]
+profile = "google-chromecast"
+layout = "default"
 
 [layouts.editor]
 name = "Editor"
@@ -39,21 +46,27 @@ long = "combo:ctrl+alt+v"
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `schema_version` | `2` | 版本 1 在加载时迁移；更高版本会被拒绝。 |
-| `profile` | 当前设备配置文件 | 不同的 id 会被拒绝；按键映射只属于一个设备配置文件。 |
-| `device` | 无 | 蓝牙地址；`atvvctl pair` 会写入。更改在下次启动时生效。 |
+| `schema_version` | `3` | 版本 1 和 2 在加载时迁移；更高版本会被拒绝。 |
+| `active_device` | 无 | 活动设备的蓝牙地址；`atvvctl pair` 会写入并设为活动设备。 |
+| `[devices.<address>]` | 无 | 已知设备：可选 `label`、必填 `profile` 和 `layout`。地址会规范为大写。 |
 | `adapter` | BlueZ 默认 | 适配器名称，例如 `hci0`。 |
 | `gain_db` | 设备配置文件值 | 限制在 ±24 dB；没有 AGC。 |
 | `input` | `true` | 为 false 时禁用发现、独占和 uinput。 |
 | `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
 | `allow_exec` | `false` | 任何 `exec:` 操作都需要它。 |
-| `active_layout` | `default` | 驱动输入运行时的布局。 |
 | `[layouts.<id>]` | 无 | 用户布局：`name`、可选的 `description`、`[gesture]` 和 `[buttons.<button>]`。 |
+
+只有活动设备拥有 GATT 会话、PipeWire 源、HID 独占和映射板。
+`atvvctl device use <address>` 无需重启守护进程即可切换已知设备；旧设备会先断开、
+释放独占，再连接新设备。每个设备的布局保存在其设备条目中，切换时会重新加载该
+设备的活动布局。已知设备在守护进程重启后仍然存在。
+`atvvctl device rename <address> <label>` 设置或清除可选标签；空标签表示清除。
 
 十二个可映射按键是 `power`、`ok`、`back`、`up`、`down`、`left`、`right`、
 `home`、`menu`、`tv`、`volume_up` 和 `volume_down`。语音键不可映射：它控制
-ATVV 麦克风和 vinput 触发。
+ATVV 麦克风和 vinput 触发。`google-chromecast` 配置文件的 OK 是 `KEY_SELECT`，
+主页是 `KEY_HOMEPAGE`，语音键是 `KEY_SEARCH`；未映射的应用键和静音键会透传。
 
 槽位是 `single`、`double` 和 `long`。缺失的槽位表示“使用设备配置文件默认值”，
 而不是“未映射”。默认映射会为每个逻辑按键重新发出原始按键，`power` 除外；
@@ -69,9 +82,10 @@ ATVV 麦克风和 vinput 触发。
 布局 id 匹配 `[a-z0-9][a-z0-9_-]{0,31}`；`default` 以及预设 id `mpv`、`slides`、
 `omp` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
 
-全局字段（`profile`、`device`、`adapter`、`gain_db`、`input`、`vinput`、
-`trigger_key`、`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、设备或
-录音键。`default` 不能被存储、重命名、删除或重置，也不会出现在 `layouts` 中。
+全局字段（`adapter`、`gain_db`、`input`、`vinput`、`trigger_key`、
+`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、活动设备或录音键。
+`default` 不能被存储、重命名、删除或重置，也不会出现在 `layouts` 中。切换布局时
+会同步更新活动设备的 `layout` 条目。
 
 手势覆盖作用于整个活动布局，因此切换布局可能改变双击/长按行为。
 `atvvctl layout show` 会打印实际生效的时序。
@@ -101,12 +115,13 @@ GUI 通过“从预设新建…”和“重置为预设…”提供同一目录�
 ### 迁移
 
 包含顶层 `[buttons]` 或 `[gesture]` 表的版本 1 文件在加载时迁移为名为 "Custom"
-的用户布局 `custom`，并设置 `active_layout = "custom"`。没有覆盖的版本 1 文件变为
-`active_layout = "default"`。下一次保存会写入版本 2 并删除旧表。版本 2 文件不得
-包含顶层表，并且 `SetConfig` 只接受版本 2，因此过期的客户端会明确失败，而不是
-悄悄丢弃布局。
+的用户布局 `custom`；没有覆盖的版本 1 文件使用 `default` 模板。版本 2 文件不得
+包含顶层表。下一次保存会写入版本 3：单个 `device` 字段变成带文件和布局信息的
+`[devices.<address>]` 条目，`active_device` 指向它，旧的顶层 `profile`、`device`
+和 `active_layout` 键被删除。版本 3 文件完整控制设备注册表。`SetConfig` 只接受
+版本 3，因此过期的客户端会明确失败，而不是悄悄丢弃布局。
 
-## 操作语法## 操作语法
+## 操作语法
 
 ```text
 none

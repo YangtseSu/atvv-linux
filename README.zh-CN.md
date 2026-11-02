@@ -11,8 +11,9 @@ evdev/uinput 按键映射和 D-Bus 控制接口。
 ## 状态
 
 ATVV v1.0 采集、输入重映射、守护进程和 D-Bus API、CLI、MCP 服务器以及可选的
-GTK 配置应用均已实现。RC003 音频路径和 fcitx5-vinput 源路径已在真实设备和系统
-服务上验证；证据见下文链接。
+GTK 配置应用均已实现。RC003 和 Google Chromecast Remote 音频路径均已实现并有
+真实设备运行记录（Chromecast 的 HID 按键映射和双设备切换仍待完成）；证据见下文
+链接。
 
 fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间关闭了 ATVV 的
 提案 PR，并会在自己的设计中实现自动选择和声明键绑定。在发布版提供该功能之前，
@@ -26,24 +27,26 @@ fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间
 - `atvv-audio`：原生 PipeWire `Audio/Source`，带容量受限的无锁队列、合成音测试
   和节点移除恢复。消费者链接时源会被唤醒（`node.pause-on-idle=false`）；PipeWire
   服务重启由 systemd 单元负责（ADR 0005）。
-- `atvv-input`：由配置文件驱动的 evdev 发现和 `EVIOCGRAB`、RC003 手势引擎、
+- `atvv-input`：由配置文件驱动的 evdev 发现和 `EVIOCGRAB`、按配置文件的手势时序、
   uinput 虚拟键盘，以及为被独占的语音键配置合成触发键/组合键。
   `atvvctl input fake-remote` 无需硬件即可走完整条路径。
-- `atvv-config`：唯一的 `daemon.toml` 模式解析器、带版本号的 JSON 配置文档、
-  按按键校验操作、手势覆盖、`exec:` 策略，以及带应用验证预设（mpv、
-  LibreOffice Impress/WPS 演示、omp）的命名布局。实时改动通过 `atvvctl config`
-  或 D-Bus `SetConfig` 方法应用。
+- `atvv-config`：唯一的 `daemon.toml` 模式解析器（带已知设备注册表和按设备布局的
+  模式 v3）、带版本号的 JSON 配置文档、按按键校验操作、手势覆盖、`exec:` 策略，
+  以及带应用验证预设（mpv、LibreOffice Impress/WPS 演示、omp）的命名布局。实时
+  改动通过 `atvvctl config` 或 D-Bus `SetConfig` 方法应用。
 - `atvv-bluez`：BlueZ GATT 传输（`bluer`）、适配器/设备选择、带 `StartNotify`
-  回退的 `AcquireNotify`、配对代理和重连处理。
+  回退的 `AcquireNotify`、会上报 PnP id 供配置文件推断的配对代理，以及重连处理。
 - `atvv-daemon` / `atvvd`：`Transport` trait 之后的会话编排、mock 与 BlueZ
   传输、定时器、PCM 解码、常驻 PipeWire 源、语音键边沿麦克风控制、触发键和
-  `org.fcitx.Vinput` 模式、输入层，以及 `org.atvv.Daemon` 上的 JSON 视图模型。
-- `atvvctl`：配置文件查看、CAPS 解码、无硬件的 RC003 会话模拟、音频源冒烟测试、
+  `org.fcitx.Vinput` 模式、输入层、带按设备布局和设备注册表的切换（配置文件变化
+  时重建源），以及 `org.atvv.Daemon` 上的 JSON 视图模型。
+- `atvvctl`：配置文件查看、CAPS 解码、无硬件的会话模拟、音频源冒烟测试、
   假输入遥控器，以及 `status`、`contract`、`mic start|stop|toggle`、`reload`、
-  `config get|set`、`capture`、`map test`、`layout list|show|use|preset`、`pair`、
-  `record`、`monitor` 和 `doctor`。
+  `config get|set`、`capture`、`map test`、`layout list|show|use|preset`、
+  `device list|use|rename`、`pair`、`record`、`monitor` 和 `doctor`。
 - `atvv-mcp`：stdio MCP 服务器，提供 `status`、`contract`、`voice_start`、
-  `voice_stop`、`voice_toggle`、`list_devices` 和 `reload`。
+  `voice_stop`、`voice_toggle`、`list_devices`、`devices`、`select_device`
+  和 `reload`。
 - `atvv-gui` / `atvv-config`：GTK4 + libadwaita 配置应用，包含可点击的遥控器
   示意图、按槽位的操作编辑器、带应用验证预设的布局管理器、键盘和遥控器按键学习、
   录音键输出选择、测试模式和脚本策略。界面跟随桌面语言环境：英文，`zh*` 语言环境
@@ -55,6 +58,12 @@ fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间
 真实 CAPS、音频、保活和重连；确切证据和剩余缺口（配对手势、可懂度、已安装单元
 的 PipeWire 重启）见
 [`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md)。
+
+第二个配置文件是 Google Chromecast Remote（`google-chromecast`，USB
+`18d1:9450`，DIS 型号 `A3`，ATVV v1.0，16 kHz ADPCM，240 字节帧）。2026-11-02
+的运行（`74:46:B3:22:2D:D5`）验证了配对推断、CAPS、音频和裸 `MIC_EXTEND` 保活；
+HID 按键映射和双设备切换仍待完成。证据和正版判断见
+[`docs/research/chromecast-hardware-evidence.md`](docs/research/chromecast-hardware-evidence.md)。
 
 ## 安装（Arch）
 
@@ -81,22 +90,25 @@ makepkg -si
 先配对遥控器，再启用用户服务：
 
 ```sh
-atvvctl pair C0:5D:39:F8:2D:4C
+atvvctl pair C0:5D:39:F8:2D:4C        # RC003
+atvvctl pair 74:46:B3:22:2D:D5        # Chromecast Remote
 systemctl --user daemon-reload
 systemctl --user enable --now atvvd
 atvvctl doctor
 ```
 
-`atvvd` 通过 PipeWire 提供 `atvv-miremote-rc003`。在 fcitx5-vinput 中按名称选择它
-（见 [`docs/integrations/fcitx5-vinput.zh-CN.md`](docs/integrations/fcitx5-vinput.zh-CN.md)）；
-不要把它设为系统默认设备。
+`atvvd` 通过 PipeWire 提供 `atvv-<profile>`（`atvv-miremote-rc003` 或
+`atvv-google-chromecast`）。在 fcitx5-vinput 中按名称选择它（见
+[`docs/integrations/fcitx5-vinput.zh-CN.md`](docs/integrations/fcitx5-vinput.zh-CN.md)）；
+不要把它设为系统默认设备。使用 `atvvctl device use <MAC>` 在已知设备间切换并
+重新加载各自的布局。
 
 按键映射、手势时序、`exec:` 启用方式和实时 `SetConfig` 路径记录在
 [`docs/configuration.zh-CN.md`](docs/configuration.zh-CN.md)。
 
 软件包安装 `/usr/bin/{atvvd,atvvctl,atvv-mcp}`；
 `/usr/lib/systemd/user/atvvd.service`；
-`/usr/lib/udev/rules.d/70-atvv-linux.rules`（对 RC003 事件节点和
+`/usr/lib/udev/rules.d/70-atvv-linux.rules`（对 RC003、Chromecast 事件节点和
 `/dev/uinput` 使用 `uaccess`）；`/usr/lib/modules-load.d/atvv-linux.conf`
 （`uinput`）；man 手册；以及 bash/zsh/fish 补全。不安装系统级 D-Bus 策略：
 守护进程使用会话总线。
@@ -108,17 +120,19 @@ atvvctl doctor
 | `cannot connect to the session D-Bus` | `systemctl --user status atvvd`；`systemctl --user enable --now atvvd` |
 | `The name is not activatable` | `atvvd` 未运行；检查 `systemctl --user status atvvd`。`0.1.0-2` 在遥控器断开时保持守护进程运行并重试链接。 |
 | `no device address` | `atvvctl pair <MAC>` 会写入 `~/.config/atvv/daemon.toml` |
-| 音频源缺失 | `pw-cli info atvv-miremote-rc003`；`atvvctl doctor` |
+| 音频源缺失 | `pw-cli info atvv-miremote-rc003` 或 `atvv-google-chromecast`；`atvvctl doctor` |
 | `uinput` 不可写或按键未被独占 | `/dev/uinput` 存在且可写；`uinput` 模块已加载；安装 udev 规则后重新登录 |
 | 遥控器未连接或缺少 CAPS | `bluetoothctl info <MAC>`；`atvvctl doctor`；`atvvctl monitor` |
 | 语音键没有触发 fcitx | 守护进程默认 `trigger_key = "DICTATE"`。保留用户的 `[TriggerKey]` 条目并添加 `1=Dictate`；编辑前停止 fcitx5，编辑后重启。整段注释掉的 `[TriggerKey]` 会禁用触发。`F24` 是回退键。 |
-| F5 传到了当前应用 | RC003 节点未被独占；检查 `atvvctl status` 中的 `input.grabbed`，并关闭其他独占程序 |
+| F5 传到了当前应用 | 遥控器节点未被独占；检查 `atvvctl status` 中的 `input.grabbed`，并关闭其他独占程序 |
 | PipeWire 重启后没有音频源 | `PartOf=pipewire.service` 会重启 `atvvd`；检查 `atvvctl status` 和 `pw-cli info` |
 | 音频源存在但 fcitx 未列出 | 音频源出现后重启 `vinput-daemon` |
 
 设备支持和真实设备记录见
-[`docs/device-support.zh-CN.md`](docs/device-support.zh-CN.md) 和
-[`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md)。
+[`docs/device-support.zh-CN.md`](docs/device-support.zh-CN.md)、
+[`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md)
+和
+[`docs/research/chromecast-hardware-evidence.md`](docs/research/chromecast-hardware-evidence.md)。
 
 ## 构建与测试
 

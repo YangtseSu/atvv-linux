@@ -11,7 +11,9 @@ use atvv_daemon::audio::PipeWireSink;
 use atvv_daemon::cli::Args;
 use atvv_daemon::daemon::{DaemonConfig, EventSink};
 use atvv_daemon::dbus::{self, DaemonInterface, DbusSink};
-use atvv_daemon::transport::{BluezTransport, MockConfig, MockHandle, MockTransport, Transport};
+use atvv_daemon::transport::{
+    BluezFactory, BluezTransport, MockConfig, MockFactory, MockHandle, MockTransport, Transport,
+};
 use atvv_protocol::profile::RC003;
 use clap::Parser;
 
@@ -28,27 +30,36 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let profile = RC003;
     let config_path = args.config.unwrap_or_else(atvv_config::default_path);
-    let loaded = atvv_config::load(&config_path, &profile)?;
-    let address = args.device.or_else(|| loaded.config.device.clone());
+    let mut loaded = atvv_config::load(&config_path, &RC003)?;
+    let address = args
+        .device
+        .clone()
+        .or_else(|| loaded.config.active_device.clone())
+        .or_else(|| args.mock.then(|| "02:00:00:00:00:01".to_string()))
+        .ok_or("no device address: pass --device or run `atvvctl pair <MAC>` first")?;
+    let profile = loaded
+        .config
+        .profile_for_address(&address)
+        .or_else(|| loaded.config.active_profile())
+        .copied()
+        .unwrap_or(RC003);
+    loaded.config.adopt_device(&address, &profile);
+    let profile = loaded.config.select_device(&address)?;
     let adapter = args.adapter.or_else(|| loaded.config.adapter.clone());
 
     // The mock handle must stay alive: dropping it closes the mock's command
     // channel and the transport reports a closed link.
     let (transport, _mock_handle): (Box<dyn Transport>, Option<MockHandle>) = if args.mock {
-        let address = address.unwrap_or_else(|| "02:00:00:00:00:01".to_string());
         let (transport, handle) = MockTransport::new(MockConfig {
-            address,
+            address: address.clone(),
             ..MockConfig::default()
         });
         (Box::new(transport), Some(handle))
     } else {
-        let address =
-            address.ok_or("no device address: pass --device or run `atvvctl pair <MAC>` first")?;
         let transport = BluezTransport::new(
             atvv_bluez::BluezConfig {
-                address,
+                address: address.clone(),
                 adapter: adapter.clone(),
                 ..atvv_bluez::BluezConfig::default()
             },
@@ -76,6 +87,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut config = DaemonConfig::new(profile, address.clone());
     config.source_name = source.name.clone();
     config.graph_rate = graph_rate;
+    config.audio_config = Some(source.clone());
     let existed = loaded.existed;
     // The document mirrors `daemon.toml`, not CLI overrides; `endpoint` and
     // `adapter` below are only the transport's effective values.
@@ -94,8 +106,16 @@ fn run() -> Result<(), Box<dyn Error>> {
         Some(Box::new(atvv_daemon::VinputClient::new()));
     let vinput_mode = config.config.vinput;
     let trigger_key = config.config.trigger_key.clone();
-    let (daemon, handle) =
+    let (mut daemon, handle) =
         atvv_daemon::Daemon::new(config, transport, Box::new(audio), signals, vinput);
+    if args.mock {
+        daemon.set_transport_factory(Box::new(MockFactory));
+    } else {
+        daemon.set_transport_factory(Box::new(BluezFactory {
+            adapter,
+            verbose: args.verbose,
+        }));
+    }
     let interface = DaemonInterface::new(
         handle.status(),
         handle.config(),

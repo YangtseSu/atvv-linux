@@ -87,6 +87,7 @@ pub enum Request {
     BeginCapture,
     EndCapture,
     RunAction(String),
+    SelectDevice(String),
     Shutdown,
 }
 
@@ -104,8 +105,10 @@ pub enum Event {
     CaptureStarted(Result<(), String>),
     CaptureEnded(Result<(), String>),
     ActionRun(Result<(), String>),
+    DeviceSwitched(Result<(), String>),
     Button(ButtonSignal),
     LayoutChanged(String),
+    DeviceChanged(String),
     SignalStreamEnded,
 }
 
@@ -122,12 +125,17 @@ pub trait DaemonApi {
     fn begin_capture(&self) -> zbus::Result<()>;
     fn end_capture(&self) -> zbus::Result<()>;
     fn run_action(&self, action: &str) -> zbus::Result<()>;
+    fn get_devices(&self) -> zbus::Result<String>;
+    fn select_device(&self, address: &str) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn button_event(&self, button: &str, trigger: &str, pressed: bool) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn layout_changed(&self, id: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn device_changed(&self, address: &str) -> zbus::Result<()>;
 }
 
 /// Connection to `org.atvv.Daemon`; created on the worker thread.
@@ -186,6 +194,10 @@ impl DaemonClient {
     fn run_action(&self, action: &str) -> Result<(), String> {
         zbus::block_on(self.proxy()?.run_action(action)).map_err(|error| error.to_string())
     }
+
+    fn select_device(&self, address: &str) -> Result<(), String> {
+        zbus::block_on(self.proxy()?.select_device(address)).map_err(|error| error.to_string())
+    }
 }
 
 /// Handle to the worker; commands are queued and never block the caller.
@@ -242,6 +254,10 @@ impl Backend {
 
     pub fn run_action(&self, action: String) {
         let _ = self.requests.send(Request::RunAction(action));
+    }
+
+    pub fn select_device(&self, address: String) {
+        let _ = self.requests.send(Request::SelectDevice(address));
     }
 
     pub fn stop(&self) {
@@ -348,6 +364,14 @@ fn worker(address: Option<&str>, requests: &Receiver<Request>, events: &Sender<E
                     client = None;
                 }
             }
+            Request::SelectDevice(address) => {
+                let result = active.select_device(&address);
+                let failed = result.is_err();
+                let _ = events.send(Event::DeviceSwitched(result));
+                if failed {
+                    client = None;
+                }
+            }
             Request::Shutdown => unreachable!(),
         }
     }
@@ -375,6 +399,9 @@ fn send_failure(request: &Request, events: &Sender<Event>, error: &str) {
         }
         Request::RunAction(_) => {
             let _ = events.send(Event::ActionRun(Err(error.to_string())));
+        }
+        Request::SelectDevice(_) => {
+            let _ = events.send(Event::DeviceSwitched(Err(error.to_string())));
         }
         Request::Shutdown => {}
     }
@@ -435,6 +462,32 @@ fn spawn_signal_listener(client: &DaemonClient, events: &Sender<Event>) {
                     };
                     if layout_events
                         .send(Event::LayoutChanged(args.id().to_string()))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            });
+        });
+
+    let connection = client.connection.clone();
+    let device_events = Sender::clone(events);
+    let _ = thread::Builder::new()
+        .name("atvv-gui-device-signals".to_string())
+        .spawn(move || {
+            zbus::block_on(async {
+                let Ok(proxy) = DaemonApiProxy::new(&connection).await else {
+                    return;
+                };
+                let Ok(mut stream) = proxy.receive_device_changed().await else {
+                    return;
+                };
+                while let Some(event) = stream.next().await {
+                    let Ok(args) = event.args() else {
+                        continue;
+                    };
+                    if device_events
+                        .send(Event::DeviceChanged(args.address().to_string()))
                         .is_err()
                     {
                         return;

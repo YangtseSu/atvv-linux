@@ -64,22 +64,29 @@ dialog.
 ## Header
 
 - **Menu**: *Device information…*, *Revert changes*, *About ATVV*, and *Quit*.
-- **Device chip**: the name BlueZ reports for the remote (the user-editable
-  alias, for example the remote's own name) and the battery level. Without a
-  BlueZ name it falls back to the profile display name and model. It opens the
-  read-only *Device information* dialog with the name, battery, remote address,
-  and the Device Information Service facts (firmware, hardware and software
+- **Device chip**: the name BlueZ reports for the active remote (the
+  user-editable alias, for example the remote's own name) and the battery
+  level. Without a BlueZ name it falls back to the profile display name and
+  model. It opens the device popover: every known device with its profile and
+  layout, an active check mark, and a *Device information…* row. Selecting
+  another device calls `SelectDevice`; the old session ends, its HID grab is
+  released, and the new device reconnects in the background. While the
+  document is dirty the switch is blocked with a toast; apply or revert first.
+  The *Device information* dialog shows the name, battery, remote address, and
+  the Device Information Service facts (firmware, hardware and software
   revisions, serial number, manufacturer, model). Rows without a value are
   hidden; a disconnected battery reads `last known`.
-- **Layout chip**: the active layout name. It opens the layout switcher, which
-  lists every layout and opens the manager.
-- **Subtitle**: the profile model (`RC003`) and the session state. The
+- **Layout chip**: the active layout name of the active device. It opens the
+  layout switcher, which lists every layout and opens the manager.
+- **Subtitle**: the profile model (`RC003`, `A3`) and the session state. The
   Bluetooth address lives in the device information dialog.
 - **Test**, **Revert**, and **Apply**.
 
-The device chip covers the one active device. Switching between known remotes
-and per-device layouts belongs to step 21, so this step opens device
-information instead of a device list.
+A device switch ends test mode, reloads the active device's document and its
+per-device layout, and updates the source name when the profile changes
+(`atvv-miremote-rc003` versus `atvv-google-chromecast`). Known devices are
+listed from `GetConfig`; the GUI never talks to BlueZ, and pairing stays in
+`atvvctl pair`.
 
 ## Layouts
 
@@ -235,20 +242,21 @@ itself is theme-neutral.
 
 ## Persistence
 
-The daemon writes the active layout, every user layout, and the global settings
-to `$XDG_CONFIG_HOME/atvv/daemon.toml` (default
+The daemon writes the active device, the known-device registry, the active
+layout, every user layout, and the global settings to
+`$XDG_CONFIG_HOME/atvv/daemon.toml` (default
 `~/.config/atvv/daemon.toml`). The same document is available through
 `atvvctl config get --json`, `atvv-mcp`, and the daemon's D-Bus API, so the GUI
-is not a second source of truth. The active layout survives daemon restarts.
+is not a second source of truth. The active device and its layout survive
+daemon restarts.
 
 ## Limits
 
-- One device profile at a time; the window shows the profile reported by the
-  daemon.
-- Device switching and per-device layouts belong to step 21; the layout chip
-  switches layouts for the one active device. The board follows the interface
-  reference except for the device switcher popover, the editor's raw-value
-  preview line, and connector arrows between cards and the diagram.
+- One active device profile at a time; the window shows the profile reported
+  by the daemon. The device popover switches between known devices and reloads
+  that device's layout. The board follows the interface reference; the second
+  remote shown there is illustrative.
+- No simultaneous devices or per-device PipeWire sources.
 - No per-application layers or automatic shortcut discovery.
 - No ASR or cloud protocol in the app; dictation only drives the ATVV session.
 - The GUI is optional. `atvvd`, `atvvctl`, `atvv-mcp`, and consumers such as

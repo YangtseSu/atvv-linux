@@ -67,6 +67,52 @@ pub trait Transport: Send {
     fn write_command(&mut self, bytes: &[u8]) -> Result<(), TransportError>;
     /// Ask the transport to re-establish the link after a disconnect.
     fn reconnect(&mut self) -> Result<(), TransportError>;
+    /// Release the link; the default is a no-op for transports that do not
+    /// own a remote connection (the mock).
+    fn disconnect(&mut self) -> Result<(), TransportError> {
+        Ok(())
+    }
+}
+
+/// Creates a transport for another address after `SelectDevice`.
+pub trait TransportFactory: Send {
+    fn create(&self, address: &str) -> Result<Box<dyn Transport>, TransportError>;
+}
+
+/// BlueZ-backed factory used by `atvvd`.
+pub struct BluezFactory {
+    pub adapter: Option<String>,
+    pub verbose: bool,
+}
+
+impl TransportFactory for BluezFactory {
+    fn create(&self, address: &str) -> Result<Box<dyn Transport>, TransportError> {
+        Ok(Box::new(BluezTransport::new(
+            atvv_bluez::BluezConfig {
+                address: address.to_string(),
+                adapter: self.adapter.clone(),
+                ..atvv_bluez::BluezConfig::default()
+            },
+            self.verbose,
+        )))
+    }
+}
+
+/// Mock factory used by `atvvd --mock` to exercise device switching.
+pub struct MockFactory;
+
+impl TransportFactory for MockFactory {
+    fn create(&self, address: &str) -> Result<Box<dyn Transport>, TransportError> {
+        let (transport, handle) = MockTransport::new(MockConfig {
+            address: address.to_string(),
+            ..MockConfig::default()
+        });
+        // The handle only provides device-side control; keep it alive for the
+        // transport's lifetime is not possible without a side table, so the
+        // mock still connects and answers GET_CAPS without it.
+        drop(handle);
+        Ok(Box::new(transport))
+    }
 }
 
 /// RC003-shaped `CAPS_RESP`: v1.0, ADPCM 16 kHz, hold-to-talk, 120-byte frames.
@@ -542,6 +588,14 @@ impl Transport for BluezTransport {
 
     fn reconnect(&mut self) -> Result<(), TransportError> {
         self.connect()
+    }
+
+    fn disconnect(&mut self) -> Result<(), TransportError> {
+        if let Some(mut link) = self.link.take() {
+            link.disconnect()
+                .map_err(|error| TransportError::Other(error.to_string()))?;
+        }
+        Ok(())
     }
 }
 

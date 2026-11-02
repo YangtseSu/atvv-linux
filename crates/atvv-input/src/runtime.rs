@@ -76,6 +76,8 @@ pub struct InputOptions {
     pub voice_trigger: Option<String>,
     /// Gesture timing override; `None` uses the profile value.
     pub gesture: Option<GestureTiming>,
+    /// Bluetooth address to match; `None` accepts every profile match.
+    pub address: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -223,7 +225,7 @@ impl InputRuntime {
             profile: profile.id.to_string(),
             error,
         })?;
-        let discovery = discover(&profile, &keymap);
+        let discovery = discover(&profile, &keymap, options.address.as_deref());
         if discovery.matched.is_empty() {
             return Err(InputError::NoDevice(profile.id.to_string()));
         }

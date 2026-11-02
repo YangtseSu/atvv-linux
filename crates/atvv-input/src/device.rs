@@ -119,7 +119,7 @@ fn is_pointer(device: &Evdev) -> bool {
 /// those entries are skipped. If `/dev/input` itself cannot be read, the
 /// result is an empty discovery.
 #[must_use]
-pub fn discover(profile: &DeviceProfile, keymap: &KeyMap) -> Discovery {
+pub fn discover(profile: &DeviceProfile, keymap: &KeyMap, address: Option<&str>) -> Discovery {
     let mut discovery = Discovery::default();
     let Ok(devices) = evdevil::enumerate() else {
         return discovery;
@@ -136,6 +136,12 @@ pub fn discover(profile: &DeviceProfile, keymap: &KeyMap) -> Discovery {
         let Some(quality) = match_quality(profile, id.vendor(), id.product(), &name) else {
             continue;
         };
+        if let Some(address) = address {
+            let unique = device.unique_id().ok().flatten();
+            if !unique.is_some_and(|unique| unique.eq_ignore_ascii_case(address)) {
+                continue;
+            }
+        }
         if is_pointer(&device) {
             discovery.skipped.push(SkippedDevice {
                 path,

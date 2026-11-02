@@ -22,7 +22,7 @@ use atvv_input::{
 };
 use atvv_protocol::caps::{Capabilities, InteractionModel, ProtocolVersion};
 use atvv_protocol::events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
-use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find};
+use atvv_protocol::profile::{PROFILES, RC003, RemoteButton, find, find_by_ids};
 use atvv_protocol::session::Session;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
@@ -68,6 +68,11 @@ enum Command {
     },
     /// Show the running daemon's status from `org.atvv.Daemon`.
     Status,
+    /// List, switch, or label known devices.
+    Device {
+        #[command(subcommand)]
+        command: DeviceCommand,
+    },
     /// Print the provider contract consumers discover on the source.
     Contract {
         /// Emit the contract as JSON.
@@ -112,6 +117,9 @@ enum Command {
         /// BlueZ adapter name such as `hci0`.
         #[arg(long)]
         adapter: Option<String>,
+        /// Device profile id; inferred from the Bluetooth PnP ids when absent.
+        #[arg(long)]
+        profile: Option<String>,
         /// Do not write the address to daemon.toml.
         #[arg(long)]
         no_save: bool,
@@ -288,9 +296,6 @@ struct ConfigSet {
     /// Synthetic key or chord; `none` disables it.
     #[arg(long)]
     trigger_key: Option<String>,
-    /// Bluetooth address saved for the next start.
-    #[arg(long)]
-    device: Option<String>,
     /// BlueZ adapter name saved for the next start.
     #[arg(long)]
     adapter: Option<String>,
@@ -359,6 +364,24 @@ enum ProfileCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum DeviceCommand {
+    /// List known devices and the active one.
+    List {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Switch to a known device without restarting the daemon.
+    Use { address: String },
+    /// Set or clear a device's user label.
+    Rename {
+        address: String,
+        /// New label; an empty string clears it.
+        label: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum CapsCommand {
     /// Decode a hex payload, e.g. 0B010002000078.
     Decode { hex: String },
@@ -394,6 +417,11 @@ fn run() -> Result<(), String> {
             InputCommand::FakeRemote { hold } => input_fake_remote(hold),
         },
         Command::Status => status(),
+        Command::Device { command } => match command {
+            DeviceCommand::List { json } => device_list(json),
+            DeviceCommand::Use { address } => device_use(&address),
+            DeviceCommand::Rename { address, label } => device_rename(&address, &label),
+        },
         Command::Contract { json } => contract(json),
         Command::Mic { command } => mic(command),
         Command::Reload => reload(),
@@ -404,8 +432,9 @@ fn run() -> Result<(), String> {
         Command::Pair {
             address,
             adapter,
+            profile,
             no_save,
-        } => pair(&address, adapter, no_save),
+        } => pair(&address, adapter, profile, no_save),
         Command::Record {
             wav,
             seconds,
@@ -462,6 +491,75 @@ fn status() -> Result<(), String> {
     let value = client.status_json().map_err(|error| error.to_string())?;
     let rendered = serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?;
     println!("{rendered}");
+    Ok(())
+}
+
+fn device_list(json: bool) -> Result<(), String> {
+    let client = daemon_client()?;
+    let value = client
+        .device_list()
+        .map_err(|error| format!("cannot read devices: {error}"))?;
+    if json {
+        let rendered = serde_json::to_string_pretty(&value)
+            .map_err(|error| format!("cannot render devices: {error}"))?;
+        println!("{rendered}");
+        return Ok(());
+    }
+    let active = value["active_device"].as_str().unwrap_or("-");
+    println!("active: {active}");
+    for device in value["devices"].as_array().into_iter().flatten() {
+        let address = device["address"].as_str().unwrap_or("-");
+        let name = device["label"]
+            .as_str()
+            .or_else(|| device["name"].as_str())
+            .unwrap_or("-");
+        let profile = device["profile"].as_str().unwrap_or("-");
+        let layout = device["layout"].as_str().unwrap_or("-");
+        let connected = if device["connected"].as_bool() == Some(true) {
+            "connected"
+        } else {
+            "offline"
+        };
+        let battery = device["battery_percent"]
+            .as_u64()
+            .map_or_else(String::new, |percent| format!(" {percent}%"));
+        println!(
+            "{} {address:<17} {name:<28} {profile:<22} {layout:<16} {connected}{battery}",
+            if device["active"].as_bool() == Some(true) {
+                "*"
+            } else {
+                " "
+            }
+        );
+    }
+    Ok(())
+}
+
+fn device_use(address: &str) -> Result<(), String> {
+    let address = atvv_config::normalize_address(address).map_err(|error| error.to_string())?;
+    let client = daemon_client()?;
+    client
+        .select_device(&address)
+        .map_err(|error| format!("cannot switch to {address}: {error}"))?;
+    println!("active: {address}");
+    Ok(())
+}
+
+fn device_rename(address: &str, label: &str) -> Result<(), String> {
+    let address = atvv_config::normalize_address(address).map_err(|error| error.to_string())?;
+    let client = daemon_client()?;
+    let mut document = client
+        .config()
+        .map_err(|error| format!("cannot read the configuration: {error}"))?;
+    let Some(device) = document.devices.get_mut(&address) else {
+        return Err(format!("unknown device {address}"));
+    };
+    let label = label.trim();
+    device.label = (!label.is_empty()).then(|| label.to_string());
+    client
+        .set_config(&document)
+        .map_err(|error| format!("cannot save the label: {error}"))?;
+    println!("{address}: {}", if label.is_empty() { "-" } else { label });
     Ok(())
 }
 
@@ -1010,10 +1108,6 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
         };
         changed = true;
     }
-    if let Some(device) = args.device {
-        document.device = Some(device);
-        changed = true;
-    }
     if let Some(adapter) = args.adapter {
         document.adapter = Some(adapter);
         changed = true;
@@ -1107,10 +1201,10 @@ fn default_action(
 fn render_config(document: &ConfigDocument) -> String {
     let trigger_key = document.trigger_key.as_deref().unwrap_or("none");
     let mut text = format!(
-        "schema:        {}\nprofile:       {}\ndevice:        {}\nadapter:       {}\ngain_db:       {}\ninput:         {}\nvinput:        {}\ntrigger_key:   {}\nallow_exec:    {}\nactive_layout: {}\nlayouts:\n",
+        "schema:        {}\nprofile:       {}\ndevice:        {}\nadapter:       {}\ngain_db:       {}\ninput:         {}\nvinput:        {}\ntrigger_key:   {}\nallow_exec:    {}\nactive_layout: {}\ndevices:\n",
         document.schema_version,
         document.profile,
-        document.device.as_deref().unwrap_or("-"),
+        document.active_device.as_deref().unwrap_or("-"),
         document.adapter.as_deref().unwrap_or("-"),
         document.gain_db,
         document.input,
@@ -1119,6 +1213,21 @@ fn render_config(document: &ConfigDocument) -> String {
         document.allow_exec,
         document.active_layout,
     );
+    for (address, device) in &document.devices {
+        text.push_str(&format!(
+            "  {}{:<20} {:<20} {:<10} {}\n",
+            if document.active_device.as_deref() == Some(address.as_str()) {
+                "* "
+            } else {
+                "  "
+            },
+            address,
+            device.profile,
+            device.layout,
+            device.label.as_deref().unwrap_or(""),
+        ));
+    }
+    text.push_str("layouts:\n");
     for summary in document.layout_summaries() {
         text.push_str(&format!(
             "  {}{:<16} {:<8} {:<20} {}\n",
@@ -1372,7 +1481,12 @@ fn key_names<T: std::fmt::Debug>(keys: &[T]) -> String {
         .join(", ")
 }
 
-fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), String> {
+fn pair(
+    address: &str,
+    adapter: Option<String>,
+    profile_id: Option<String>,
+    no_save: bool,
+) -> Result<(), String> {
     let report = atvv_bluez::pair(atvv_bluez::PairConfig {
         address: address.to_string(),
         adapter: adapter.clone(),
@@ -1380,9 +1494,27 @@ fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), Str
     })
     .map_err(|error| format!("pairing {address} failed: {error}"))?;
 
+    let profile = match profile_id {
+        Some(id) => find(&id).ok_or_else(|| format!("unknown device profile {id:?}"))?,
+        None => report
+            .vendor_id
+            .zip(report.product_id)
+            .and_then(|(vendor, product)| find_by_ids(vendor, product))
+            .ok_or_else(|| {
+                format!(
+                    "cannot infer a device profile from PnP ids {:?}/{:?}; pass --profile",
+                    report.vendor_id, report.product_id
+                )
+            })?,
+    };
+
     println!("address: {}", report.address);
     if let Some(name) = &report.name {
         println!("name: {name}");
+    }
+    println!("profile: {}", profile.id);
+    if let (Some(vendor), Some(product)) = (report.vendor_id, report.product_id) {
+        println!("pnp: {vendor:04x}:{product:04x}");
     }
     println!("already_paired: {}", report.already_paired);
     println!("paired: {}", report.paired);
@@ -1398,9 +1530,14 @@ fn pair(address: &str, adapter: Option<String>, no_save: bool) -> Result<(), Str
         return Ok(());
     }
     let path = atvv_config::default_path();
-    atvv_config::save_device(&path, &report.address, adapter.as_deref())
+    atvv_config::save_device(&path, &report.address, profile, adapter.as_deref())
         .map_err(|error| error.to_string())?;
-    println!("config: {} device={}", path.display(), report.address);
+    println!(
+        "config: {} device={} profile={}",
+        path.display(),
+        report.address,
+        profile.id
+    );
     Ok(())
 }
 
@@ -1520,6 +1657,13 @@ fn monitor() -> Result<(), String> {
                 }
                 "VoiceStarted" => println!("voice: started"),
                 "VoiceStopped" => println!("voice: stopped"),
+                "DeviceChanged" => {
+                    let address: String = message
+                        .body()
+                        .deserialize()
+                        .map_err(|error| error.to_string())?;
+                    println!("device: {address}");
+                }
                 other => println!("{other}"),
             }
         }
@@ -1564,10 +1708,31 @@ fn doctor(device_arg: Option<String>, adapter: Option<String>) -> Result<(), Str
     let mut checks = Vec::new();
     let config_path = atvv_config::default_path();
     let config = atvv_config::load(&config_path, &RC003);
+    match &config {
+        Ok(loaded) => checks.push(Check::new(
+            "registry",
+            if loaded.config.active_device.is_some() {
+                CheckState::Ok
+            } else {
+                CheckState::Warn
+            },
+            format!(
+                "{} known; active {}; profile {}",
+                loaded.config.devices.len(),
+                loaded.config.active_device.as_deref().unwrap_or("-"),
+                loaded.config.profile,
+            ),
+        )),
+        Err(error) => checks.push(Check::new(
+            "registry",
+            CheckState::Fail,
+            format!("cannot load {}: {error}", config_path.display()),
+        )),
+    }
     let configured_device = config
         .as_ref()
         .ok()
-        .and_then(|config| config.config.device.clone());
+        .and_then(|config| config.config.active_device.clone());
     let address = device_arg.or(configured_device);
     let status = match Client::connect() {
         Ok(client) => match client.status() {

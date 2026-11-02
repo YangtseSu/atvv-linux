@@ -21,7 +21,7 @@ pub use caps::{Capabilities, CapsError, Codec, InteractionModel, ProtocolVersion
 pub use events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
 pub use frame::{FrameAccumulator, FrameError};
 pub use profile::{
-    ButtonKey, DeviceProfile, GestureTiming, KeepaliveVariant, MicCloseVariant, MicOpenVariant,
-    NibbleOrder, PROFILES, RC003, RemoteButton,
+    ButtonKey, CHROMECAST, DeviceProfile, GestureTiming, KeepaliveVariant, MicCloseVariant,
+    MicOpenVariant, NibbleOrder, PROFILES, RC003, RemoteButton, find, find_by_ids,
 };
 pub use session::{Session, SessionAction, SessionState};

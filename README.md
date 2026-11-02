@@ -12,9 +12,10 @@ graph; evdev/uinput owns input remapping.
 ## Status
 
 ATVV v1.0 capture, input remapping, the daemon and D-Bus API, the CLI, the MCP
-server, and the optional GTK configuration app are implemented. The RC003
-audio path and the fcitx5-vinput source path have been verified on real devices
-and system services; evidence is linked below.
+server, and the optional GTK configuration app are implemented. The RC003 and
+Google Chromecast Remote audio paths are implemented and have recorded
+real-device runs (the Chromecast HID press map and two-device switch are still
+pending); evidence is linked below.
 
 Automatic fcitx5-vinput setup is upstream-owned: the maintainer closed the
 ATVV proposal PRs during an architecture refactor and will implement
@@ -31,29 +32,33 @@ Implemented:
   synthetic-tone test, and node-removal recovery. The source wakes when a
   consumer links (`node.pause-on-idle=false`); full PipeWire service restart is
   delegated to the systemd unit (ADR 0005).
-- `atvv-input`: profile-driven evdev discovery and `EVIOCGRAB`, the RC003
-  gesture engine, a uinput virtual keyboard, and a configurable synthetic
+- `atvv-input`: profile-driven evdev discovery and `EVIOCGRAB`, per-profile
+  gesture timing, a uinput virtual keyboard, and a configurable synthetic
   trigger key/chord for the grabbed voice key. `atvvctl input fake-remote`
   exercises the whole path without hardware.
-- `atvv-config`: the single `daemon.toml` schema parser, the versioned JSON
+- `atvv-config`: the single `daemon.toml` schema parser (schema v3 with a
+  known-device registry and per-device layouts), the versioned JSON
   configuration document, per-button action validation, gesture overrides,
   the `exec:` policy, and named layouts with app-verified presets (mpv,
   LibreOffice Impress/WPS Presentation, omp). Live changes are applied through
   `atvvctl config` or the D-Bus `SetConfig` method.
 - `atvv-bluez`: BlueZ GATT transport (`bluer`), adapter/device selection,
-  `AcquireNotify` with a `StartNotify` fallback, a pairing agent, and
-  reconnect handling.
+  `AcquireNotify` with a `StartNotify` fallback, a pairing agent that reports
+  the PnP ids for profile inference, and reconnect handling.
 - `atvv-daemon` / `atvvd`: session orchestration behind a `Transport` trait,
   the mock and BlueZ transports, timers, PCM decoding, the resident PipeWire
   source, voice-edge mic control, trigger-key and `org.fcitx.Vinput` modes, the
-  input layer, and a JSON view model over `org.atvv.Daemon`.
-- `atvvctl`: profile inspection, CAPS decoding, a hardware-free RC003 session
+  input layer, device-registry switching with per-device layouts and source
+  recreation on a profile change, and a JSON view model over
+  `org.atvv.Daemon`.
+- `atvvctl`: profile inspection, CAPS decoding, a hardware-free session
   simulation, an audio-source smoke test, the fake input remote, plus
   `status`, `contract`, `mic start|stop|toggle`, `reload`, `config
-  get|set`, `capture`, `map test`, `layout list|show|use|preset`, `pair`,
-  `record`, `monitor`, and `doctor`.
+  get|set`, `capture`, `map test`, `layout list|show|use|preset`,
+  `device list|use|rename`, `pair`, `record`, `monitor`, and `doctor`.
 - `atvv-mcp`: stdio MCP server with `status`, `contract`, `voice_start`,
-  `voice_stop`, `voice_toggle`, `list_devices`, and `reload`.
+  `voice_stop`, `voice_toggle`, `list_devices`, `devices`, `select_device`,
+  and `reload`.
 - `atvv-gui` / `atvv-config`: GTK4 + libadwaita configuration app with a
   clickable remote diagram, per-slot action editor, a layout manager with
   app-verified presets, keyboard and remote key learning, recording-key
@@ -91,26 +96,29 @@ makepkg -si
 Install `atvv` before `atvv-gui`; an AUR helper resolves that dependency. The
 GUI app is optional; the daemon and CLI do not depend on GTK.
 
-Pair the remote, then enable the user service:
+Pair a remote, then enable the user service:
 
 ```sh
-atvvctl pair C0:5D:39:F8:2D:4C
+atvvctl pair C0:5D:39:F8:2D:4C        # RC003
+atvvctl pair 74:46:B3:22:2D:D5        # Chromecast Remote
 systemctl --user daemon-reload
 systemctl --user enable --now atvvd
 atvvctl doctor
 ```
 
-`atvvd` exposes `atvv-miremote-rc003` through PipeWire. Select it in
-fcitx5-vinput by name (see [`docs/integrations/fcitx5-vinput.md`](docs/integrations/fcitx5-vinput.md));
-do not make it the system default.
+`atvvd` exposes `atvv-<profile>` through PipeWire (`atvv-miremote-rc003` or
+`atvv-google-chromecast`). Select it in fcitx5-vinput by name (see
+[`docs/integrations/fcitx5-vinput.md`](docs/integrations/fcitx5-vinput.md));
+do not make it the system default. Use `atvvctl device use <MAC>` to switch
+between known devices and reload their layouts.
 
 Button mappings, gesture timing, `exec:` opt-in, and the live `SetConfig`
 path are documented in [`docs/configuration.md`](docs/configuration.md).
 
 The package installs `/usr/bin/{atvvd,atvvctl,atvv-mcp}`;
 `/usr/lib/systemd/user/atvvd.service`;
-`/usr/lib/udev/rules.d/70-atvv-linux.rules` (`uaccess` for the RC003 event
-nodes and `/dev/uinput`); `/usr/lib/modules-load.d/atvv-linux.conf` (`uinput`);
+`/usr/lib/udev/rules.d/70-atvv-linux.rules` (`uaccess` for the RC003 and
+Chromecast event nodes and `/dev/uinput`); `/usr/lib/modules-load.d/atvv-linux.conf` (`uinput`);
 man pages; and bash/zsh/fish completions. No system-wide D-Bus policy is
 installed: the daemon uses the session bus.
 
@@ -121,17 +129,19 @@ installed: the daemon uses the session bus.
 | `cannot connect to the session D-Bus` | `systemctl --user status atvvd`; `systemctl --user enable --now atvvd` |
 | `The name is not activatable` | `atvvd` is not running; check `systemctl --user status atvvd`. `0.1.0-2` keeps the daemon up while the remote is disconnected and retries the link. |
 | `no device address` | `atvvctl pair <MAC>` writes `~/.config/atvv/daemon.toml` |
-| Source missing | `pw-cli info atvv-miremote-rc003`; `atvvctl doctor` |
+| Source missing | `pw-cli info atvv-miremote-rc003` or `atvv-google-chromecast`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
 | Remote not connected or CAPS missing | `bluetoothctl info <MAC>`; `atvvctl doctor`; `atvvctl monitor` |
 | Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "DICTATE"`. Keep the user's `[TriggerKey]` entries and add `1=Dictate`; stop fcitx5 before editing and restart it after. A commented `[TriggerKey]` section disables the trigger. `F24` is the fallback key. |
-| F5 reaches the focused application | The RC003 node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
+| F5 reaches the focused application | The remote's node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
 | No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
 | Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |
 
 Device support and the real-device record are in
-[`docs/device-support.md`](docs/device-support.md) and
-[`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md).
+[`docs/device-support.md`](docs/device-support.md),
+[`docs/research/rc003-hardware-evidence.md`](docs/research/rc003-hardware-evidence.md),
+and
+[`docs/research/chromecast-hardware-evidence.md`](docs/research/chromecast-hardware-evidence.md).
 
 ## Build and test
 

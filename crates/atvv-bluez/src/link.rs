@@ -272,6 +272,16 @@ impl BluezLink {
         Ok(())
     }
 
+    /// Release the BLE link. The daemon uses this before switching devices;
+    /// the remote is reconnected lazily on the next `connect`.
+    pub fn disconnect(&mut self) -> Result<()> {
+        self.generation.fetch_add(1, Ordering::Relaxed);
+        self.stop_tasks();
+        let device = self.device.clone();
+        self.runtime
+            .block_on(async move { device.disconnect().await.map_err(BluezError::from) })
+    }
+
     fn stop_tasks(&mut self) {
         for task in self.tasks.drain(..) {
             task.abort();

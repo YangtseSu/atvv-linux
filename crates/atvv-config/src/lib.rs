@@ -29,14 +29,16 @@ use atvv_input::{
     Action, ActionError, ActionMap, KeyResolver, Trigger, parse_action, parse_key_program,
     resolve_key,
 };
-use atvv_protocol::profile::{DeviceProfile, GestureTiming, RemoteButton};
+use atvv_protocol::profile::{DeviceProfile, GestureTiming, RemoteButton, find};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Current schema version written by this crate.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 /// Flat button map schema; loaded once and migrated to [`SCHEMA_VERSION`].
 pub const LEGACY_SCHEMA_VERSION: u32 = 1;
+/// Layout schema with one active device; migrated to [`SCHEMA_VERSION`].
+pub const V2_SCHEMA_VERSION: u32 = 2;
 /// Gain clamp from the research notes: ±24 dB, no AGC.
 pub const MAX_GAIN_DB: i8 = 24;
 /// fcitx5-vinput trigger key used while the voice key is held.
@@ -57,6 +59,8 @@ pub const MAX_LAYOUTS: usize = 32;
 pub const MAX_LAYOUT_NAME: usize = 40;
 /// Longest layout description in characters.
 pub const MAX_LAYOUT_DESCRIPTION: usize = 120;
+/// Longest device label in characters.
+pub const MAX_DEVICE_LABEL: usize = 40;
 /// Ids that user layouts may not take: the template and the built-in presets.
 pub const RESERVED_LAYOUT_IDS: [&str; 4] = [DEFAULT_LAYOUT, "mpv", "slides", "omp"];
 
@@ -541,14 +545,55 @@ impl LayoutDocument {
     }
 }
 
+/// One known device in the TOML file.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeviceToml {
+    /// Optional user label; BlueZ's alias is runtime-only.
+    pub label: Option<String>,
+    /// Device profile id.
+    pub profile: String,
+    /// Layout that drives this device while it is active.
+    pub layout: Option<String>,
+}
+
+/// One known device in the JSON document.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeviceDocument {
+    #[serde(default)]
+    pub label: Option<String>,
+    pub profile: String,
+    /// Layout id; `default` is the synthesized template.
+    #[serde(default = "default_layout_id")]
+    pub layout: String,
+}
+
+fn default_layout_id() -> String {
+    DEFAULT_LAYOUT.to_string()
+}
+
+/// Validated registry entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownDevice {
+    pub label: Option<String>,
+    pub profile: String,
+    pub layout: String,
+}
+
 /// Raw `daemon.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FileConfig {
     pub schema_version: Option<u32>,
-    /// Device profile id; must match the profile this build loaded.
+    /// Active device address (schema 3).
+    pub active_device: Option<String>,
+    /// Known devices by Bluetooth address (schema 3).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub devices: BTreeMap<String, DeviceToml>,
+    /// Device profile id; schema 1/2 only.
     pub profile: Option<String>,
-    /// Bluetooth address written by `atvvctl pair`.
+    /// Bluetooth address written by `atvvctl pair`; schema 1/2 only.
     pub device: Option<String>,
     /// BlueZ adapter name such as `hci0`; the default adapter when absent.
     pub adapter: Option<String>,
@@ -578,7 +623,10 @@ pub struct FileConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub profile: String,
-    pub device: Option<String>,
+    /// Active device address; `None` before a device is paired.
+    pub active_device: Option<String>,
+    /// Known devices by normalized Bluetooth address.
+    pub devices: BTreeMap<String, KnownDevice>,
     pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
@@ -602,7 +650,8 @@ impl Config {
     pub fn defaults(profile: &DeviceProfile) -> Self {
         Self {
             profile: profile.id.to_string(),
-            device: None,
+            active_device: None,
+            devices: BTreeMap::new(),
             adapter: None,
             gain_db: profile.gain_db,
             input: true,
@@ -631,9 +680,71 @@ impl Config {
     pub fn select_layout(&mut self, id: &str, profile: &DeviceProfile) -> Result<(), ConfigError> {
         let (map, gesture) = resolve_layout(profile, id, &self.layouts, self.allow_exec)?;
         self.active_layout = id.to_string();
+        if let Some(address) = &self.active_device
+            && let Some(device) = self.devices.get_mut(address)
+        {
+            device.layout = id.to_string();
+        }
         self.map = map;
         self.gesture = gesture;
         Ok(())
+    }
+
+    /// Make a known address active and load its profile and layout.
+    pub fn select_device(&mut self, address: &str) -> Result<DeviceProfile, ConfigError> {
+        let address = normalize_address(address)?;
+        let device = self
+            .devices
+            .get(&address)
+            .ok_or_else(|| ConfigError::UnknownDevice(address.clone()))?
+            .clone();
+        let profile = find(&device.profile)
+            .ok_or_else(|| ConfigError::UnknownProfile(device.profile.clone()))?;
+        self.active_device = Some(address);
+        self.profile = profile.id.to_string();
+        self.active_layout = device.layout;
+        let (map, gesture) =
+            resolve_layout(profile, &self.active_layout, &self.layouts, self.allow_exec)?;
+        self.map = map;
+        self.gesture = gesture;
+        Ok(*profile)
+    }
+
+    /// Add an address to the registry if absent and make it active.
+    ///
+    /// An existing entry keeps its profile and layout: an explicit CLI
+    /// `--device` override must not silently rewrite the saved device.
+    pub fn adopt_device(&mut self, address: &str, profile: &DeviceProfile) {
+        let Ok(address) = normalize_address(address) else {
+            return;
+        };
+        self.devices
+            .entry(address.clone())
+            .or_insert_with(|| KnownDevice {
+                label: None,
+                profile: profile.id.to_string(),
+                layout: DEFAULT_LAYOUT.to_string(),
+            });
+        self.active_device = Some(address);
+        self.profile = profile.id.to_string();
+    }
+
+    /// Profile configured for an address, if the address is known.
+    #[must_use]
+    pub fn profile_for_address(&self, address: &str) -> Option<&'static DeviceProfile> {
+        normalize_address(address)
+            .ok()
+            .and_then(|address| self.devices.get(&address))
+            .and_then(|device| find(&device.profile))
+    }
+
+    /// Profile of the active device, falling back to the loaded profile.
+    #[must_use]
+    pub fn active_profile(&self) -> Option<&'static DeviceProfile> {
+        self.active_device
+            .as_deref()
+            .and_then(|address| self.profile_for_address(address))
+            .or_else(|| find(&self.profile))
     }
 }
 
@@ -663,6 +774,25 @@ pub fn default_path() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
         .unwrap_or_else(|| PathBuf::from("."));
     base.join("atvv").join("daemon.toml")
+}
+
+/// Whether `text` is a colon-separated 48-bit Bluetooth address.
+#[must_use]
+pub fn is_bluetooth_address(text: &str) -> bool {
+    let parts: Vec<&str> = text.split(':').collect();
+    parts.len() == 6
+        && parts
+            .iter()
+            .all(|part| part.len() == 2 && part.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
+/// Normalize a Bluetooth address to uppercase BlueZ form.
+pub fn normalize_address(text: &str) -> Result<String, ConfigError> {
+    let text = text.trim();
+    if !is_bluetooth_address(text) {
+        return Err(ConfigError::Address(text.to_string()));
+    }
+    Ok(text.to_ascii_uppercase())
 }
 
 /// Whether `id` matches `[a-z0-9][a-z0-9_-]{0,31}`.
@@ -944,27 +1074,14 @@ fn resolve_layout(
 }
 
 impl FileConfig {
-    /// Validate every field, migrate a flat v1 map, and resolve the active
-    /// layout against the profile defaults.
-    pub fn validate(&self, profile: &DeviceProfile) -> Result<Config, ConfigError> {
-        let file = self.migrated()?;
-        if let Some(profile_id) = &file.profile
-            && profile_id != profile.id
-        {
-            return Err(ConfigError::Profile {
-                found: profile_id.clone(),
-                expected: profile.id.to_string(),
-            });
-        }
-        let gain_db = file.gain_db.unwrap_or(profile.gain_db);
-        if !(-MAX_GAIN_DB..=MAX_GAIN_DB).contains(&gain_db) {
-            return Err(ConfigError::GainRange(gain_db));
-        }
-        let trigger_key = match file.trigger_key.as_deref() {
-            Some(name) => parse_trigger_key(name)?,
-            None => Some(DEFAULT_TRIGGER_KEY.to_string()),
+    /// Validate every field, migrate older schemas, and resolve the active
+    /// device's layout against the profile defaults.
+    pub fn validate(&self, fallback: &DeviceProfile) -> Result<Config, ConfigError> {
+        let mut file = self.migrated(fallback)?;
+        let active_device = match file.active_device.take() {
+            Some(address) => Some(normalize_address(&address)?),
+            None => None,
         };
-        let allow_exec = file.allow_exec.unwrap_or(false);
         if file.layouts.len() > MAX_LAYOUTS {
             return Err(ConfigError::TooManyLayouts);
         }
@@ -973,21 +1090,86 @@ impl FileConfig {
         for (id, layout) in &file.layouts {
             layouts.insert(
                 id.clone(),
-                validate_layout(id, layout, allow_exec, profile, &mut names)?,
+                validate_layout(
+                    id,
+                    layout,
+                    file.allow_exec.unwrap_or(false),
+                    fallback,
+                    &mut names,
+                )?,
             );
         }
-        let active_layout = file
-            .active_layout
-            .clone()
-            .unwrap_or_else(|| DEFAULT_LAYOUT.to_string());
+        let mut devices = BTreeMap::new();
+        for (raw_address, device) in &file.devices {
+            let address = normalize_address(raw_address)?;
+            if let Some(label) = &device.label {
+                let label = label.trim();
+                if label.is_empty() || label.chars().count() > MAX_DEVICE_LABEL {
+                    return Err(ConfigError::DeviceLabel(address));
+                }
+            }
+            if atvv_protocol::profile::find(&device.profile).is_none() {
+                return Err(ConfigError::UnknownProfile(device.profile.clone()));
+            }
+            let layout = device
+                .layout
+                .clone()
+                .unwrap_or_else(|| DEFAULT_LAYOUT.to_string());
+            if layout != DEFAULT_LAYOUT && !layouts.contains_key(&layout) {
+                return Err(ConfigError::ActiveLayout(layout));
+            }
+            if devices
+                .insert(
+                    address.clone(),
+                    KnownDevice {
+                        label: device.label.clone(),
+                        profile: device.profile.clone(),
+                        layout,
+                    },
+                )
+                .is_some()
+            {
+                return Err(ConfigError::DuplicateDevice(address));
+            }
+        }
+        let active_profile = match &active_device {
+            Some(address) => {
+                let device = devices
+                    .get(address)
+                    .ok_or_else(|| ConfigError::UnknownDevice(address.clone()))?;
+                atvv_protocol::profile::find(&device.profile)
+                    .ok_or_else(|| ConfigError::UnknownProfile(device.profile.clone()))?
+            }
+            None => fallback,
+        };
+        let active_layout = if let Some(address) = &active_device {
+            devices.get(address).map_or_else(
+                || DEFAULT_LAYOUT.to_string(),
+                |device| device.layout.clone(),
+            )
+        } else {
+            file.active_layout
+                .clone()
+                .unwrap_or_else(|| DEFAULT_LAYOUT.to_string())
+        };
         if active_layout != DEFAULT_LAYOUT && !layouts.contains_key(&active_layout) {
             return Err(ConfigError::ActiveLayout(active_layout));
         }
-        let (map, gesture) = resolve_layout(profile, &active_layout, &layouts, allow_exec)?;
+        let gain_db = file.gain_db.unwrap_or(active_profile.gain_db);
+        if !(-MAX_GAIN_DB..=MAX_GAIN_DB).contains(&gain_db) {
+            return Err(ConfigError::GainRange(gain_db));
+        }
+        let trigger_key = match file.trigger_key.as_deref() {
+            Some(name) => parse_trigger_key(name)?,
+            None => Some(DEFAULT_TRIGGER_KEY.to_string()),
+        };
+        let allow_exec = file.allow_exec.unwrap_or(false);
+        let (map, gesture) = resolve_layout(active_profile, &active_layout, &layouts, allow_exec)?;
 
         Ok(Config {
-            profile: profile.id.to_string(),
-            device: file.device.clone(),
+            profile: active_profile.id.to_string(),
+            active_device,
+            devices,
             adapter: file.adapter.clone(),
             gain_db,
             input: file.input.unwrap_or(true),
@@ -1001,56 +1183,94 @@ impl FileConfig {
         })
     }
 
-    /// Move a flat v1 button map into the `custom` layout.
+    /// Move a flat v1 button map into the `custom` layout, then convert the
+    /// single `device` field into the schema 3 registry.
     ///
-    /// A v2 file must not carry the top-level `[buttons]` or `[gesture]`
-    /// tables, and a v1 file must not carry layouts. The returned file is
-    /// always schema version 2.
-    fn migrated(&self) -> Result<FileConfig, ConfigError> {
+    /// A v2 file must not carry v3 fields, and a v3 file must not carry the
+    /// legacy tables. The returned file is always schema version 3.
+    fn migrated(&self, fallback: &DeviceProfile) -> Result<FileConfig, ConfigError> {
         let mut file = self.clone();
-        match file.schema_version {
-            None | Some(LEGACY_SCHEMA_VERSION) => {
-                if !file.layouts.is_empty() || file.active_layout.is_some() {
-                    return Err(ConfigError::MixedSchema);
-                }
-                file.schema_version = Some(SCHEMA_VERSION);
-                let has_overrides = file.buttons.values().any(|slots| !slots.is_empty())
-                    || file
-                        .gesture
-                        .as_ref()
-                        .is_some_and(|gesture| !gesture.is_empty());
-                if has_overrides {
-                    let mut buttons = BTreeMap::new();
-                    for (name, slots) in std::mem::take(&mut file.buttons) {
-                        if !slots.is_empty() {
-                            buttons.insert(name, slots);
-                        }
-                    }
-                    file.layouts.insert(
-                        MIGRATED_LAYOUT.to_string(),
-                        LayoutToml {
-                            name: MIGRATED_LAYOUT_NAME.to_string(),
-                            description: None,
-                            gesture: file.gesture.take(),
-                            buttons,
-                        },
-                    );
-                    file.active_layout = Some(MIGRATED_LAYOUT.to_string());
-                } else {
-                    file.buttons.clear();
-                    file.gesture = None;
-                    file.active_layout = Some(DEFAULT_LAYOUT.to_string());
-                }
-                Ok(file)
+        if file.schema_version == Some(SCHEMA_VERSION) {
+            if file.profile.is_some()
+                || file.device.is_some()
+                || !file.buttons.is_empty()
+                || file.gesture.is_some()
+            {
+                return Err(ConfigError::LegacyTables);
             }
-            Some(SCHEMA_VERSION) => {
-                if !file.buttons.is_empty() || file.gesture.is_some() {
-                    return Err(ConfigError::LegacyTables);
-                }
-                Ok(file)
-            }
-            Some(found) => Err(ConfigError::SchemaVersion { found }),
+            return Ok(file);
         }
+        if file.schema_version == Some(V2_SCHEMA_VERSION) {
+            if file.active_device.is_some() || !file.devices.is_empty() {
+                return Err(ConfigError::MixedSchema);
+            }
+            if !file.buttons.is_empty() || file.gesture.is_some() {
+                return Err(ConfigError::LegacyTables);
+            }
+        }
+        if file.schema_version.is_none() || file.schema_version == Some(LEGACY_SCHEMA_VERSION) {
+            if !file.layouts.is_empty() || file.active_layout.is_some() {
+                return Err(ConfigError::MixedSchema);
+            }
+            let has_overrides = file.buttons.values().any(|slots| !slots.is_empty())
+                || file
+                    .gesture
+                    .as_ref()
+                    .is_some_and(|gesture| !gesture.is_empty());
+            if has_overrides {
+                let mut buttons = BTreeMap::new();
+                for (name, slots) in std::mem::take(&mut file.buttons) {
+                    if !slots.is_empty() {
+                        buttons.insert(name, slots);
+                    }
+                }
+                file.layouts.insert(
+                    MIGRATED_LAYOUT.to_string(),
+                    LayoutToml {
+                        name: MIGRATED_LAYOUT_NAME.to_string(),
+                        description: None,
+                        gesture: file.gesture.take(),
+                        buttons,
+                    },
+                );
+                file.active_layout = Some(MIGRATED_LAYOUT.to_string());
+            } else {
+                file.buttons.clear();
+                file.gesture = None;
+                file.active_layout = Some(DEFAULT_LAYOUT.to_string());
+            }
+            file.schema_version = Some(V2_SCHEMA_VERSION);
+        }
+        if file.schema_version != Some(V2_SCHEMA_VERSION) {
+            return Err(ConfigError::SchemaVersion {
+                found: file.schema_version.unwrap_or(0),
+            });
+        }
+
+        if let Some(address) = file.device.take() {
+            let profile_id = file
+                .profile
+                .take()
+                .unwrap_or_else(|| fallback.id.to_string());
+            let layout = file
+                .active_layout
+                .take()
+                .unwrap_or_else(|| DEFAULT_LAYOUT.to_string());
+            let address = normalize_address(&address)?;
+            file.devices.insert(
+                address.clone(),
+                DeviceToml {
+                    label: None,
+                    profile: profile_id,
+                    layout: Some(layout),
+                },
+            );
+            file.active_device = Some(address);
+        } else {
+            file.profile = None;
+        }
+        file.schema_version = Some(SCHEMA_VERSION);
+        Ok(file)
     }
 }
 
@@ -1080,12 +1300,19 @@ pub fn load(path: &Path, profile: &DeviceProfile) -> Result<LoadedConfig, Config
     })
 }
 
-/// Record the paired device and adapter without discarding layouts.
+/// Record a paired device and adapter without discarding layouts.
 ///
-/// The file is migrated to the current schema in the same write. A malformed
-/// existing file is an error: the daemon should not silently replace a typo
-/// with defaults.
-pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(), ConfigError> {
+/// The device becomes active. An existing entry keeps its label and layout;
+/// only the profile is refreshed. The file is migrated to the current schema
+/// in the same write. A malformed existing file is an error: the daemon
+/// should not silently replace a typo with defaults.
+pub fn save_device(
+    path: &Path,
+    device: &str,
+    profile: &DeviceProfile,
+    adapter: Option<&str>,
+) -> Result<(), ConfigError> {
+    let address = normalize_address(device)?;
     let mut file = if path.exists() {
         let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
             path: path.to_path_buf(),
@@ -1095,14 +1322,32 @@ pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(
             path: path.to_path_buf(),
             source,
         })?;
-        file.migrated()?
+        file.migrated(profile)?
     } else {
         FileConfig {
             schema_version: Some(SCHEMA_VERSION),
             ..FileConfig::default()
         }
     };
-    file.device = Some(device.to_string());
+    let fallback_layout = file
+        .active_layout
+        .clone()
+        .unwrap_or_else(|| DEFAULT_LAYOUT.to_string());
+    file.devices
+        .entry(address.clone())
+        .and_modify(|device| device.profile = profile.id.to_string())
+        .or_insert_with(|| DeviceToml {
+            label: None,
+            profile: profile.id.to_string(),
+            layout: Some(fallback_layout.clone()),
+        });
+    if let Some(device) = file.devices.get_mut(&address)
+        && device.layout.is_none()
+    {
+        device.layout = Some(fallback_layout);
+    }
+    file.active_device = Some(address);
+    file.active_layout = None;
     if let Some(adapter) = adapter {
         file.adapter = Some(adapter.to_string());
     }
@@ -1119,8 +1364,11 @@ pub fn save_device(path: &Path, device: &str, adapter: Option<&str>) -> Result<(
 #[serde(deny_unknown_fields)]
 pub struct ConfigDocument {
     pub schema_version: u32,
+    /// Active profile id, derived from the active device entry.
     pub profile: String,
-    pub device: Option<String>,
+    pub active_device: Option<String>,
+    #[serde(default)]
+    pub devices: BTreeMap<String, DeviceDocument>,
     pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
@@ -1140,7 +1388,21 @@ impl ConfigDocument {
         Self {
             schema_version: SCHEMA_VERSION,
             profile: config.profile.clone(),
-            device: config.device.clone(),
+            active_device: config.active_device.clone(),
+            devices: config
+                .devices
+                .iter()
+                .map(|(address, device)| {
+                    (
+                        address.clone(),
+                        DeviceDocument {
+                            label: device.label.clone(),
+                            profile: device.profile.clone(),
+                            layout: device.layout.clone(),
+                        },
+                    )
+                })
+                .collect(),
             adapter: config.adapter.clone(),
             gain_db: config.gain_db,
             input: config.input,
@@ -1150,6 +1412,16 @@ impl ConfigDocument {
             active_layout: config.active_layout.clone(),
             layouts: config.layouts.clone(),
         }
+    }
+
+    /// Profile of the active device, falling back to the document profile.
+    #[must_use]
+    pub fn active_profile(&self) -> Option<&'static DeviceProfile> {
+        self.active_device
+            .as_ref()
+            .and_then(|address| self.devices.get(address))
+            .and_then(|device| find(&device.profile))
+            .or_else(|| find(&self.profile))
     }
 
     /// Layouts for a selector: the template first, then user layouts by id.
@@ -1204,17 +1476,40 @@ impl ConfigDocument {
             Some(key) => Some(key.to_string()),
             None => Some("none".to_string()),
         };
+        let devices = self
+            .devices
+            .iter()
+            .map(|(address, device)| {
+                (
+                    address.clone(),
+                    DeviceToml {
+                        label: device.label.clone(),
+                        profile: device.profile.clone(),
+                        layout: Some(if self.active_device.as_deref() == Some(address.as_str()) {
+                            self.active_layout.clone()
+                        } else {
+                            device.layout.clone()
+                        }),
+                    },
+                )
+            })
+            .collect();
         FileConfig {
             schema_version: Some(SCHEMA_VERSION),
+            active_device: self.active_device.clone(),
+            devices,
             profile: None,
-            device: self.device.clone(),
+            device: None,
             adapter: self.adapter.clone(),
             gain_db: (self.gain_db != profile.gain_db).then_some(self.gain_db),
             input: (!self.input).then_some(false),
             vinput: (self.vinput != VinputMode::Trigger).then_some(self.vinput),
             trigger_key,
             allow_exec: self.allow_exec.then_some(true),
-            active_layout: Some(self.active_layout.clone()),
+            active_layout: self
+                .active_device
+                .is_none()
+                .then(|| self.active_layout.clone()),
             layouts,
             gesture: None,
             buttons: BTreeMap::new(),
@@ -1222,17 +1517,40 @@ impl ConfigDocument {
     }
 
     fn to_file_config(&self) -> FileConfig {
+        let devices = self
+            .devices
+            .iter()
+            .map(|(address, device)| {
+                (
+                    address.clone(),
+                    DeviceToml {
+                        label: device.label.clone(),
+                        profile: device.profile.clone(),
+                        layout: Some(if self.active_device.as_deref() == Some(address.as_str()) {
+                            self.active_layout.clone()
+                        } else {
+                            device.layout.clone()
+                        }),
+                    },
+                )
+            })
+            .collect();
         FileConfig {
             schema_version: Some(self.schema_version),
-            profile: Some(self.profile.clone()),
-            device: self.device.clone(),
+            active_device: self.active_device.clone(),
+            devices,
+            profile: None,
+            device: None,
             adapter: self.adapter.clone(),
             gain_db: Some(self.gain_db),
             input: Some(self.input),
             vinput: Some(self.vinput),
             trigger_key: self.trigger_key.clone(),
             allow_exec: Some(self.allow_exec),
-            active_layout: Some(self.active_layout.clone()),
+            active_layout: self
+                .active_device
+                .is_none()
+                .then(|| self.active_layout.clone()),
             layouts: self
                 .layouts
                 .iter()
@@ -1489,8 +1807,16 @@ pub enum ConfigError {
         min: u16,
         max: u16,
     },
-    #[error("profile {found:?} is not the active profile {expected:?}")]
-    Profile { found: String, expected: String },
+    #[error("bluetooth address {0:?} must be six colon-separated hex octets")]
+    Address(String),
+    #[error("unknown device {0:?}; run `atvvctl pair <MAC>` first")]
+    UnknownDevice(String),
+    #[error("unknown device profile {0:?}")]
+    UnknownProfile(String),
+    #[error("device {0:?}: the label must be 1-{MAX_DEVICE_LABEL} characters")]
+    DeviceLabel(String),
+    #[error("device address {0:?} appears more than once after normalization")]
+    DuplicateDevice(String),
     #[error("buttons: unknown button {0:?}")]
     UnknownButton(String),
     #[error("buttons.voice: the voice key drives ATVV and cannot be action-mapped")]
@@ -1543,7 +1869,7 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atvv_protocol::profile::RC003;
+    use atvv_protocol::profile::{CHROMECAST, RC003};
 
     fn path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -1635,7 +1961,7 @@ mod tests {
         let document = ConfigDocument::from_config(&loaded.config);
         save_document(&path, &document, &RC003).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("schema_version = 3"), "{text}");
         assert!(text.contains("active_layout = \"custom\""), "{text}");
         assert!(text.contains("[layouts.custom]"), "{text}");
         assert!(text.contains("[layouts.custom.buttons.up]"), "{text}");
@@ -1661,7 +1987,7 @@ mod tests {
     #[test]
     fn schema_versions_and_mixed_tables_are_rejected() {
         for text in [
-            "schema_version = 3\n",
+            "schema_version = 4\n",
             "schema_version = 1\n[layouts.editor]\nname = \"Editor\"\n",
             "schema_version = 2\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
             "schema_version = 2\n[gesture]\nlong_press_ms = 700\n",
@@ -1858,7 +2184,7 @@ mod tests {
         let path = path("document");
         save_document(&path, &document, &RC003).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("schema_version = 3"), "{text}");
         assert!(text.contains("active_layout = \"editor\""), "{text}");
         assert!(text.contains("[layouts.editor]"), "{text}");
         assert!(text.contains("name = \"Coding\""), "{text}");
@@ -2011,6 +2337,89 @@ mod tests {
     }
 
     #[test]
+    fn v2_device_migrates_to_the_registry() {
+        let path = path("v2-device");
+        std::fs::write(
+            &path,
+            "schema_version = 2\nprofile = \"miremote-rc003\"\ndevice = \"c0:5d:39:f8:2d:4c\"\nactive_layout = \"editor\"\n\n[layouts.editor]\nname = \"Editor\"\n",
+        )
+        .unwrap();
+        let loaded = load(&path, &RC003).unwrap();
+        assert_eq!(
+            loaded.config.active_device.as_deref(),
+            Some("C0:5D:39:F8:2D:4C")
+        );
+        assert_eq!(loaded.config.active_layout, "editor");
+        let device = &loaded.config.devices["C0:5D:39:F8:2D:4C"];
+        assert_eq!(device.profile, "miremote-rc003");
+        assert_eq!(device.layout, "editor");
+
+        save_document(&path, &ConfigDocument::from_config(&loaded.config), &RC003).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("schema_version = 3"), "{text}");
+        assert!(text.contains("[devices.\"C0:5D:39:F8:2D:4C\"]"), "{text}");
+        assert!(text.contains("layout = \"editor\""), "{text}");
+        let parsed: FileConfig = toml::from_str(&text).unwrap();
+        assert!(parsed.profile.is_none());
+        assert!(parsed.device.is_none());
+        assert!(parsed.active_layout.is_none());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn select_device_loads_the_device_layout_and_profile() {
+        let first = "C0:5D:39:F8:2D:4C";
+        let second = "74:46:B3:22:2D:D5";
+        let mut layout = LayoutDocument {
+            name: "Second".to_string(),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Up,
+            Trigger::Single,
+            Some("key:KEY_F13".to_string()),
+        );
+        let file = FileConfig {
+            schema_version: Some(SCHEMA_VERSION),
+            active_device: Some(first.to_string()),
+            devices: BTreeMap::from([
+                (
+                    first.to_string(),
+                    DeviceToml {
+                        label: None,
+                        profile: RC003.id.to_string(),
+                        layout: Some(DEFAULT_LAYOUT.to_string()),
+                    },
+                ),
+                (
+                    second.to_string(),
+                    DeviceToml {
+                        label: Some("Chromecast".to_string()),
+                        profile: CHROMECAST.id.to_string(),
+                        layout: Some("second".to_string()),
+                    },
+                ),
+            ]),
+            layouts: BTreeMap::from([("second".to_string(), layout.to_toml())]),
+            ..FileConfig::default()
+        };
+        let mut config = file.validate(&RC003).unwrap();
+        assert_eq!(config.profile, RC003.id);
+        let profile = config.select_device(second).unwrap();
+        assert_eq!(profile.id, CHROMECAST.id);
+        assert_eq!(config.profile, CHROMECAST.id);
+        assert_eq!(config.active_device.as_deref(), Some(second));
+        assert_eq!(config.active_layout, "second");
+        assert_eq!(
+            config.map.resolve(RemoteButton::Up, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_F13".into()
+            })
+        );
+        assert_eq!(config.devices[first].layout, DEFAULT_LAYOUT);
+    }
+
+    #[test]
     fn save_device_round_trips_and_preserves_layouts() {
         let path = path("save");
         std::fs::write(
@@ -2018,13 +2427,16 @@ mod tests {
             "schema_version = 1\ngain_db = 6\ninput = false\n[buttons.up]\nsingle = \"key:KEY_F13\"\n",
         )
         .unwrap();
-        save_device(&path, "C0:5D:39:F8:2D:4C", Some("hci0")).unwrap();
+        save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, Some("hci0")).unwrap();
 
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("schema_version = 2"), "{text}");
+        assert!(text.contains("schema_version = 3"), "{text}");
         assert!(text.contains("[layouts.custom.buttons.up]"), "{text}");
         let loaded = load(&path, &RC003).unwrap();
-        assert_eq!(loaded.config.device.as_deref(), Some("C0:5D:39:F8:2D:4C"));
+        assert_eq!(
+            loaded.config.active_device.as_deref(),
+            Some("C0:5D:39:F8:2D:4C")
+        );
         assert_eq!(loaded.config.adapter.as_deref(), Some("hci0"));
         assert_eq!(loaded.config.gain_db, 6);
         assert!(!loaded.config.input);
@@ -2037,35 +2449,36 @@ mod tests {
         let path = path("malformed");
         std::fs::write(&path, "gaiN_db = 3\n").unwrap();
         assert!(matches!(
-            save_device(&path, "C0:5D:39:F8:2D:4C", None),
+            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, None),
             Err(ConfigError::Parse { .. })
         ));
 
-        std::fs::write(&path, "schema_version = 3\n").unwrap();
+        std::fs::write(&path, "schema_version = 4\n").unwrap();
         assert!(matches!(
-            save_device(&path, "C0:5D:39:F8:2D:4C", None),
-            Err(ConfigError::SchemaVersion { found: 3 })
+            save_device(&path, "C0:5D:39:F8:2D:4C", &RC003, None),
+            Err(ConfigError::SchemaVersion { found: 4 })
         ));
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
-    fn profile_mismatch_is_rejected() {
+    fn unknown_device_profile_is_rejected() {
         let file = FileConfig {
-            profile: Some("other-remote".to_string()),
+            schema_version: Some(SCHEMA_VERSION),
+            active_device: Some("C0:5D:39:F8:2D:4C".to_string()),
+            devices: BTreeMap::from([(
+                "C0:5D:39:F8:2D:4C".to_string(),
+                DeviceToml {
+                    label: None,
+                    profile: "other-remote".to_string(),
+                    layout: None,
+                },
+            )]),
             ..FileConfig::default()
         };
         assert!(matches!(
             file.validate(&RC003),
-            Err(ConfigError::Profile { found, expected })
-                if found == "other-remote" && expected == RC003.id
-        ));
-
-        let mut document = defaults();
-        document.profile = "other-remote".to_string();
-        assert!(matches!(
-            document.validate(&RC003),
-            Err(ConfigError::Profile { found, .. }) if found == "other-remote"
+            Err(ConfigError::UnknownProfile(profile)) if profile == "other-remote"
         ));
     }
 

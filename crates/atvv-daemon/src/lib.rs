@@ -20,8 +20,8 @@ pub use daemon::{Command, Daemon, DaemonConfig, DaemonEvent, DaemonHandle, Event
 pub use dbus::{Client, ClientError};
 pub use exec::{ExecEngine, ExecResult};
 pub use status::{
-    AudioView, CapsView, ConfigCell, ConfigView, ContractView, DbusView, DeviceView, InputView,
-    McpView, StatusCell, StatusView, VinputView,
+    AudioView, CapsView, ConfigCell, ConfigView, ContractView, DbusView, DeviceEntryView,
+    DeviceView, InputView, McpView, StatusCell, StatusView, VinputView,
 };
 pub use transport::{
     BluezTransport, MockConfig, MockHandle, MockTransport, Transport, TransportEvent,

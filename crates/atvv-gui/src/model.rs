@@ -13,16 +13,10 @@ use atvv_config::{
     unique_layout_name,
 };
 use atvv_input::{Action, ActionMap, Trigger, parse_action};
-use atvv_protocol::profile::{DeviceProfile, PROFILES, RemoteButton};
+use atvv_protocol::profile::{DeviceProfile, RemoteButton};
 
 use crate::actions::pointer_action_label;
 use crate::i18n::tr;
-
-/// Resolve a profile id from the daemon document.
-#[must_use]
-pub fn profile_by_id(id: &str) -> Option<DeviceProfile> {
-    PROFILES.iter().copied().find(|profile| profile.id == id)
-}
 
 /// Human label for a hotspot and the selected-key row.
 #[must_use]
@@ -240,6 +234,15 @@ fn clean_description(description: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Keep the active device's registry entry in step with `active_layout`.
+fn sync_device_layout(document: &mut ConfigDocument) {
+    if let Some(address) = document.active_device.clone()
+        && let Some(device) = document.devices.get_mut(&address)
+    {
+        device.layout = document.active_layout.clone();
+    }
+}
+
 /// Editable configuration and the current selection.
 ///
 /// `working` holds the raw slots of the active layout. While the `default`
@@ -258,7 +261,9 @@ pub struct GuiModel {
 
 impl GuiModel {
     pub fn new(document: ConfigDocument) -> Result<Self, String> {
-        let profile = profile_by_id(&document.profile)
+        let profile = document
+            .active_profile()
+            .copied()
             .ok_or_else(|| format!("unknown device profile {:?}", document.profile))?;
         let working = working_layout(&document)?;
         Ok(Self {
@@ -392,6 +397,7 @@ impl GuiModel {
             return Err(format!("unknown layout {id:?}"));
         }
         self.document.active_layout = id.to_string();
+        sync_device_layout(&mut self.document);
         self.working = working_layout(&self.document)?;
         Ok(true)
     }
@@ -475,6 +481,7 @@ impl GuiModel {
         layout.description = clean_description(description);
         next.layouts.insert(id.clone(), layout);
         next.active_layout = id.clone();
+        sync_device_layout(&mut next);
         next.validate(&self.profile)
             .map_err(|error| error.to_string())?;
         self.working = working_layout(&next)?;
@@ -1134,6 +1141,37 @@ mod tests {
             model
                 .reset_layout_to_preset(DEFAULT_LAYOUT, slides)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn active_device_layout_is_kept_in_the_registry() {
+        let address = "C0:5D:39:F8:2D:4C";
+        let mut document = document();
+        document.active_device = Some(address.to_string());
+        document.devices.insert(
+            address.to_string(),
+            atvv_config::DeviceDocument {
+                label: None,
+                profile: atvv_protocol::RC003.id.to_string(),
+                layout: "editor".to_string(),
+            },
+        );
+        document.layouts.insert(
+            "editor".to_string(),
+            LayoutDocument {
+                name: "Editor".to_string(),
+                ..LayoutDocument::default()
+            },
+        );
+        document.active_layout = "editor".to_string();
+        let mut model = GuiModel::new(document).unwrap();
+        assert_eq!(model.active_layout(), "editor");
+        assert_eq!(model.profile.id, atvv_protocol::RC003.id);
+        assert!(model.switch_layout(DEFAULT_LAYOUT).unwrap());
+        assert_eq!(
+            model.document.devices[address].layout, DEFAULT_LAYOUT,
+            "the active device entry must follow the layout switch"
         );
     }
 }

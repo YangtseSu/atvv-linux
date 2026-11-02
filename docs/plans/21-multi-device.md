@@ -1,6 +1,6 @@
 # Step 21 — Multi-device switching
 
-Status: ⬜ not-started
+Status: 🚧 in-progress
 Depends on: 06, 13, 15, 17
 Touches: `crates/atvv-config/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
 `crates/atvv-gui/`, `crates/atvv-mcp/`, `docs/`
@@ -19,19 +19,20 @@ there is illustrative, not verified hardware.
 
 ## Next action
 
-Add the device registry, `active_device`, and the migration from the single
-`device` field in `atvv-config`.
+Install the dev package so the `uaccess` rule covers the Chromecast HID node,
+capture the physical key map, then connect the RC003 and Chromecast to this
+host and record the two-device switch (and back) with a real audio stream.
 
 ## Current gap
 
-- `ListDevices()` returns `vec![self.address]`
-  (`crates/atvv-daemon/src/dbus.rs`).
-- `daemon.toml` has one `device`; `main` starts one `RC003` transport
-  (`crates/atvv-daemon/src/main.rs`).
-- `atvv-input` grabs every matched node
-  (`crates/atvv-input/src/runtime.rs`); two same-profile remotes connected at
-  once would both be grabbed.
-- Step 17 keeps layouts global; per-device assignment is this step.
+- The Chromecast HID key map is unrecorded; the profile uses the Linux
+  consumer-control mapping and must be corrected from real presses.
+- The two-device switch has synthetic coverage and a mock-D-Bus smoke run, but
+  no recorded RC003 + Chromecast run on one host.
+- `GetDevices` does not track a last-seen timestamp; it reports the registry,
+  active/connected state, layout, name, label, profile, and battery.
+- The board is still RC003-shaped; the Chromecast profile uses the same twelve
+  cards and leaves app/mute keys unmapped.
 
 ## Decision
 
@@ -41,8 +42,9 @@ consumer-side capture selection would need a per-device source and routing.
 
 ## Data model
 
-- Device registry and active device. The exact schema version is decided with
-  step 17 to avoid a second migration:
+- Device registry and active device in schema v3. Step 17 chose schema v2;
+  this step migrates the single `device`/`active_layout` pair into a registry
+  entry and writes v3:
   ```toml
   active_device = "C0:5D:39:F8:2D:4C"
 
@@ -51,13 +53,15 @@ consumer-side capture selection would need a per-device source and routing.
   profile = "miremote-rc003"
   layout = "default"
   ```
-- `label`, `profile`, and `layout` persist. Last seen and battery are runtime
-  status, not config; expose them through `GetDevices`.
-- `atvvctl pair` adds or updates the device entry and sets it active; it must
-  not discard other known devices or layouts.
-- A device whose profile does not match the loaded profile is rejected with a
-  clear error until the profile-driven board/audio work exists. The first cut
-  supports multiple devices of the current profile.
+- `label`, `profile`, and `layout` persist. Battery and connection state are
+  runtime status, not config; expose them through `GetDevices` and
+  `StatusView.devices`. A last-seen timestamp is not stored yet.
+- `atvvctl pair` infers the profile from the BlueZ PnP ids, adds or updates the
+  device entry, and sets it active; it does not discard other known devices or
+  layouts.
+- Devices of different profiles are supported: the active device selects the
+  session profile, source name, input keymap, and layout. The board remains
+  RC003-shaped until a profile-driven diagram exists.
 
 ## Daemon
 
@@ -65,11 +69,13 @@ consumer-side capture selection would need a per-device source and routing.
   the current session, ends capture/test, releases the evdev grab, disconnects
   the old device, persists the address, builds the new transport, and starts
   the session.
-- The resident source keeps its name when the profile is unchanged. A failed
-  connect restores the previous device and config; the GUI sees an error.
-- The old HID node must be gone before the new one is grabbed. Rely on BlueZ
-  disconnect; if evdev exposes the device address (`uniq`), filter discovery
-  by the active address as a second guard.
+- The resident source keeps its name when the profile is unchanged; a profile
+  change drops the old source and creates `atvv-<new-profile>`. A failed
+  transport creation restores the previous device and config; the GUI sees an
+  error.
+- The old HID node must be gone before the new one is grabbed. BlueZ
+  disconnect runs first, and discovery filters by the evdev `uniq` address as
+  a second guard.
 - `StatusView` adds the active device and a device list; `atvvctl doctor`
   checks the registry and the active link.
 
@@ -77,7 +83,8 @@ consumer-side capture selection would need a per-device source and routing.
 
 - `ListDevices() -> as` returns known addresses (compatible).
 - `GetDevices() -> s` returns JSON metadata: address, label, name, profile,
-  active, connected, battery, last seen, layout.
+  active, connected, battery, and layout. A last-seen timestamp is not
+  tracked yet.
 - `SelectDevice(s) -> ()`; signal `DeviceChanged(s)`.
 - `GetConfig`/`SetConfig` include the registry; the existing `device` field
   becomes `active_device` or is migrated.
@@ -113,19 +120,37 @@ consumer-side capture selection would need a per-device source and routing.
 
 ## Verification
 
+Recorded 2026-11-02 on the second development machine:
+
 ```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-xvfb-run -a cargo test -p atvv-gui --test ui
 ```
+
+`cargo test --workspace` → all suites passed, including 40 GUI model tests and
+the new registry, migration, switch, rollback, and capture-end tests.
+`xvfb-run` is not installed on this machine, so the GTK window/UI tests were
+not rerun here; the GUI compiles and its model tests pass.
 
 ```text
 atvvctl device list
-atvvctl device use <address>
+atvvctl device use 02:00:00:00:00:02
 atvvctl status
 atvvctl doctor
 ```
+
+A `dbus-run-session` smoke run with `atvvd --mock` and two devices printed both
+devices, switched the active device, changed the source to
+`atvv-google-chromecast`, reloaded layout `second`, and persisted
+`active_device = "02:00:00:00:00:02"` in the TOML file.
+
+Real Chromecast run (2026-11-02, `74:46:B3:22:2D:D5`): `atvvctl pair`
+inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
+`atvv-google-chromecast` with `atvv.profile="google-chromecast"`, decoded
+240-byte frames (54 frames / 25,920 samples in two seconds), sent bare
+`MIC_EXTEND`, and stopped cleanly. See
+`docs/research/chromecast-hardware-evidence.md`.
 
 ## Out of scope
 
@@ -137,14 +162,17 @@ atvvctl doctor
 
 ## Exit criteria
 
-- ⬜ Known devices persist and the active device survives a daemon restart.
-- ⬜ Switching reconnects the transport and keeps the source name for the same
+- ✅ Known devices persist and the active device survives a daemon restart.
+- ✅ Switching reconnects the transport and keeps the source name for the same
   profile; a failed switch restores the old device.
-- ⬜ Per-device layouts load into the board/input runtime; dirty switching is
+- ✅ Per-device layouts load into the board/input runtime; dirty switching is
   blocked.
 - ⬜ Only the active device's HID node is grabbed; capture/test ends on switch.
-- ⬜ CLI, MCP, status, and doctor expose the active device; docs updated.
+  Address filtering and capture/test teardown are implemented and unit-tested;
+  a real two-remote HID run is pending the `uaccess` install.
+- ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ⬜ The `-git` package contains the GUI; GTK stays out of the base package.
+  The package is rebuilt after the final code pass.
 
 ## Risks
 
@@ -161,3 +189,12 @@ atvvctl doctor
 
 - 2026-11-01 — planned after the step 15 interface review. The device chip and
   popover are previewed in `docs/plans/15-mapping-board.html`; no code yet.
+- 2026-11-02 — schema v3 registry and migration implemented; `pair` infers the
+  profile from PnP ids; `SelectDevice` swaps transport, session, input, and
+  source (recreating it on a profile change); `GetDevices`/`DeviceChanged`,
+  `atvvctl device list|use|rename`, MCP `devices`/`select_device`, the GUI
+  device popover with a dirty block, and per-device layouts are implemented.
+  The Google Chromecast profile was added and its ATVV audio/keepalive run is
+  recorded. Mock two-device D-Bus smoke passed. Pending: the `uaccess` install
+  and Chromecast HID capture, the real RC003+Chromecast switch, and the final
+  package rebuild.

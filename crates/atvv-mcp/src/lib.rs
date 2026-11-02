@@ -30,6 +30,8 @@ pub const TOOLS: &[&str] = &[
     "voice_stop",
     "voice_toggle",
     "list_devices",
+    "devices",
+    "select_device",
     "reload",
 ];
 
@@ -121,6 +123,25 @@ impl<B: Backend> Server<B> {
                 .backend
                 .list_devices()
                 .map(|devices| pretty(&json!({"devices": devices}))),
+            "devices" => self.backend.devices().map(|devices| pretty(&devices)),
+            "select_device" => {
+                let address = params
+                    .get("arguments")
+                    .and_then(|arguments| arguments.get("address"))
+                    .and_then(Value::as_str);
+                match address {
+                    Some(address) => self.backend.select_device(address).map(|()| {
+                        pretty(&json!({"ok": true, "tool": name, "active_device": address}))
+                    }),
+                    None => {
+                        return encode(error_response(
+                            id,
+                            INVALID_PARAMS,
+                            "select_device requires arguments.address",
+                        ));
+                    }
+                }
+            }
             "reload" => self
                 .backend
                 .reload()
@@ -217,6 +238,25 @@ fn tools() -> Value {
         ),
         tool("list_devices", "List configured ATVV device addresses."),
         tool(
+            "devices",
+            "Known devices with runtime metadata as JSON: address, label, name, \
+             profile, layout, active, connected, and battery."
+        ),
+        json!({
+            "name": "select_device",
+            "description": "Switch the daemon to a known device without restarting. \
+                            The old session is stopped, its HID grab is released, and \
+                            the new device reconnects in the background.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "address": {"type": "string", "description": "Bluetooth address"}
+                },
+                "required": ["address"],
+                "additionalProperties": false
+            }
+        }),
+        tool(
             "reload",
             "Re-read $XDG_CONFIG_HOME/atvv/daemon.toml (gain, input, vinput)."
         ),
@@ -295,6 +335,26 @@ mod tests {
         fn list_devices(&mut self) -> Result<Vec<String>, String> {
             self.calls.push("list_devices");
             Ok(vec!["C0:5D:39:F8:2D:4C".to_string()])
+        }
+
+        fn devices(&mut self) -> Result<Value, String> {
+            self.calls.push("devices");
+            Ok(json!({
+                "active_device": "C0:5D:39:F8:2D:4C",
+                "devices": [{
+                    "address": "C0:5D:39:F8:2D:4C",
+                    "profile": "miremote-rc003",
+                    "active": true
+                }]
+            }))
+        }
+
+        fn select_device(&mut self, address: &str) -> Result<(), String> {
+            self.calls.push("select_device");
+            if self.fail {
+                return Err(format!("cannot switch to {address}"));
+            }
+            Ok(())
         }
 
         fn reload(&mut self) -> Result<(), String> {

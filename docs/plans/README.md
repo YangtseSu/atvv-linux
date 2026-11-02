@@ -81,7 +81,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | H — Layout profiles | 17–18 | 17 **done**: named user layouts with a template default, live switching, CLI/GUI/D-Bus support, v1 migration, and recorded RC003 key changes. 18 **done**: app-verified presets for mpv, Impress/WPS presentation, and omp |
 | I — Localization | 19 | **done**: GUI en/zh-Hans catalog and bilingual user docs |
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
-| K — Device management | 21 | **planned**: single-active device registry and switching, per-device layouts |
+| K — Device management | 21 | **in-progress**: single-active device registry and switching, per-device layouts, Chromecast profile; real two-device run pending |
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
@@ -100,7 +100,7 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 21 | K | [multi-device](21-multi-device.md) | ⬜ not-started | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
+| 21 | K | [multi-device](21-multi-device.md) | 🚧 in-progress | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
 
 ### Completed steps
 
@@ -189,5 +189,5 @@ blockers, and the next action. This index does not repeat it.
 
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
-- Second ATVV v1.0 device to validate the profile abstraction.
+- Real two-device switch validation with the RC003 and Chromecast on one host.
 - Layout import/export and a config migration UI.

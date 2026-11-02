@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
-use atvv_audio::Resampler;
+use atvv_audio::{AudioSourceConfig, Resampler};
 use atvv_config::{Config, ConfigDocument, VinputMode};
 use atvv_input::{Action, ActionMap, DictationMode, InputOptions, InputRuntime, RemoteEvent};
 use atvv_protocol::adpcm::Decoder;
@@ -24,10 +24,10 @@ use crate::audio::PcmSink;
 use crate::capture::{self, CaptureCell};
 use crate::exec::ExecEngine;
 use crate::status::{
-    AudioView, CapsView, ConfigCell, ConfigView, DeviceView, HardwareView, InputView, StatusCell,
-    StatusView, VinputView,
+    AudioView, CapsView, ConfigCell, ConfigView, DeviceEntryView, DeviceView, HardwareView,
+    InputView, StatusCell, StatusView, VinputView,
 };
-use crate::transport::{Transport, TransportEvent};
+use crate::transport::{Transport, TransportEvent, TransportFactory};
 use crate::vinput::VinputControl;
 
 /// How often the daemon refreshes the cached battery while connected.
@@ -91,6 +91,11 @@ pub enum Command {
         action: String,
         reply: Sender<Result<(), String>>,
     },
+    /// Make a known device active; the reply carries the result.
+    SelectDevice {
+        address: String,
+        reply: Sender<Result<(), String>>,
+    },
     Shutdown,
 }
 
@@ -102,6 +107,8 @@ pub enum DaemonEvent {
     VoiceStopped,
     /// The active layout changed; carries the new id.
     LayoutChanged(String),
+    /// The active device changed; carries the new address.
+    DeviceChanged(String),
     /// Logical button activity while capture mode is active.
     ButtonEvent {
         button: String,
@@ -135,6 +142,9 @@ pub struct DaemonConfig {
     /// Defaults to the profile rate so a daemon built without a real sink
     /// still behaves like one.
     pub graph_rate: u32,
+    /// Resident source configuration when the daemon owns a real PipeWire
+    /// source; `None` keeps the injected sink (tests, mocks).
+    pub audio_config: Option<AudioSourceConfig>,
     pub config_path: PathBuf,
     pub config_loaded: bool,
     /// Validated configuration; the daemon applies changes live.
@@ -155,6 +165,7 @@ impl DaemonConfig {
             address: address.into(),
             source_name: format!("atvv-{}", profile.id),
             graph_rate: profile.sample_rate,
+            audio_config: None,
             config_path: atvv_config::default_path(),
             config_loaded: false,
             config: Config::defaults(&profile),
@@ -218,7 +229,9 @@ pub struct Daemon {
     profile: DeviceProfile,
     address: String,
     transport: Box<dyn Transport>,
+    transport_factory: Option<Box<dyn TransportFactory>>,
     audio: Box<dyn PcmSink>,
+    audio_config: Option<AudioSourceConfig>,
     input: Option<InputRuntime>,
     signals: Arc<dyn EventSink>,
     status: StatusCell,
@@ -294,6 +307,7 @@ impl Daemon {
         let input_trigger = trigger_for(&config.config);
         let (input, input_degraded) = start_input(
             config.profile,
+            &config.address,
             config.config.input,
             input_trigger,
             &config.config.map,
@@ -335,6 +349,7 @@ impl Daemon {
                 address: config.address.clone(),
                 transport: transport.kind().to_string(),
             },
+            devices: device_entries(&config.config, false),
             layout: layout_view(&config.config),
             hardware: HardwareView::default(),
             caps: None,
@@ -378,7 +393,9 @@ impl Daemon {
             profile: config.profile,
             address: config.address,
             transport,
+            transport_factory: None,
             audio,
+            audio_config: config.audio_config,
             input,
             signals,
             status,
@@ -429,6 +446,11 @@ impl Daemon {
             reconnect_delay: config.reconnect_delay,
         };
         (daemon, handle)
+    }
+
+    /// Install the factory used to build a transport after `SelectDevice`.
+    pub fn set_transport_factory(&mut self, factory: Box<dyn TransportFactory>) {
+        self.transport_factory = Some(factory);
     }
 
     pub fn run(mut self) {
@@ -808,6 +830,15 @@ impl Daemon {
                 }
                 let _ = reply.send(result);
             }
+            Command::SelectDevice { address, reply } => {
+                let result = self.select_device(&address);
+                let failed = result.as_ref().err().cloned();
+                if let Some(error) = failed {
+                    self.last_error = Some(format!("select device: {error}"));
+                    self.trace(format!("select device failed: {error}"));
+                }
+                let _ = reply.send(result);
+            }
         }
         self.publish_status();
         false
@@ -882,6 +913,13 @@ impl Daemon {
     fn reload_config(&mut self) -> Result<(), String> {
         let loaded = atvv_config::load(&self.config_path, &self.profile)
             .map_err(|error| error.to_string())?;
+        if loaded.config.active_device != self.config.active_device
+            || loaded.config.profile != self.profile.id
+        {
+            return Err(
+                "the active device changed; use `atvvctl device use <address>`".to_string(),
+            );
+        }
         let existed = loaded.existed;
         self.apply_config(loaded.config)?;
         self.config_loaded = existed;
@@ -906,6 +944,11 @@ impl Daemon {
         let next = document
             .validate(&self.profile)
             .map_err(|error| error.to_string())?;
+        if next.active_device != self.config.active_device || next.profile != self.profile.id {
+            return Err(
+                "use `atvvctl device use <address>` to change the active device".to_string(),
+            );
+        }
         let previous = self.config.clone();
         self.apply_config(next)?;
         if let Err(error) = atvv_config::save_document(&self.config_path, &document, &self.profile)
@@ -957,6 +1000,136 @@ impl Daemon {
         Ok(())
     }
 
+    /// Switch to a known device: stop the session, release the grab, persist
+    /// the new address, and start a fresh session for its profile.
+    fn select_device(&mut self, raw_address: &str) -> Result<(), String> {
+        let address =
+            atvv_config::normalize_address(raw_address).map_err(|error| error.to_string())?;
+        if self.config.active_device.as_deref() == Some(address.as_str()) && self.address == address
+        {
+            return Ok(());
+        }
+        let target =
+            self.config.devices.get(&address).cloned().ok_or_else(|| {
+                format!("unknown device {address}; run `atvvctl pair <MAC>` first")
+            })?;
+        let target_profile = atvv_protocol::profile::find(&target.profile)
+            .ok_or_else(|| format!("unknown device profile {:?}", target.profile))?;
+        if self.transport_factory.is_none() {
+            return Err("device switching is not available".to_string());
+        }
+
+        let previous = self.config.clone();
+        let previous_profile = self.profile;
+        let previous_address = self.address.clone();
+        let mut next = previous.clone();
+        let profile = next
+            .select_device(&address)
+            .map_err(|error| error.to_string())?;
+        debug_assert_eq!(profile.id, target_profile.id);
+        let transport = self
+            .transport_factory
+            .as_ref()
+            .expect("checked above")
+            .create(&address)
+            .map_err(|error| format!("cannot build a transport for {address}: {error}"))?;
+
+        if matches!(
+            self.session.state(),
+            SessionState::Opening | SessionState::Streaming
+        ) {
+            self.request_voice(false);
+        }
+        capture::end(&self.capture);
+        self.input = None;
+        self.connected = false;
+        self.last_error = None;
+        let _ = self.transport.disconnect();
+
+        self.profile = profile;
+        self.address = address.clone();
+        self.transport = transport;
+        self.config = next;
+        self.publish_config_document();
+        self.session = Session::new(profile);
+        self.accumulator = None;
+        self.caps_deadline = None;
+        self.caps_attempts = 0;
+        self.last_audio = None;
+        self.next_keepalive = None;
+        self.discard_until = None;
+        self.device_alias = None;
+        self.hardware = HardwareView::default();
+        self.next_hardware_at = None;
+        self.frames = 0;
+        self.samples = 0;
+        self.dropped_frames = 0;
+        self.voice_key = None;
+        self.last_button = None;
+        if profile.id != previous_profile.id {
+            self.restart_audio(profile);
+        }
+        self.reconnect_at = self.transport.needs_connect().then(Instant::now);
+
+        let document = ConfigDocument::from_config(&self.config);
+        if let Err(error) = atvv_config::save_document(&self.config_path, &document, &profile) {
+            self.config = previous;
+            self.publish_config_document();
+            self.profile = previous_profile;
+            self.address = previous_address.clone();
+            self.session = Session::new(previous_profile);
+            self.connected = false;
+            self.caps_deadline = None;
+            self.reconnect_at = Some(Instant::now());
+            if profile.id != previous_profile.id {
+                self.restart_audio(previous_profile);
+            }
+            let restore = self
+                .transport_factory
+                .as_ref()
+                .expect("checked above")
+                .create(&previous_address)
+                .map_err(|restore| {
+                    format!(
+                        "cannot save the new device and cannot restore the old transport: \
+                         {error}; {restore}"
+                    )
+                })?;
+            self.transport = restore;
+            self.publish_status();
+            return Err(format!(
+                "cannot save {}: {error}",
+                self.config_path.display()
+            ));
+        }
+        self.config_loaded = true;
+        self.trace(format!(
+            "device switched to {address} ({} {})",
+            profile.id, profile.display_name
+        ));
+        self.signals.publish(DaemonEvent::DeviceChanged(address));
+        self.publish_status();
+        Ok(())
+    }
+
+    /// Recreate the resident source after a profile change.
+    fn restart_audio(&mut self, profile: DeviceProfile) {
+        if self.audio_config.is_some() {
+            let next = AudioSourceConfig {
+                name: crate::dbus::source_name(profile),
+                description: profile.display_name.to_string(),
+                sample_rate: profile.sample_rate,
+                channels: 1,
+                queue_capacity: profile.sample_rate as usize,
+                extra_properties: atvv_audio::contract_properties(profile.id),
+            };
+            self.audio = Box::new(crate::audio::PipeWireSink::start(next.clone()));
+            self.graph_rate = next.sample_rate;
+            self.audio_config = Some(next);
+        }
+        self.resampler = Resampler::new(profile.sample_rate, self.graph_rate);
+    }
+
     /// Apply a validated configuration to the live runtime.
     ///
     /// The input runtime is recreated only when the map, timing, trigger, or
@@ -984,6 +1157,7 @@ impl Daemon {
                 self.input_degraded.clear();
                 let (input, degraded) = start_input(
                     self.profile,
+                    &self.address,
                     true,
                     trigger_for(&next),
                     &next.map,
@@ -996,6 +1170,7 @@ impl Daemon {
                 } else {
                     let (previous_input, previous_degraded) = start_input(
                         self.profile,
+                        &self.address,
                         old.input,
                         trigger_for(&old),
                         &old.map,
@@ -1038,6 +1213,7 @@ impl Daemon {
         let trigger = trigger_for(&self.config).map(str::to_string);
         let (input, degraded) = start_input(
             self.profile,
+            &self.address,
             true,
             trigger.as_deref(),
             &self.config.map,
@@ -1408,6 +1584,7 @@ impl Daemon {
                 address: self.address.clone(),
                 transport: self.transport.kind().to_string(),
             },
+            devices: device_entries(&self.config, self.connected),
             hardware: self.hardware.clone(),
             caps,
             audio: AudioView {
@@ -1450,6 +1627,21 @@ impl Daemon {
     }
 }
 
+fn device_entries(config: &Config, connected: bool) -> Vec<DeviceEntryView> {
+    config
+        .devices
+        .iter()
+        .map(|(address, device)| DeviceEntryView {
+            address: address.clone(),
+            label: device.label.clone(),
+            profile: device.profile.clone(),
+            layout: device.layout.clone(),
+            active: config.active_device.as_deref() == Some(address.as_str()),
+            connected: connected && config.active_device.as_deref() == Some(address.as_str()),
+        })
+        .collect()
+}
+
 fn layout_view(config: &Config) -> crate::status::LayoutView {
     crate::status::LayoutView {
         id: config.active_layout.clone(),
@@ -1471,6 +1663,7 @@ fn hardware_view(info: atvv_bluez::HardwareInfo) -> HardwareView {
 
 fn start_input(
     profile: DeviceProfile,
+    address: &str,
     enabled: bool,
     voice_trigger: Option<&str>,
     map: &ActionMap,
@@ -1482,6 +1675,7 @@ fn start_input(
     let options = InputOptions {
         voice_trigger: voice_trigger.map(str::to_string),
         gesture: Some(gesture),
+        address: Some(address.to_string()),
     };
     match InputRuntime::start_with_options(profile, map.clone(), options) {
         Ok(runtime) => {
@@ -2434,5 +2628,198 @@ mod tests {
             daemon.malformed_sync.suppressed > 0 || daemon.malformed_sync.last_report.is_some(),
             "the anomaly was not counted for rate limiting"
         );
+    }
+
+    #[derive(Default)]
+    struct TestFactory {
+        handles: Arc<Mutex<Vec<(String, MockHandle)>>>,
+        fail: Option<String>,
+    }
+
+    impl TransportFactory for TestFactory {
+        fn create(
+            &self,
+            address: &str,
+        ) -> Result<Box<dyn crate::transport::Transport>, crate::transport::TransportError>
+        {
+            if self.fail.as_deref() == Some(address) {
+                return Err(crate::transport::TransportError::Other(
+                    "cannot connect".to_string(),
+                ));
+            }
+            let (transport, handle) = MockTransport::new(MockConfig {
+                address: address.to_string(),
+                name: format!("mock {address}"),
+                ..MockConfig::default()
+            });
+            self.handles
+                .lock()
+                .unwrap()
+                .push((address.to_string(), handle));
+            Ok(Box::new(transport))
+        }
+    }
+
+    fn two_device_config(first: &str, second: &str) -> Config {
+        let mut document = ConfigDocument::from_config(&Config::defaults(&RC003));
+        document.profile = RC003.id.to_string();
+        document.active_device = Some(first.to_string());
+        document.devices.insert(
+            first.to_string(),
+            atvv_config::DeviceDocument {
+                label: None,
+                profile: RC003.id.to_string(),
+                layout: atvv_config::DEFAULT_LAYOUT.to_string(),
+            },
+        );
+        document.devices.insert(
+            second.to_string(),
+            atvv_config::DeviceDocument {
+                label: Some("Second".to_string()),
+                profile: atvv_protocol::profile::CHROMECAST.id.to_string(),
+                layout: "second".to_string(),
+            },
+        );
+        let mut layout = atvv_config::LayoutDocument {
+            name: "Second".to_string(),
+            ..atvv_config::LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Up,
+            atvv_input::Trigger::Single,
+            Some("key:KEY_F13".to_string()),
+        );
+        document.layouts.insert("second".to_string(), layout);
+        document.input = false;
+        document.validate(&RC003).unwrap()
+    }
+
+    #[test]
+    fn select_device_switches_transport_layout_and_persists() {
+        let first = "02:00:00:00:00:0A";
+        let second = "02:00:00:00:00:0B";
+        let config = two_device_config(first, second);
+        let path =
+            std::env::temp_dir().join(format!("atvv-device-switch-{}.toml", std::process::id()));
+        atvv_config::save_document(&path, &ConfigDocument::from_config(&config), &RC003).unwrap();
+
+        let (transport, old) = MockTransport::new(MockConfig {
+            address: first.to_string(),
+            name: "first".to_string(),
+            ..MockConfig::default()
+        });
+        let mut daemon_config = DaemonConfig::new(RC003, first);
+        daemon_config.config = config;
+        daemon_config.config_path = path.clone();
+        daemon_config.tick = Duration::from_millis(5);
+        let (daemon, handle) = Daemon::new(
+            daemon_config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        let factory = TestFactory {
+            handles: Arc::new(Mutex::new(Vec::new())),
+            fail: None,
+        };
+        let handles = Arc::clone(&factory.handles);
+        let mut daemon = daemon;
+        daemon.set_transport_factory(Box::new(factory));
+        let thread = std::thread::spawn(move || daemon.run());
+        wait_for(&handle, |status| status.connected);
+        old.clear_commands();
+        capture::begin(&handle.capture(), Some(":1.42".to_string()));
+
+        let (reply, result) = mpsc::channel();
+        handle
+            .send(Command::SelectDevice {
+                address: second.to_string(),
+                reply,
+            })
+            .unwrap();
+        result
+            .recv_timeout(Duration::from_secs(2))
+            .expect("switch reply")
+            .expect("switch succeeds");
+        let status = wait_for(&handle, |status| {
+            status.connected && status.device.address == second
+        });
+        assert_eq!(status.device.id, atvv_protocol::profile::CHROMECAST.id);
+        assert_eq!(status.layout.id, "second");
+        assert!(!capture::is_active(&handle.capture()));
+        assert_eq!(old.command_count(0x0A), 0, "old transport still written");
+
+        let document = crate::status::lock_config(&handle.config()).clone();
+        assert_eq!(document.active_device.as_deref(), Some(second));
+        let persisted = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            persisted.contains(&format!("active_device = \"{second}\"")),
+            "{persisted}"
+        );
+        assert!(persisted.contains(&format!("\"{second}\"")), "{persisted}");
+        let handles = handles.lock().unwrap();
+        let (_, second_handle) = handles
+            .iter()
+            .find(|(address, _)| address == second)
+            .expect("second transport");
+        assert!(second_handle.command_count(0x0A) > 0);
+
+        handle.send(Command::Shutdown).unwrap();
+        thread.join().unwrap();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn failed_transport_creation_keeps_the_old_device() {
+        let first = "02:00:00:00:00:0C";
+        let second = "02:00:00:00:00:0D";
+        let config = two_device_config(first, second);
+        let path =
+            std::env::temp_dir().join(format!("atvv-device-fail-{}.toml", std::process::id()));
+        atvv_config::save_document(&path, &ConfigDocument::from_config(&config), &RC003).unwrap();
+        let (transport, _old) = MockTransport::new(MockConfig {
+            address: first.to_string(),
+            ..MockConfig::default()
+        });
+        let mut daemon_config = DaemonConfig::new(RC003, first);
+        daemon_config.config = config;
+        daemon_config.config_path = path.clone();
+        daemon_config.tick = Duration::from_millis(5);
+        let (mut daemon, handle) = Daemon::new(
+            daemon_config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        daemon.set_transport_factory(Box::new(TestFactory {
+            handles: Arc::new(Mutex::new(Vec::new())),
+            fail: Some(second.to_string()),
+        }));
+        let thread = std::thread::spawn(move || daemon.run());
+        wait_for(&handle, |status| status.connected);
+
+        let (reply, result) = mpsc::channel();
+        handle
+            .send(Command::SelectDevice {
+                address: second.to_string(),
+                reply,
+            })
+            .unwrap();
+        let error = result
+            .recv_timeout(Duration::from_secs(2))
+            .expect("switch reply")
+            .expect_err("switch must fail");
+        assert!(error.contains("cannot build a transport"), "{error}");
+        let status = crate::status::lock(&handle.status()).clone();
+        assert_eq!(status.device.address, first);
+        assert_eq!(status.device.id, RC003.id);
+        let document = crate::status::lock_config(&handle.config()).clone();
+        assert_eq!(document.active_device.as_deref(), Some(first));
+
+        handle.send(Command::Shutdown).unwrap();
+        thread.join().unwrap();
+        let _ = std::fs::remove_file(&path);
     }
 }

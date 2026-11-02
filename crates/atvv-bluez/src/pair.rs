@@ -44,6 +44,10 @@ impl Default for PairConfig {
 pub struct PairReport {
     pub address: String,
     pub name: Option<String>,
+    /// Bluetooth PnP vendor id from BlueZ's `Modalias`, if reported.
+    pub vendor_id: Option<u16>,
+    /// Bluetooth PnP product id from BlueZ's `Modalias`, if reported.
+    pub product_id: Option<u16>,
     /// The device was already bonded; no pairing exchange was started.
     pub already_paired: bool,
     pub paired: bool,
@@ -83,10 +87,17 @@ pub fn pair(config: PairConfig) -> Result<PairReport> {
             }
         }
         device.set_trusted(true).await?;
+        let modalias = device.modalias().await.ok().flatten();
 
         Ok::<_, BluezError>(PairReport {
             address: device.address().to_string(),
             name: name(&device).await,
+            vendor_id: modalias
+                .as_ref()
+                .and_then(|modalias| u16::try_from(modalias.vendor).ok()),
+            product_id: modalias
+                .as_ref()
+                .and_then(|modalias| u16::try_from(modalias.product).ok()),
             already_paired,
             paired: device.is_paired().await?,
             trusted: device.is_trusted().await?,

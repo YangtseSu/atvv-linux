@@ -27,7 +27,9 @@ ATVV 音频    ──GATT─> atvvd ──PipeWire Audio/Source─────�
 
 ## 音频契约
 
-- 节点：`Audio/Source`，名称 `atvv-<profile>`（例如 `atvv-miremote-rc003`）。
+- 节点：`Audio/Source`，名称 `atvv-<profile>`（例如 `atvv-miremote-rc003` 或
+  `atvv-google-chromecast`）。名称跟随活动设备的配置文件；切换到不同配置文件的
+  设备会替换常驻源，同一配置文件内切换设备则保持名称不变。
 - 格式：16 kHz、单声道、S16LE。`CAPS_RESP` 是 ATVV 编解码器的权威来源；
   PipeWire 节点始终呈现 16 kHz 单声道。
 - 生命周期：源在守护进程生命周期内常驻，遥控器空闲时输出静音。

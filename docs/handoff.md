@@ -1,18 +1,19 @@
 # Handoff
 
-Updated: 2026-11-01
+Updated: 2026-11-02
 
 ## Project
 
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` under `xvfb-run` → 230 passed, 8 ignored
-  tests (four kernel-uinput input tests, the real RC003 pointer test, one
-  daemon live test, the real-device GUI test, and a locale-detection test;
-  the kernel tests pass with `/dev/uinput` access, the pointer test also needs
-  the RC003 and physical presses, and the locale test runs under
-  `LANG=zh_CN.UTF-8`).
+- Tests: `cargo test --workspace` → 237 passed, 8 ignored tests (four
+  kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
+  the real-device GUI test, and a locale-detection test; the kernel tests pass
+  with `/dev/uinput` access, the pointer test also needs the RC003 and physical
+  presses, and the locale test runs under `LANG=zh_CN.UTF-8`). On 2026-11-02 the
+  suite ran without `xvfb-run` because it is not installed on this machine; the
+  GUI model tests ran, while the GTK window/UI tests were not exercised here.
   The GUI XTest suite needs `GDK_BACKEND=x11` and an X screen at least as large
   as the window; it skips the pointer section otherwise.
 
@@ -36,11 +37,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   reference for the step 15 mapping board, now implemented in
   `crates/atvv-gui/src/board.rs` and `crates/atvv-gui/src/editor.rs`. It is a
   design artifact, not shipped code. The device popover and per-device maps
-  preview step 21; the second remote is illustrative. It also contains the
-  decided step 17 layout UI: header layout chip, layout popover, manager
-  dialog, template Default, and the manager's Apply/Revert footer. Steps 17
-  and 18 are implemented; the board has the layout chip. The preset dialog is
-  not part of the HTML reference.
+  are now implemented; the second remote in the reference is illustrative. It
+  also contains the decided step 17 layout UI: header layout chip, layout
+  popover, manager dialog, template Default, and the manager's Apply/Revert
+  footer. Steps 17, 18, and the step 21 GUI are implemented; the board has the
+  layout chip. The preset dialog is not part of the HTML reference.
 
 ## Completed
 
@@ -55,6 +56,19 @@ per-session copies; `docs/plans/` remains the canonical plan.
   picker and BlueZ alias, and the CAPS-rate fix. The stable AUR
   `atvv`/`atvv-gui` `0.2.0-1` were built from this archive and published;
   `.SRCINFO` matches and `namcap PKGBUILD` is clean.
+- **Step 21 multi-device (in progress)**: schema v3 adds `active_device` and a
+  `[devices.<address>]` registry with per-device layouts. `atvvctl pair`
+  infers the profile from the BlueZ PnP ids and sets the device active;
+  `SelectDevice` swaps transport, session, input, and source (recreating
+  `atvv-<profile>` on a profile change), rolls back on failure, ends
+  capture/test, and persists the registry. `GetDevices`/`DeviceChanged`,
+  `atvvctl device list|use|rename`, MCP `devices`/`select_device`, the GUI
+  device popover with a dirty block, `StatusView.devices`, and a registry
+  doctor check are implemented. The Google Chromecast Remote profile
+  (`google-chromecast`, `18d1:9450`, 240-byte ADPCM frames, bare keepalive)
+  was added and its ATVV audio/pairing run recorded. Mock two-device switching
+  and persistence passed. Pending: the `uaccess` install and Chromecast HID
+  capture, the real RC003+Chromecast switch, and the final package rebuild.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -405,10 +419,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `docs/plans/10-vinput-zero-config.md`,
   `docs/research/vinput-upstream-api.md`, and
   `docs/decisions/0007-integration-direction.md`.
-- **21 multi-device switching (planned)**: one active device at a time, a
-  known-device registry, `SelectDevice`/`GetDevices`/`DeviceChanged`, and
-  per-device layouts. The step 15 reference previews the device chip/popover.
-  Simultaneous devices are out of scope. Depends on 06, 13, 15, and 17; see
+- **21 multi-device switching (in progress)**: schema v3 registry, explicit
+  `SelectDevice`, per-device layouts, `GetDevices`/`DeviceChanged`, CLI/MCP/GUI
+  switching, and a `google-chromecast` profile are implemented. Remaining: the
+  real RC003+Chromecast switch on one host, the Chromecast HID press map, and
+  the `-git` package rebuild. Simultaneous devices stay out of scope. See
   `docs/plans/21-multi-device.md`.
 - **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
   UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
@@ -429,9 +444,12 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - Rust 2024; MSRV 1.99 tracks the stable toolchain (zbus 6 needs 1.89,
   gtk4 0.11 needs 1.92); `atvv-protocol` is I/O-free.
 - `DeviceProfile` is hardware/firmware identity. User keymaps are separate
-  `Layout` objects (schema v2) with a synthesized `default` template;
+  `Layout` objects (schema v3) with a synthesized `default` template;
   presets are static templates that create user layouts. No automatic
-  per-app/focus switching.
+  per-app/focus switching. Each known device has its own `layout` entry.
+- Device facts live in `DeviceProfile`; RC003 profile id is
+  `miremote-rc003` and the Chromecast profile id is `google-chromecast`.
+  Button keys and gesture timing are profile fields.
 - Arch Linux packaging only; Debian/Fedora/Nix/Flatpak are out.
 - PipeWire service restart belongs to systemd (`PartOf=pipewire.service`,
   `Restart=always`), not to `atvv-audio`. Verified with a transient unit using
@@ -444,16 +462,17 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
 - ASR is external; no unofficial cloud protocol in the core.
 - GUI: Rust + `gtk4-rs` + `libadwaita`, GNOME HIG; GUI is an optional D-Bus
   client. See ADR 0008. No TUI/GPUI/web UI.
-- Device facts live in `DeviceProfile`; RC003 profile id is
-  `miremote-rc003`. Button keys and gesture timing are profile fields.
 - The fake remote profile (`test-fake-remote`, VID `0x1209`, PID `0x0002`) is
   test-only and never part of `PROFILES`.
 - D-Bus boundary: `org.atvv.Daemon` at `/org/atvv/Daemon`; `GetStatus` returns
-  JSON from the `StatusView` model; `GetConfig` returns the versioned
-  `ConfigDocument`; `SetConfig` validates, applies, and persists atomically;
-  `BeginCapture`/`EndCapture` control capture mode; `ListDevices` returns
-  addresses; `StartVoice`, `StopVoice`, `ToggleVoice`, `ReloadConfig`;
-  signals `StateChanged(s)`, `VoiceStarted()`, `VoiceStopped()`, and
+  JSON from the `StatusView` model (including the active device and the known
+  device list); `GetConfig` returns the versioned `ConfigDocument`; `SetConfig`
+  validates, applies, and persists atomically (it rejects an active-device
+  change); `BeginCapture`/`EndCapture` control capture mode; `ListDevices`
+  returns addresses; `GetDevices` returns registry/runtime JSON;
+  `SelectDevice(address)` switches the active device; `StartVoice`,
+  `StopVoice`, `ToggleVoice`, `ReloadConfig`; signals `StateChanged(s)`,
+  `DeviceChanged(s)`, `VoiceStarted()`, `VoiceStopped()`, and
   `ButtonEvent(s,s,b)`. Protocol structs do not cross D-Bus.
 - GUI: `atvv-gui` is a separate GTK4/libadwaita D-Bus client (`atvv-config`,
   `org.atvv.Config`). It uses `GetConfig`/`SetConfig`,
@@ -463,10 +482,11 @@ verified the fields recorded in `docs/research/rc003-hardware-evidence.md`.
   the serial worker, and dictation through the session. The daemon package
   stays GTK-free; `atvv-gui` is a split package. The mapping board keeps one
   selection model (`GuiModel.selected`/`trigger`) shared by the diagram
-  hotspots, the card slots, the modal editors, and test mode; layout/profile
-  switching stays out until steps 17 and 21.
+  hotspots, the card slots, the modal editors, and test mode; the header
+  layout chip switches layouts and the device popover calls `SelectDevice`.
 - Config: `$XDG_CONFIG_HOME/atvv/daemon.toml`; missing file = defaults;
-  invalid file is reported by `ReloadConfig` and `atvvctl doctor`.
+  schema v3 stores the active device and a known-device registry; invalid
+  file is reported by `ReloadConfig` and `atvvctl doctor`.
   `atvv-config` is the only parser. A slot that is absent means "profile
   default"; `none` swallows the button. The voice key is not mappable.
   `exec:` requires `allow_exec = true`; the daemon runs it as the user with a
@@ -749,11 +769,12 @@ is `mpv`, `slides` (Impress/WPS), and `omp`; applying one creates an inactive
 user layout, and reset keeps the layout's name and description. Real-app runs
 are recorded in `docs/plans/18-layout-presets.md`; see ADR 0010.
 
-The next scheduled step is **step 21 (multi-device)**: a single-active
-known-device registry, `SelectDevice`/`GetDevices`/`DeviceChanged`, and
-per-device layouts. The board and device chip already preview the UI in
-`docs/plans/15-mapping-board.html`. B01 (recording-key press/release actions)
-is backlog and does not block step 21.
+**Step 21 (multi-device) is in progress.** The registry, schema v3 migration,
+`SelectDevice`/`GetDevices`/`DeviceChanged`, per-device layouts, the
+`google-chromecast` profile, CLI/MCP/GUI switching, and synthetic tests are
+implemented. The Chromecast ATVV audio/keepalive/pairing run is recorded in
+`docs/research/chromecast-hardware-evidence.md`. B01 (recording-key
+press/release actions) is backlog and does not block step 21.
 
 **Step 10 vinput-zero-config is blocked** on upstream's own implementation:
 ATVV is the provider and vinput is the consumer. The maintainer closed PRs
@@ -762,9 +783,13 @@ refactor and said auto-selection and recording-key binding are in its
 follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
-Immediate action: start step 21. In parallel, watch upstream releases; when
-one ships its own auto-selection/declared-key binding, rebuild vinput and
-record the zero-config RC003 run. Do not reopen the PRs.
+Immediate action: install the rebuilt `-git` package so the `uaccess` rule
+covers the Chromecast HID node, capture the physical key map, then connect the
+RC003 and Chromecast to this host and record the two-device switch and back
+with a real audio stream. After that, rebuild the package with the GUI and
+close step 21. In parallel, watch upstream releases; when one ships its own
+auto-selection/declared-key binding, rebuild vinput and record the zero-config
+RC003 run. Do not reopen the PRs.
 
 ## Commands
 

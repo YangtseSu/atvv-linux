@@ -41,6 +41,9 @@ pub struct StatusView {
     pub connected: bool,
     pub streaming: bool,
     pub device: DeviceView,
+    /// Known devices and which one is active.
+    #[serde(default)]
+    pub devices: Vec<DeviceEntryView>,
     /// Active key layout driving the input runtime.
     pub layout: LayoutView,
     pub hardware: HardwareView,
@@ -70,6 +73,17 @@ pub struct DeviceView {
     pub model: String,
     pub address: String,
     pub transport: String,
+}
+
+/// One known device in the status list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceEntryView {
+    pub address: String,
+    pub label: Option<String>,
+    pub profile: String,
+    pub layout: String,
+    pub active: bool,
+    pub connected: bool,
 }
 
 /// Passive hardware facts from BlueZ.
