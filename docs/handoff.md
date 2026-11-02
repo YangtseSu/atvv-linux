@@ -51,6 +51,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **v0.3.1 release (tagged)**: workspace version 0.3.1. Fixes the
+  audio-characteristic classification that could drop a raw ADPCM frame,
+  reset the decoder, record a bogus sequence gap, and close the stream as an
+  unsupported 8 kHz codec. The annotated tag runs the release workflow for
+  x86_64/aarch64 binaries, the source archive, checksums, and generated
+  notes. AUR/VCS recipes are external; the stable AUR `atvv` needs its
+  `pkgver` and checksum updated after the tag assets exist.
 - **Audio-sync frame misclassification (fixed 2026-11-03)**: a raw 120-byte
   ADPCM frame beginning with `0x0A` was parsed as `AUDIO_SYNC` on the audio
   characteristic. The frame was dropped, the decoder reset from its bytes, a
@@ -919,11 +926,11 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Rebuild and reinstall the package.** The audio-sync length fix in
-`crates/atvv-daemon/src/daemon.rs` is not in the published `0.3.0-1` package.
-Rebuild `atvv`/`atvv-gui` (or the external `atvv-git` recipes) from this tree,
-install, and start `atvvd.service`. Until then the unit stays stopped and the
-fixed `target/debug/atvvd --verbose` runs from the checkout. Pushing needs
+**v0.3.1 is tagged; finish the release.** The tag push runs the release
+workflow. After the source archive exists, update the external AUR `atvv`
+recipe to `0.3.1-1` with its checksum, build and install it, and start
+`atvvd.service`. Until then the unit stays stopped and the fixed
+`target/debug/atvvd --verbose` runs from the checkout. Pushing needs
 explicit approval.
 
 **v0.3.0 is published.** The annotated tag `v0.3.0` (`ad39a49`) published the
