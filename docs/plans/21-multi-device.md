@@ -179,7 +179,7 @@ released` around two real presses. See
   two-remote HID run is still pending.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ✅ The `-git` package contains the GUI; GTK stays out of the base package.
-  `atvv-git`/`atvv-gui-git 0.2.0.r19.ge3da3c6-1` are built.
+  `atvv-git`/`atvv-gui-git 0.2.0.r21.g9721e88-1` are built.
 
 ## Risks
 
@@ -213,6 +213,10 @@ released` around two real presses. See
   documented A0 firmware. Recorded in
   `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
   pending.
+- 2026-11-02 — built the r21 `-git` packages from the physical-order commit
+  for operator installation with the split recipe pointed at the local
+  repository; the recipe is restored. `docs/handoff.md` carries the sizes and
+  sha256 values.
 - 2026-11-02 — the board columns are now a per-profile presentation fact in
   `RemoteLayout`, ordered by each key's hotspot position and split evenly
   (6/6 RC003, 7/7 Chromecast). The board moves cards between columns when the

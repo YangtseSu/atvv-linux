@@ -84,9 +84,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `DeviceProfile.buttons`: the Chromecast shows Mute, YouTube, Netflix, and
   Input, hides Menu, and the preset preview drops slots the device lacks.
   Capture/test mode publishes the session-driven Assistant edge as a `voice`
-  `ButtonEvent` instead of holding the configured trigger. The r19 `-git`
-  packages were built from this commit (see the package record below).
-  Pending: the real RC003+Chromecast switch.
+  `ButtonEvent` instead of holding the configured trigger. The r21 `-git`
+  packages were built from the physical-order commit (see the package record
+  below). Pending: the real RC003+Chromecast switch.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -437,7 +437,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   embeds the profile-driven board cards and the YouTube/Netflix/Mute
   hotspots, and the packaged docs carry the new button contract. `namcap`
   reports only the expected implicit-library/runtime notes. The installed r17
-  pair remains active until the operator installs these.
+  pair remains active until the operator installs these. Superseded by r21.
+- **Physical-order board `-git` packages (built, not installed)**: `atvv-git
+  0.2.0.r21.g9721e88-1` (6,241,632 bytes; sha256
+  `686a0f88f14b69021dc652d69c1e96fe1668c6d7461894df40fe6f8d6a3c7814`) and
+  `atvv-gui-git 0.2.0.r21.g9721e88-1` (1,438,370 bytes; sha256
+  `4addbfe973e0845bf6f5a7989e99b824cd2ed2e4177f2d03450f73a26c83bac4`) were
+  built from local commit `9721e88` with the split recipe temporarily pointed
+  at the local repository; the recipe is restored to the GitHub source and
+  the build clone's origin is back on GitHub. They carry the per-profile
+  columns ordered top-to-bottom by physical position (RC003 6/6, Chromecast
+  7/7). `namcap` reports only the expected implicit-library/runtime notes.
+  The installed r17 pair remains active until the operator installs these.
 
 ## Not implemented
 
