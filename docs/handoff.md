@@ -852,6 +852,17 @@ refactor and said auto-selection and recording-key binding are in its
 follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
+**Steps 23–24 are planned, not started.** Step 23
+(`docs/plans/23-audio-feedback.md`) adds the live level, GUI gain, and the
+session-boundary PCM flush. Step 24
+(`docs/plans/24-first-run-and-troubleshooting.md`) adds the generic
+**Getting started** checklist, the bilingual troubleshooting page, and the
+README known-limitations sections. B03
+(`docs/plans/B03-preopen-mic.md`) is the hardware-gated keep-open experiment
+and stays in the backlog. Step 21 remains in-progress; if the next session is
+the consumer-polish work instead of the two-device hardware run, start step
+23, then 24.
+
 Immediate action: connect the RC003 and Chromecast to this host and record the
 two-device switch and back with a real audio stream. Then rebuild the `-git`
 package with the final Chromecast key map and session-trigger change and close

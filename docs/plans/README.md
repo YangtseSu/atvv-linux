@@ -58,6 +58,7 @@ it can be picked up without re-deriving the design.
 |---|------|--------|------------|-------------------|
 | B01 | [Recording-key press and release actions](B01-recording-key-press-release-actions.md) | ⏸ backlog | 14 | one press and one release action run per edge while the mic, trigger key, and provider contract stay unchanged |
 | B02 | [NFC tag investigation and optional trigger](B02-nfc-tag.md) | ⏸ backlog | — (needs an NFC reader) | the RC003 tag's IC, UID, NDEF, and lock state are recorded, and a read-only trigger is demonstrated or the rewrite path is restored exactly |
+| B03 | [Keep-open microphone experiment](B03-preopen-mic.md) | ⏸ backlog | 02, 04, 06, 07 | an RC003 A/B measures first-frame latency and idle battery, and the opt-in path is implemented only if it clears the gate |
 
 ## Scope
 
@@ -83,12 +84,15 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | J — Release | 20 | **done**: v0.1.0 release and external Arch packaging |
 | K — Device management | 21 | **in-progress**: single-active device registry and switching, per-device layouts, Chromecast profile; real two-device run pending |
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
+| M — Consumer polish | 23–24 | 23 **not started**: live level/gain and a session-scoped PCM queue; 24 **not started**: first-run checklist and recovery docs |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
 upstream's own implementation; steps 11–18 are complete. Step 17 is complete
 and verified with the real RC003; step 18 is complete with recorded app runs
-on mpv, Impress, WPS Presentation, and omp.
+on mpv, Impress, WPS Presentation, and omp. Steps 23–24 are the planned
+consumer polish from the `sayall-linux` comparison; B03 is the hardware-gated
+keep-open experiment.
 
 ## Step files
 
@@ -101,6 +105,8 @@ verified; they are not reopened. Live work is listed first.
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
 | 21 | K | [multi-device](21-multi-device.md) | 🚧 in-progress | 06, 13, 15, 17 | one known-device switch with per-device layouts and a stable source |
+| 23 | M | [audio-feedback](23-audio-feedback.md) | ⬜ not-started | 04, 06, 14, 19 | status/GUI show the live level and gain, and a new session clears the PCM queue |
+| 24 | M | [first-run-and-troubleshooting](24-first-run-and-troubleshooting.md) | ⬜ not-started | 12, 14, 19, 23 | a generic checklist finds the missing layer and the bilingual recovery docs are linked |
 
 ### Completed steps
 
@@ -187,10 +193,9 @@ blockers, and the next action. This index does not repeat it.
 
 ## Unscheduled ideas
 
-- Consumer-facing polish from the `sayall-linux` comparison: audio level and
-  gain in the GUI, a session-boundary queue flush, a first-run checklist, and
-  a troubleshooting page. See
-  [`sayall-linux-comparison.md`](../research/sayall-linux-comparison.md) §6.
+- Structured `app:` action (shell-free desktop launch) once user demand exists;
+  see [`sayall-linux-comparison.md`](../research/sayall-linux-comparison.md)
+  §3.6.
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Real two-device switch validation with the RC003 and Chromecast on one host.

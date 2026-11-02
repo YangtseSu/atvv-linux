@@ -294,9 +294,13 @@ can fail closed on an unknown desktop id.
 | P2 | Opt-in keep-open microphone | medium | RC003 A/B for first-frame latency and battery |
 | P3 | Structured `app:` action | small | only if users ask; security review of the action grammar |
 
-The first three can be done without hardware and without changing the provider
-contract. The keep-open experiment needs a recorded real-device run before it
-can become a default or a documented recommendation.
+The P1/P2 items are scheduled: [step 23](../plans/23-audio-feedback.md)
+covers the level, gain, and session-boundary flush;
+[step 24](../plans/24-first-run-and-troubleshooting.md) covers the checklist,
+troubleshooting page, and known-limitations sections. The keep-open experiment
+is [backlog B03](../plans/B03-preopen-mic.md) and needs a recorded real-device
+run before it can become a default or a documented recommendation. The `app:`
+action stays unscheduled until user demand exists.
 
 ## 7. Open questions
 
