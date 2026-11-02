@@ -179,7 +179,7 @@ released` around two real presses. See
   two-remote HID run is still pending.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ✅ The `-git` package contains the GUI; GTK stays out of the base package.
-  `atvv-git`/`atvv-gui-git 0.2.0.r12.g7ab7652-1` are built.
+  `atvv-git`/`atvv-gui-git 0.2.0.r12.g7ec5357-1` are built.
 
 ## Risks
 
@@ -205,4 +205,4 @@ released` around two real presses. See
   reconnect, physical HID map, and direct-Assistant `AUDIO_START` run are
   recorded; the daemon now synthesizes the session trigger for that profile.
   Mock two-device D-Bus smoke passed; the package was rebuilt as
-  `0.2.0.r12.g7ab7652-1`. Pending: the real RC003+Chromecast switch.
+  `0.2.0.r12.g7ec5357-1`. Pending: the real RC003+Chromecast switch.

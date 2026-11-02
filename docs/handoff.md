@@ -70,10 +70,10 @@ per-session copies; `docs/plans/` remains the canonical plan.
   press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
   Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
   session trigger (`trigger_from_session`). Mock two-device switching and
-  persistence passed. The dev package `atvv-git 0.2.0.r12.g7ab7652-1`
-  (sha256 `94749c3e6258fa80e5a22dc726da74c442d46aa2a70acef1df27df52b816726a`)
-  and `atvv-gui-git 0.2.0.r12.g7ab7652-1` were built from commit `7ab7652`;
-  the r10 pair is installed and already supports the D-Bus trigger path.
+  persistence passed. The clean dev package `atvv-git 0.2.0.r12.g7ec5357-1`
+  (sha256 `247870309d6bbd38e2d53747417e46b9740b66b25215f6d885956478b7d2d957`)
+  and `atvv-gui-git 0.2.0.r12.g7ec5357-1` were built from commit `7ec5357`;
+  the installed r10 pair already runs the same trigger code.
   Pending: the real RC003+Chromecast switch.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
@@ -416,7 +416,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   setup, not a workaround. The ATVV-side `SetCaptureDevice` push and
   `vinput_device` policy are dropped. `vinput = "trigger"` remains the
   default; `vinput = "dbus"` is an explicit fallback. The live `daemon.toml`
-  already sets `trigger_key = "DICTATE"`; the installed service accepts it.
+  uses the default trigger with `trigger_key = "DICTATE"`; editing
+  vinput's `[TriggerKey]` requires a full fcitx5 restart
+  (`fcitx5-remote -r` is not enough).
   Upstream closed PRs #493–#495 and issues #491/#492 on
   2026-10-30 during a low-level architecture refactor that is not merging
   new features; the maintainer said auto-selection and recording-key binding
