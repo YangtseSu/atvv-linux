@@ -2,7 +2,8 @@
 
 Status: 🚧 in-progress
 Depends on: 06, 13, 15, 17
-Touches: `crates/atvv-config/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
+Touches: `crates/atvv-protocol/`, `crates/atvv-config/`, `crates/atvv-input/`,
+`crates/atvv-bluez/`, `crates/atvv-daemon/`, `crates/atvv-cli/`,
 `crates/atvv-gui/`, `crates/atvv-mcp/`, `docs/`
 
 ## Goal
