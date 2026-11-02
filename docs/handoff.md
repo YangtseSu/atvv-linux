@@ -57,9 +57,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   and the session-boundary PCM flush (23), the first-run checklist and
   bilingual recovery docs (24), ATVV v1.0 `MIC_OPEN_ERROR`/`AUDIO_SYNC`
   conformance (25), the opt-in pre-opened microphone session (26), the
-  second-device pairing fix, and profile-driven board ordering. AUR/VCS
-  recipes are external; the stable AUR `atvv` needs its `pkgver` and checksum
-  updated after the tag assets exist.
+  second-device pairing fix, and profile-driven board ordering. The stable
+  AUR `atvv` update to `0.3.0-1` was pushed as AUR commit `88215f3`; the
+  external VCS recipes remain separate.
 - **Step 26 keep-open microphone (complete, 2026-11-03)**: B03 was promoted
   and executed on the real RC003 (`C0:5D:39:F8:2D:4C`). With temporary
   verbose timestamps, 25 baseline presses measured a median 155.6 ms from the
@@ -499,8 +499,8 @@ per-session copies; `docs/plans/` remains the canonical plan.
 - **20 first release and external packaging (prepared, push pending)**:
   `.github/workflows/release.yml` builds x86_64/aarch64 binaries, packages
   them with the runtime assets and docs, and publishes them with the source
-  archive and checksums; `v0.1.0` is tagged locally. Arch recipes are outside the repository: one
-  split AUR pkgbase `atvv` (`atvv`, `atvv-gui`) under `~/aur/atvv`, and one
+  archive and checksums; `v0.1.0` is tagged locally. Arch recipes are outside
+  the repository: one split AUR pkgbase `atvv` (`atvv`, `atvv-gui`), and one
   split VCS pkgbase `atvv-git` (`atvv-git`, `atvv-gui-git`) in the personal
   `arch-pkgs` repository. Both declare `x86_64` and `aarch64`; aarch64 was not
   built here. The split Cargo build compiles the shared graph once. See
@@ -905,8 +905,8 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 **v0.3.0 is published.** The annotated tag `v0.3.0` (`ad39a49`) published the
 release with x86_64/aarch64 binaries, the source archive, checksums, and
-generated notes; the external AUR `atvv` recipe still needs its `pkgver` and
-checksum update. `Cargo.toml` and `Cargo.lock` carry 0.3.0.
+generated notes; the AUR `atvv`/`atvv-gui` `0.3.0-1` update was pushed (AUR
+commit `88215f3`). `Cargo.toml` and `Cargo.lock` carry 0.3.0.
 
 **v0.2.0 is published.** The tag `v0.2.0` (`073fa93`) has the x86_64/aarch64
 binaries, source archive, checksums, and generated notes at
