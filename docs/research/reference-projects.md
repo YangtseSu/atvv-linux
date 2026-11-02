@@ -1,9 +1,11 @@
 # Reference projects and sources
 
-Pinned snapshots used for the research snapshots on 2026-10-29 and
-2026-10-31 (layout/preset/NFC research: `layout-profiles-presets.md`). Every project
-is identified by its GitHub URL and pinned commit; no local clone path is part
-of this repository. Code reuse follows the license table below.
+Pinned snapshots used for the research snapshots on 2026-10-29,
+2026-10-31, and 2026-11-02 (layout/preset/NFC research:
+`layout-profiles-presets.md`; consumer UX: `sayall-linux-comparison.md`).
+Every project is identified by its GitHub URL and pinned commit; no local
+clone path is part of this repository. Code reuse follows the license table
+below.
 
 ## 1. Snapshots
 
@@ -11,6 +13,7 @@ of this repository. Code reuse follows the license table below.
 |---|---|---|---|---|
 | ATVVoice | <https://github.com/b0o/ATVVoice> | `v0.2.0-13-g0e8f641` | MIT | ATVV protocol, native PipeWire, D-Bus API |
 | sayall-omarchy | <https://github.com/fan-tastic-z/sayall-omarchy> | `4d10971` | MIT per `Cargo.toml`; no standalone `LICENSE` in snapshot | RC003 field behavior, input/gestures, pairing |
+| sayall-linux | <https://github.com/ZXC011/sayall-linux> | `d2b914a` | GPL-3.0-only | Single-consumer UX: first-run checklist, level meter, pre-roll, troubleshooting |
 | remote-mic-app | <https://github.com/HD838A/remote-mic-app> | `834d6a789e43` | GPL-3.0-only | Per-device layouts, base mapping + profile overrides; macOS |
 | fcitx5-vinput | <https://github.com/xifan2333/fcitx5-vinput> | `v2.4.2-106-gd9a409d` | GPL-3.0 | ASR/TTS surface, D-Bus interface |
 | Open Voice Bridge | <https://github.com/nijez/open-voice-bridge> | `1796b149f752` | GPL-3.0 | Hardware profiles, hotspot layout, per-device mapping |
@@ -23,6 +26,10 @@ of this repository. Code reuse follows the license table below.
 `Cargo.toml` declares `license = "MIT"`. If code is ever reused, preserve the
 copyright and license notice and verify the upstream repository at that commit.
 
+`sayall-linux` (ZXC011) is a different project from `sayall-omarchy`
+(fan-tastic-z). The names are similar; the code, license, and scope are not.
+See `sayall-linux-comparison.md`.
+
 ## 2. What to consult
 
 | Need | Read | Use |
@@ -33,6 +40,7 @@ copyright and license notice and verify the upstream repository at that commit.
 | Input/gesture/uinput | sayall `crates/sayall-hid`, `crates/sayall-core` | `EVIOCGRAB`, key map, gesture FSM; MIT |
 | Pairing | sayall pairing agent | LE SC numeric-comparison auto-confirm; MIT |
 | Feature semantics | remote-mic-app `TECHNICAL.en.md`, `README.md` | Hold/tap, pre-roll/drain, mapping, permissions; behavior only |
+| Last-mile UX | sayall-linux `sayall_bridge.py`, `sayall_gui.py`, `docs/TROUBLESHOOTING.md` | Level meter, pre-roll, first-run checklist, symptom-based docs; behavior only |
 | Profile schema | Open Voice Bridge `docs/ARCHITECTURE.md`, `specs/device-profile.schema.json` | Fact-directory idea; no code copy |
 | fcitx integration | fcitx5-vinput `src/common/dbus/dbus_interface.h`, settings docs | D-Bus names/methods/signals; GPL-3.0 |
 | System properties | PipeWire props documentation, bluer README | `Audio/Source`, `Channels=1`, `Cache=no` |
@@ -47,6 +55,7 @@ copyright and license notice and verify the upstream repository at that commit.
 | vimo_remote | MIT | Yes, with copyright/license notice |
 | google-remote-voice-mac | MIT | Yes, with copyright/license notice; this change reuses documented facts only |
 | remote-mic-app | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
+| sayall-linux | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
 | remote-mic-app-windows | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
 | Open Voice Bridge | GPL-3.0 | **No** unless the whole combined work becomes GPL-3.0-only |
 | fcitx5-vinput | GPL-3.0 | Integrate over D-Bus; do not static-link or copy into a differently licensed work |

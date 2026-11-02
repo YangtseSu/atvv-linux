@@ -12,6 +12,10 @@ not a second plan and it does not override `docs/plans/`.
   interface.
 - [`reference-projects.md`](reference-projects.md) — exact source URLs, pinned
   snapshots, licenses, reuse boundaries, and upstream references.
+- [`sayall-linux-comparison.md`](sayall-linux-comparison.md) — ZXC011
+  `sayall-linux` snapshot: architecture comparison, last-mile UX borrow list
+  (level meter, session pre-roll, first-run checklist, troubleshooting), and
+  the integration patterns we reject.
 - [`consumer-keys.md`](consumer-keys.md) — `KEY_VOICECOMMAND`,
   `KEY_ASSISTANT`, and `KEY_DICTATE`: kernel/XKB/fcitx5 names, desktop usage,
   the `DICTATE` trigger default, `evdev`/`evdevil` support, and the deferred
@@ -66,6 +70,7 @@ not a second plan and it does not override `docs/plans/`.
 | 18 layout presets | `layout-profiles-presets.md` §2–§3, the step 17 file |
 | 21 multi-device | `chromecast-hardware-evidence.md`, `protocol-and-device.md` §7 |
 | B02 NFC | `layout-profiles-presets.md` §4, `rc003-hardware-evidence.md` |
+| Consumer UX / troubleshooting | `sayall-linux-comparison.md` §3, `../integrations/provider-contract.md` |
 
 ## Current deltas after the research snapshot
 

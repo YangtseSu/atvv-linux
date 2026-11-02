@@ -45,6 +45,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **sayall-linux comparison (research, 2026-11-02)**:
+  `docs/research/sayall-linux-comparison.md` compares
+  `ZXC011/sayall-linux@d2b914a` (GPL-3.0-only, behavior only) with this stack.
+  It records four borrow candidates (GUI audio level/gain, session-boundary
+  PCM queue flush, opt-in keep-open mic, first-run checklist), a
+  troubleshooting-doc gap, and the rejected default-source/Vokie-config
+  shortcuts. No code change; the hardware next action below is unchanged.
 - **v0.2.0 release (published 2026-11-02)**: workspace version 0.2.0; the
   annotated tag `v0.2.0` (`073fa93`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0)
