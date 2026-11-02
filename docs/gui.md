@@ -53,6 +53,11 @@ buttons and the diagram together. Both columns are ordered by the key's
 physical position and split evenly (6/6 on the RC003, 7/7 on the Chromecast).
 The Chromecast has no Menu card, and its `tv` slot is labelled Input.
 
+The diagram is sized from the card columns, not the window: it takes the
+height the columns leave and derives its width from the illustration's
+view-box ratio, so the remote stays level with the text and a taller window
+adds one empty area below the board instead of bands above and below it.
+
 Every card shows its three gesture slots, **Single**, **Double**, and
 **Long**, with the resolved action in compact form (`Return`, `F13`,
 `Ctrl+Alt+V`, `Left click`, `Pointer up 1`, `Command…`, `Start dictation`, or

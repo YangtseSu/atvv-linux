@@ -6,6 +6,13 @@
 //! picture share one coordinate system. `GtkAspectFrame` keeps the picture at
 //! the view-box ratio; a size change only recomputes the scaled rectangles.
 //! Each device family supplies its own vector asset and hotspot table.
+//!
+//! Nothing in the diagram measures the texture: the root is an overlay whose
+//! base child is an empty `GtkDrawingArea`, and the picture and the hotspot
+//! layer are overlay children with `set_measure_overlay(false)`. Without that,
+//! `GtkPicture` reports the SVG's intrinsic 320x950 size and the illustration
+//! dictates the board height. [`fit_height`] is the only source of the
+//! diagram's size.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -324,9 +331,9 @@ fn hotspot_css(button: RemoteButton) -> &'static str {
     }
 }
 
-/// Smallest width the diagram claims; the board around it sets the height, so
-/// the picture shrinks to fit a 1040x760 window instead of forcing the board
-/// to scroll vertically.
+/// Smallest width the diagram claims, and the matching height at the view-box
+/// ratio. [`fit_height`] raises both; the board calls it with the height of
+/// the card columns, so the remote never outgrows the text beside it.
 const DIAGRAM_WIDTH: f64 = 130.0;
 const DIAGRAM_HEIGHT: f64 = DIAGRAM_WIDTH * VIEWBOX_HEIGHT / VIEWBOX_WIDTH;
 
@@ -342,10 +349,10 @@ fn scaled(hotspot: Hotspot, width: f64, height: f64) -> (f64, f64, i32, i32) {
 pub type SelectHandler = Box<dyn Fn(RemoteButton)>;
 
 pub struct RemoteDiagram {
-    root: gtk::AspectFrame,
+    root: gtk::Overlay,
     fixed: gtk::Fixed,
-    base: gtk::Stack,
     picture: gtk::Picture,
+    fallback: gtk::Label,
     buttons: BTreeMap<RemoteButton, gtk::Button>,
     layout: Rc<Cell<&'static RemoteLayout>>,
     profile: Cell<&'static str>,
@@ -354,39 +361,39 @@ pub struct RemoteDiagram {
 impl RemoteDiagram {
     #[must_use]
     pub fn new() -> Self {
-        let root = gtk::AspectFrame::builder()
-            .ratio((VIEWBOX_WIDTH / VIEWBOX_HEIGHT) as f32)
-            .obey_child(false)
-            .hexpand(true)
-            .vexpand(true)
-            .halign(gtk::Align::Center)
-            .valign(gtk::Align::Center)
-            .width_request(DIAGRAM_WIDTH as i32)
-            .build();
+        // An overlay, not a `GtkAspectFrame`: an aspect frame derives its
+        // natural height from the width it is offered, which made the center
+        // column claim 831 px at a 280 px width. The overlay's empty base child
+        // measures nothing, so [`fit_height`] alone sets the size.
+        let root = gtk::Overlay::new();
+        root.add_css_class("remote-canvas");
+        root.set_halign(gtk::Align::Center);
+        root.set_valign(gtk::Align::Center);
+        root.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
 
-        let fixed = gtk::Fixed::new();
-        fixed.add_css_class("remote-canvas");
-        fixed.set_hexpand(true);
-        fixed.set_vexpand(true);
-        fixed.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
-        root.set_child(Some(&fixed));
+        let base = gtk::DrawingArea::new();
+        base.set_can_target(false);
+        root.set_child(Some(&base));
 
         let picture = gtk::Picture::new();
         picture.set_content_fit(gtk::ContentFit::Contain);
         picture.set_can_shrink(true);
         picture.set_can_target(false);
+        root.add_overlay(&picture);
+        root.set_measure_overlay(&picture, false);
 
         let fallback = gtk::Label::new(Some(tr("Remote diagram unavailable")));
         fallback.add_css_class("dim-label");
         fallback.set_can_target(false);
+        fallback.set_visible(false);
+        root.add_overlay(&fallback);
+        root.set_measure_overlay(&fallback, false);
 
-        let base = gtk::Stack::new();
-        base.set_can_target(false);
-        base.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
-        base.add_named(&picture, Some("picture"));
-        base.add_named(&fallback, Some("fallback"));
-        base.set_visible_child_name("picture");
-        fixed.put(&base, 0.0, 0.0);
+        let fixed = gtk::Fixed::new();
+        fixed.set_hexpand(true);
+        fixed.set_vexpand(true);
+        root.add_overlay(&fixed);
+        root.set_measure_overlay(&fixed, false);
 
         let buttons = RemoteButton::ALL
             .iter()
@@ -398,7 +405,6 @@ impl RemoteDiagram {
 
         let layout = Rc::new(Cell::new(DEFAULT_LAYOUT));
         let tick_layout = Rc::clone(&layout);
-        let tick_base = base.clone();
         let tick_buttons = buttons.clone();
         let last = Cell::new((0, 0));
         fixed.add_tick_callback(move |fixed, _clock| {
@@ -406,7 +412,6 @@ impl RemoteDiagram {
             let height = fixed.height();
             if width > 0 && height > 0 && (width, height) != last.get() {
                 last.set((width, height));
-                tick_base.set_size_request(width, height);
                 for hotspot in tick_layout.get().hotspots {
                     let Some(button) = tick_buttons.get(&hotspot.button) else {
                         continue;
@@ -422,8 +427,8 @@ impl RemoteDiagram {
         let diagram = Self {
             root,
             fixed,
-            base,
             picture,
+            fallback,
             buttons,
             layout,
             profile: Cell::new(DEFAULT_LAYOUT.profile_id),
@@ -453,10 +458,12 @@ impl RemoteDiagram {
         match texture(layout.svg) {
             Some(texture) => {
                 self.picture.set_paintable(Some(&texture));
-                self.base.set_visible_child_name("picture");
+                self.picture.set_visible(true);
+                self.fallback.set_visible(false);
             }
             None => {
-                self.base.set_visible_child_name("fallback");
+                self.picture.set_visible(false);
+                self.fallback.set_visible(true);
             }
         }
 
@@ -470,7 +477,6 @@ impl RemoteDiagram {
         } else {
             DIAGRAM_HEIGHT
         };
-        self.base.set_size_request(width as i32, height as i32);
         for button in RemoteButton::ALL {
             let Some(hotspot) = layout
                 .hotspots
@@ -494,7 +500,7 @@ impl RemoteDiagram {
     }
 
     #[must_use]
-    pub fn root(&self) -> &gtk::AspectFrame {
+    pub fn root(&self) -> &gtk::Overlay {
         &self.root
     }
 
@@ -573,6 +579,13 @@ impl Default for RemoteDiagram {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Size `canvas` to `height` pixels; the width follows the view-box ratio.
+pub fn fit_height(canvas: &gtk::Overlay, height: i32) {
+    let height = height.max(DIAGRAM_HEIGHT as i32);
+    let width = (f64::from(height) * VIEWBOX_WIDTH / VIEWBOX_HEIGHT).round() as i32;
+    canvas.set_size_request(width.max(DIAGRAM_WIDTH as i32), height);
 }
 
 fn hotspot_button(button: RemoteButton) -> gtk::Button {

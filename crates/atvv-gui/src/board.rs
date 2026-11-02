@@ -13,6 +13,7 @@ use std::rc::Rc;
 
 use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
+use gtk::glib;
 use gtk::prelude::*;
 
 use crate::diagram::{RemoteDiagram, columns_for};
@@ -26,6 +27,38 @@ const COLUMN_WIDTH: i32 = 236;
 const CENTER_MIN_WIDTH: i32 = 280;
 const BOARD_MIN_WIDTH: i32 = 860;
 const CARD_SPACING: i32 = 6;
+/// Spacing inside the center column between the hint, the diagram, and the
+/// voice card; [`MappingBoard::fit`] subtracts it when sizing the diagram.
+const CENTER_SPACING: i32 = 9;
+
+/// Fit `canvas` to the card columns' natural height.
+///
+/// The remote is a reference view of the text, not the subject of the window:
+/// it takes the taller column's natural height minus the hint and the voice
+/// card, so the columns stay level and no surplus becomes bands above and
+/// below them. A scrolled window stretches the board to the viewport, so the
+/// natural height — not the allocation — is what the illustration must match.
+/// `width` is the center column's width, which the hint and the voice card
+/// wrap at and therefore measure against.
+fn fit(
+    columns: (&gtk::Box, &gtk::Box),
+    hint: &gtk::Label,
+    voice: &gtk::Button,
+    canvas: &gtk::Overlay,
+    width: i32,
+) {
+    let height = columns
+        .0
+        .measure(gtk::Orientation::Vertical, -1)
+        .1
+        .max(columns.1.measure(gtk::Orientation::Vertical, -1).1)
+        - hint.measure(gtk::Orientation::Vertical, width).1
+        - voice.measure(gtk::Orientation::Vertical, width).1
+        - 2 * CENTER_SPACING;
+    if height > 0 {
+        crate::diagram::fit_height(canvas, height);
+    }
+}
 
 fn remove_selection_classes(classed: &impl IsA<gtk::Widget>, classes: &[&str]) {
     for class in classes {
@@ -146,6 +179,10 @@ impl KeyCard {
 /// The board widget plus the widgets the window needs to drive it.
 pub struct MappingBoard {
     root: gtk::Box,
+    hint: gtk::Label,
+    center: gtk::Box,
+    /// Center-column width of the last fit; zero forces a refit.
+    fitted_width: Rc<Cell<i32>>,
     left: gtk::Box,
     right: gtk::Box,
     cards: BTreeMap<RemoteButton, KeyCard>,
@@ -163,13 +200,16 @@ impl MappingBoard {
         root.add_css_class("mapping-board");
         root.set_size_request(BOARD_MIN_WIDTH, -1);
         root.set_hexpand(true);
+        // The board hugs its content; a taller viewport leaves one empty area
+        // below instead of bands above and below the columns.
+        root.set_valign(gtk::Align::Start);
 
         let left = gtk::Box::new(gtk::Orientation::Vertical, CARD_SPACING);
         left.set_width_request(COLUMN_WIDTH);
-        left.set_valign(gtk::Align::Center);
+        left.set_valign(gtk::Align::Start);
         let right = gtk::Box::new(gtk::Orientation::Vertical, CARD_SPACING);
         right.set_width_request(COLUMN_WIDTH);
-        right.set_valign(gtk::Align::Center);
+        right.set_valign(gtk::Align::Start);
         // Every profile shares one card per logical button; `arrange` moves
         // the cards into the active profile's two columns.
         let mut cards = BTreeMap::new();
@@ -178,10 +218,10 @@ impl MappingBoard {
         }
 
         let diagram = RemoteDiagram::new();
-        let center = gtk::Box::new(gtk::Orientation::Vertical, 9);
+        let center = gtk::Box::new(gtk::Orientation::Vertical, CENTER_SPACING);
         center.set_width_request(CENTER_MIN_WIDTH);
         center.set_hexpand(true);
-        center.set_valign(gtk::Align::Fill);
+        center.set_valign(gtk::Align::Start);
         let hint = gtk::Label::new(Some(tr(
             "Click a slot to edit it; click a key on the remote to edit its single action.",
         )));
@@ -201,6 +241,9 @@ impl MappingBoard {
 
         let board = Self {
             root,
+            hint,
+            center,
+            fitted_width: Rc::new(Cell::new(0)),
             left,
             right,
             cards,
@@ -211,6 +254,26 @@ impl MappingBoard {
             voice_sub,
         };
         board.arrange(board.diagram.profile());
+
+        // Fit on the frame clock, once the center column has its real width.
+        // At construction time the column has no width, so a wrapped hint is
+        // measured against the minimum and the drawing sits a line too tall.
+        // Tracking the width also covers a window resize and a font change;
+        // `refresh` clears it so a profile switch refits immediately.
+        let fitted_width = Rc::clone(&board.fitted_width);
+        let center = board.center.clone();
+        let hint = board.hint.clone();
+        let voice = board.voice_card.clone();
+        let columns = (board.left.clone(), board.right.clone());
+        let canvas = board.diagram.root().clone();
+        board.root.add_tick_callback(move |_, _clock| {
+            let width = center.width();
+            if width > 0 && width != fitted_width.get() {
+                fitted_width.set(width);
+                fit((&columns.0, &columns.1), &hint, &voice, &canvas, width);
+            }
+            glib::ControlFlow::Continue
+        });
         board
     }
 
@@ -397,6 +460,8 @@ impl MappingBoard {
         self.diagram.set_profile(model.profile.id);
         self.diagram
             .refresh(model, pressed.map(|(button, _)| button), voice_selected);
+        // A new profile changes the column card count, so measure again.
+        self.fitted_width.set(0);
     }
 }
 

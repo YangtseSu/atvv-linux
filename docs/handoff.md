@@ -7,7 +7,7 @@ Updated: 2026-11-03
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 270 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 271 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -51,6 +51,21 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Board proportions (fixed 2026-11-03)**: the remote diagram claimed the
+  SVG's intrinsic 320x950 size through `GtkPicture`, so the center column's
+  natural height was 950 px against 540 px card columns; the picture then grew
+  with the window while the columns stayed 540 px and were centered in the
+  surplus. The diagram root is now a `GtkOverlay` whose base is an empty
+  `GtkDrawingArea`, with the picture and the hotspot layer as overlay children
+  under `set_measure_overlay(false)`, so nothing measures the texture. A
+  `GtkAspectFrame` was not enough: it derives its natural height from the
+  offered width (831 px at 280 px). `MappingBoard::fit` sizes the illustration
+  from the taller card column minus the hint and voice card, measured at the
+  center column's width; a frame-clock callback refits when that width changes,
+  which covers window resize and font changes. All three columns align to the
+  top, so surplus height is one area below the content. `tests/layout.rs`
+  fails on the previous code (585 px diagram against 540 px columns) for both
+  profiles. Workspace: 271 passed, 9 ignored; fmt and clippy clean.
 - **v0.3.1 release (published 2026-11-03)**: workspace version 0.3.1; the
   annotated tag `v0.3.1` (`8320855`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.3.1)
