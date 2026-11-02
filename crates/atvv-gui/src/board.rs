@@ -7,6 +7,7 @@
 //! model, so the hotspots, the cards, the editor dialog, and test mode cannot
 //! drift apart.
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -14,35 +15,9 @@ use atvv_input::Trigger;
 use atvv_protocol::profile::RemoteButton;
 use gtk::prelude::*;
 
-use crate::diagram::RemoteDiagram;
+use crate::diagram::{RemoteDiagram, columns_for};
 use crate::i18n::{tr, tr_args};
 use crate::model::{GuiModel, action_label, button_label, button_label_for, trigger_label};
-
-/// Buttons shown left of the remote, top to bottom.
-///
-/// The two columns are the superset of every profile's physical buttons; a
-/// card is hidden when the active profile has no such button.
-pub const LEFT_COLUMN: [RemoteButton; 7] = [
-    RemoteButton::Power,
-    RemoteButton::Up,
-    RemoteButton::Left,
-    RemoteButton::Back,
-    RemoteButton::Home,
-    RemoteButton::Menu,
-    RemoteButton::YouTube,
-];
-
-/// Buttons shown right of the remote, top to bottom.
-pub const RIGHT_COLUMN: [RemoteButton; 8] = [
-    RemoteButton::Right,
-    RemoteButton::Ok,
-    RemoteButton::Down,
-    RemoteButton::VolumeUp,
-    RemoteButton::VolumeDown,
-    RemoteButton::Tv,
-    RemoteButton::Mute,
-    RemoteButton::Netflix,
-];
 
 /// Gesture slots every card shows, top to bottom.
 pub const SLOTS: [Trigger; 3] = [Trigger::Single, Trigger::Double, Trigger::Long];
@@ -171,7 +146,10 @@ impl KeyCard {
 /// The board widget plus the widgets the window needs to drive it.
 pub struct MappingBoard {
     root: gtk::Box,
+    left: gtk::Box,
+    right: gtk::Box,
     cards: BTreeMap<RemoteButton, KeyCard>,
+    arranged_for: Cell<&'static str>,
     diagram: RemoteDiagram,
     voice_card: gtk::Button,
     voice_output: gtk::Label,
@@ -186,22 +164,17 @@ impl MappingBoard {
         root.set_size_request(BOARD_MIN_WIDTH, -1);
         root.set_hexpand(true);
 
-        let mut cards = BTreeMap::new();
         let left = gtk::Box::new(gtk::Orientation::Vertical, CARD_SPACING);
         left.set_width_request(COLUMN_WIDTH);
         left.set_valign(gtk::Align::Center);
-        for button in LEFT_COLUMN {
-            let card = KeyCard::new(button);
-            left.append(&card.root);
-            cards.insert(button, card);
-        }
         let right = gtk::Box::new(gtk::Orientation::Vertical, CARD_SPACING);
         right.set_width_request(COLUMN_WIDTH);
         right.set_valign(gtk::Align::Center);
-        for button in RIGHT_COLUMN {
-            let card = KeyCard::new(button);
-            right.append(&card.root);
-            cards.insert(button, card);
+        // Every profile shares one card per logical button; `arrange` moves
+        // the cards into the active profile's two columns.
+        let mut cards = BTreeMap::new();
+        for button in RemoteButton::LOGICAL {
+            cards.insert(button, KeyCard::new(button));
         }
 
         let diagram = RemoteDiagram::new();
@@ -226,13 +199,45 @@ impl MappingBoard {
         root.append(&center);
         root.append(&right);
 
-        Self {
+        let board = Self {
             root,
+            left,
+            right,
             cards,
+            arranged_for: Cell::new(""),
             diagram,
             voice_card,
             voice_output,
             voice_sub,
+        };
+        board.arrange(board.diagram.profile());
+        board
+    }
+
+    /// Move the cards into the active profile's columns, ordered top to
+    /// bottom by their physical position. Hidden cards stay parented to the
+    /// previous column; GTK skips invisible children.
+    fn arrange(&self, profile_id: &'static str) {
+        if self.arranged_for.get() == profile_id {
+            return;
+        }
+        self.arranged_for.set(profile_id);
+        let (left, right) = columns_for(profile_id);
+        for button in left {
+            let card = self
+                .cards
+                .get(button)
+                .unwrap_or_else(|| panic!("{profile_id} lists {button} without a card"));
+            card.root.unparent();
+            self.left.append(&card.root);
+        }
+        for button in right {
+            let card = self
+                .cards
+                .get(button)
+                .unwrap_or_else(|| panic!("{profile_id} lists {button} without a card"));
+            card.root.unparent();
+            self.right.append(&card.root);
         }
     }
 
@@ -259,6 +264,30 @@ impl MappingBoard {
     #[must_use]
     pub fn card(&self, button: RemoteButton) -> Option<&KeyCard> {
         self.cards.get(&button)
+    }
+
+    /// Visible cards in column order; `left` selects the left column.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn column_buttons(&self, left: bool) -> Vec<RemoteButton> {
+        let column = if left { &self.left } else { &self.right };
+        let mut buttons = Vec::new();
+        let mut child = column.first_child();
+        while let Some(widget) = child {
+            let next = widget.next_sibling();
+            if widget.is_visible() {
+                let name = widget.widget_name();
+                if let Some(name) = name.as_str().strip_prefix("card-")
+                    && let Some(button) = RemoteButton::ALL
+                        .iter()
+                        .find(|button| button.name() == name)
+                {
+                    buttons.push(*button);
+                }
+            }
+            child = next;
+        }
+        buttons
     }
 
     /// The focusable slot button for one gesture.
@@ -299,6 +328,7 @@ impl MappingBoard {
         pressed: Option<(RemoteButton, Trigger)>,
         voice_selected: bool,
     ) {
+        self.arrange(model.profile.id);
         let conflicts = model.conflicts();
         let selected = (!voice_selected).then_some((model.selected, model.trigger));
         for (button, card) in &self.cards {
@@ -454,30 +484,31 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
-    fn every_logical_button_has_exactly_one_card() {
-        let mut seen = BTreeSet::new();
-        for button in LEFT_COLUMN.into_iter().chain(RIGHT_COLUMN) {
-            assert_ne!(button, RemoteButton::Voice, "the voice key is not a card");
-            assert!(seen.insert(button), "{button} has two cards");
-        }
-        for button in RemoteButton::LOGICAL {
-            assert!(seen.contains(&button), "{button} has no card");
-        }
-        assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
-    }
-
-    #[test]
-    fn every_profile_button_has_a_card_in_a_column() {
-        let mut seen = BTreeSet::new();
-        for button in LEFT_COLUMN.into_iter().chain(RIGHT_COLUMN) {
-            seen.insert(button);
-        }
+    fn profile_columns_cover_the_buttons_in_balanced_columns() {
+        let mut all = BTreeSet::new();
         for profile in [atvv_protocol::RC003, atvv_protocol::CHROMECAST] {
+            let (left, right) = columns_for(profile.id);
+            assert!(
+                left.len().abs_diff(right.len()) <= 1,
+                "{} columns are not balanced",
+                profile.id
+            );
+            let mut seen = BTreeSet::new();
+            for button in left.iter().chain(right) {
+                assert_ne!(*button, RemoteButton::Voice);
+                assert!(seen.insert(*button), "{} lists {button} twice", profile.id);
+                assert!(
+                    profile.has_button(*button),
+                    "{} lists missing {button}",
+                    profile.id
+                );
+                all.insert(*button);
+            }
             for button in profile.buttons {
                 assert!(seen.contains(button), "{} misses {button}", profile.id);
             }
-            assert!(!seen.contains(&RemoteButton::Voice));
         }
+        assert_eq!(all.len(), RemoteButton::LOGICAL.len());
     }
 
     #[test]

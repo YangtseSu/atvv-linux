@@ -144,6 +144,9 @@ fn window_smoke() {
             );
         }
     }
+    let (rc_left, rc_right) = atvv_gui::diagram::columns_for(RC003.id);
+    assert_eq!(window.board().column_buttons(true), rc_left);
+    assert_eq!(window.board().column_buttons(false), rc_right);
     assert_eq!(
         window.board().slot_text(RemoteButton::Ok, Trigger::Single),
         Some("Return".to_string())
@@ -717,6 +720,9 @@ fn window_smoke() {
             .unwrap_or_else(|| panic!("{button} has no card"));
         assert!(card.root().is_visible(), "{button} card is hidden");
     }
+    let (google_left, google_right) = atvv_gui::diagram::columns_for(CHROMECAST.id);
+    assert_eq!(google.board().column_buttons(true), google_left);
+    assert_eq!(google.board().column_buttons(false), google_right);
     let menu = google.board().card(RemoteButton::Menu).expect("menu card");
     assert!(!menu.root().is_visible(), "Chromecast has no menu card");
     assert_eq!(

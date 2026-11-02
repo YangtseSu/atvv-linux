@@ -34,6 +34,10 @@ struct RemoteLayout {
     profile_id: &'static str,
     svg: &'static [u8],
     hotspots: &'static [Hotspot],
+    /// Card column left of the diagram, ordered by physical position.
+    left: &'static [RemoteButton],
+    /// Card column right of the diagram, ordered by physical position.
+    right: &'static [RemoteButton],
 }
 
 const RC003_SVG: &[u8] = include_bytes!("../resources/remote-miremote-rc003.svg");
@@ -134,6 +138,22 @@ const RC003_LAYOUT: RemoteLayout = RemoteLayout {
             width: 0.257813,
             height: 0.088105,
         },
+    ],
+    left: &[
+        RemoteButton::Power,
+        RemoteButton::Up,
+        RemoteButton::Left,
+        RemoteButton::Back,
+        RemoteButton::Home,
+        RemoteButton::Menu,
+    ],
+    right: &[
+        RemoteButton::Right,
+        RemoteButton::Ok,
+        RemoteButton::Down,
+        RemoteButton::VolumeUp,
+        RemoteButton::VolumeDown,
+        RemoteButton::Tv,
     ],
 };
 
@@ -247,6 +267,24 @@ const CHROMECAST_LAYOUT: RemoteLayout = RemoteLayout {
             height: 0.056842,
         },
     ],
+    left: &[
+        RemoteButton::Up,
+        RemoteButton::Left,
+        RemoteButton::Down,
+        RemoteButton::Back,
+        RemoteButton::Home,
+        RemoteButton::YouTube,
+        RemoteButton::Power,
+    ],
+    right: &[
+        RemoteButton::Ok,
+        RemoteButton::Right,
+        RemoteButton::VolumeUp,
+        RemoteButton::VolumeDown,
+        RemoteButton::Mute,
+        RemoteButton::Netflix,
+        RemoteButton::Tv,
+    ],
 };
 
 const DEFAULT_LAYOUT: &RemoteLayout = &RC003_LAYOUT;
@@ -256,6 +294,13 @@ fn layout_for(profile_id: &str) -> &'static RemoteLayout {
         "google-chromecast" => &CHROMECAST_LAYOUT,
         _ => DEFAULT_LAYOUT,
     }
+}
+
+/// Card columns for a profile, ordered by physical position.
+#[must_use]
+pub fn columns_for(profile_id: &str) -> (&'static [RemoteButton], &'static [RemoteButton]) {
+    let layout = layout_for(profile_id);
+    (layout.left, layout.right)
 }
 
 fn hotspot_css(button: RemoteButton) -> &'static str {
@@ -385,6 +430,12 @@ impl RemoteDiagram {
         };
         diagram.apply(DEFAULT_LAYOUT);
         diagram
+    }
+
+    /// The profile whose illustration is currently shown.
+    #[must_use]
+    pub fn profile(&self) -> &'static str {
+        self.profile.get()
     }
 
     /// Swap the illustration and hotspot table for the active profile.
@@ -585,6 +636,39 @@ mod tests {
             assert!(layout.svg.len() > 1_000);
         }
         assert_ne!(RC003_LAYOUT.svg, CHROMECAST_LAYOUT.svg);
+    }
+
+    #[test]
+    fn card_columns_follow_the_physical_order() {
+        for layout in [DEFAULT_LAYOUT, &CHROMECAST_LAYOUT] {
+            assert!(
+                layout.left.len().abs_diff(layout.right.len()) <= 1,
+                "{} columns are not balanced",
+                layout.profile_id
+            );
+            for column in [layout.left, layout.right] {
+                let positions = column
+                    .iter()
+                    .map(|button| {
+                        layout
+                            .hotspots
+                            .iter()
+                            .find(|hotspot| hotspot.button == *button)
+                            .unwrap_or_else(|| {
+                                panic!("{} has no {button} hotspot", layout.profile_id)
+                            })
+                            .y
+                    })
+                    .collect::<Vec<_>>();
+                assert!(
+                    positions
+                        .windows(2)
+                        .all(|pair| pair[0] <= pair[1] + f64::EPSILON),
+                    "{} column is not top-to-bottom: {positions:?}",
+                    layout.profile_id
+                );
+            }
+        }
     }
 
     #[test]

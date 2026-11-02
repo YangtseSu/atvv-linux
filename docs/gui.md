@@ -41,15 +41,17 @@ switch. Restart `atvv-config` after changing the desktop language.
 The window is a three-column board around the active device's vector diagram
 (RC003 or Chromecast Voice Remote):
 
-- Left cards: Power, Up, Left, Back, Home, Menu, and—on the
-  Chromecast—YouTube and Mute.
+- Left cards, top to bottom: on the RC003 Power, Up, Left, Back, Home, Menu;
+  on the Chromecast Up, Left, Down, Back, Home, YouTube, Power.
 - Center: the remote diagram and the voice-key card.
-- Right cards: Right, OK, Down, Volume up, Volume down, TV, and—on the
-  Chromecast—Netflix. The Chromecast has no Menu card, and its `tv` slot is
-  labelled Input.
+- Right cards, top to bottom: on the RC003 Right, OK, Down, Volume up, Volume
+  down, TV; on the Chromecast OK, Right, Volume up, Volume down, Mute, Netflix,
+  Input.
 
 The card set follows the active profile, so switching devices swaps the
-buttons and the diagram together.
+buttons and the diagram together. Both columns are ordered by the key's
+physical position and split evenly (6/6 on the RC003, 7/7 on the Chromecast).
+The Chromecast has no Menu card, and its `tv` slot is labelled Input.
 
 Every card shows its three gesture slots, **Single**, **Double**, and
 **Long**, with the resolved action in compact form (`Return`, `F13`,

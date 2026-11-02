@@ -213,6 +213,10 @@ released` around two real presses. See
   documented A0 firmware. Recorded in
   `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
   pending.
+- 2026-11-02 — the board columns are now a per-profile presentation fact in
+  `RemoteLayout`, ordered by each key's hotspot position and split evenly
+  (6/6 RC003, 7/7 Chromecast). The board moves cards between columns when the
+  profile changes; the GUI smoke asserts the actual column order.
 - 2026-11-02 — built the profile-driven board `-git` packages from commit
   `e3da3c6` for operator installation with the split recipe pointed at the
   local repository; the recipe is restored. `docs/handoff.md` carries the
