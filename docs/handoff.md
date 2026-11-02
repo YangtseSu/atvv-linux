@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 237 passed, 8 ignored tests (four
+- Tests: `cargo test --workspace` → 238 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
