@@ -12,7 +12,7 @@ evdev/uinput 按键映射和 D-Bus 控制接口。
 
 ATVV v1.0 采集、输入重映射、守护进程和 D-Bus API、CLI、MCP 服务器以及可选的
 GTK 配置应用均已实现。RC003 和 Google Chromecast Remote 音频路径均已实现并有
-真实设备运行记录（Chromecast 的 HID 按键映射和双设备切换仍待完成）；证据见下文
+真实设备运行记录（Chromecast A0 固件的运行仍待完成）；证据见下文
 链接。
 
 fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间关闭了 ATVV 的
@@ -62,7 +62,7 @@ fcitx5-vinput 的自动设置由上游负责：维护者在其架构重构期间
 第二个配置文件是 Google Chromecast Remote（`google-chromecast`，USB
 `18d1:9450`，DIS 型号 `A3`，ATVV v1.0，16 kHz ADPCM，240 字节帧）。2026-11-02
 的运行（`74:46:B3:22:2D:D5`）验证了配对推断、CAPS、音频和裸 `MIC_EXTEND` 保活；
-HID 按键映射和双设备切换仍待完成。证据和正版判断见
+A0 固件的运行仍待完成。证据和正版判断见
 [`docs/research/chromecast-hardware-evidence.md`](docs/research/chromecast-hardware-evidence.md)。
 
 ## 安装（Arch）

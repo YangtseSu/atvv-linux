@@ -205,5 +205,4 @@ blockers, and the next action. This index does not repeat it.
   §3.6.
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
-- Real two-device switch validation with the RC003 and Chromecast on one host.
 - Layout import/export and a config migration UI.

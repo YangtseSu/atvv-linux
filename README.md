@@ -14,8 +14,8 @@ graph; evdev/uinput owns input remapping.
 ATVV v1.0 capture, input remapping, the daemon and D-Bus API, the CLI, the MCP
 server, and the optional GTK configuration app are implemented. The RC003 and
 Google Chromecast Remote audio paths are implemented and have recorded
-real-device runs (the Chromecast HID press map and two-device switch are still
-pending); evidence is linked below.
+real-device runs (the Chromecast A0 firmware run is still pending); evidence is
+linked below.
 
 Automatic fcitx5-vinput setup is upstream-owned: the maintainer closed the
 ATVV proposal PRs during an architecture refactor and will implement

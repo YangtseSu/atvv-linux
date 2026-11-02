@@ -40,8 +40,8 @@ not a second plan and it does not override `docs/plans/`.
   Google Chromecast Remote run (2026-11-02, `74:46:B3:22:2D:D5`): DIS/PnP
   identity and authenticity limits, ten-byte `CAPS_RESP` with 240-byte
   frames, `MIC_OPEN`/`MIC_CLOSE`, bare and stream-id close/keepalive
-  acceptance, source contract, HID map, reconnect, and the pending two-device
-  switch.
+  acceptance, source contract, HID map, reconnect, and the two-device switch
+  with the RC003.
 
 ## Evidence rules
 
@@ -103,8 +103,8 @@ implementation direction:
   A second real device, the Google Chromecast Remote
   (`74:46:B3:22:2D:D5`, profile `google-chromecast`), passed ATVV audio,
   keepalive, and a profile-inference pairing run on 2026-11-02. See
-  [`chromecast-hardware-evidence.md`](chromecast-hardware-evidence.md); its
-  HID press map and two-device switch remain pending.
+  [`chromecast-hardware-evidence.md`](chromecast-hardware-evidence.md); the A0
+  firmware run remains pending.
   Step 09's root package install, post-reboot run, and end-to-end fcitx text
   commit are recorded in
   [`../acceptance/rc003-2026-10-30.md`](../acceptance/rc003-2026-10-30.md).

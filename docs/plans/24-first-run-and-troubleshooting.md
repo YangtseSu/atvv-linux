@@ -98,8 +98,8 @@ and `contract` data. It does not start services, open Bluetooth, write
     `preopen_mic = false`; the measured keep-open result is step 26;
   - fcitx5-vinput auto-selection and declared-key binding are upstream-owned
     and still pending; manual configuration is documented;
-  - the Chromecast A0 Linux run, HID press map, and two-device switch remain
-    pending as recorded in the handoff;
+  - the Chromecast A0 Linux run remains pending; the A3 HID map and
+    two-device switch are recorded in step 21;
   - ATVV does not perform ASR; the consumer owns recognition and text commit;
   - default gain is 0 dB and clipping is possible; set gain with the GUI or
     `atvvctl config set --gain-db`.

@@ -203,8 +203,13 @@ atvvd: caps v1.0 codecs=0x02 interaction=HoldToTalk frame=240
 
 The final status was `state ready`, `connected true`.
 
+## Two-device switch
+
+The two-device switch with the RC003 on the same host passed on 2026-11-02;
+both devices stayed known, the source and grab followed the active device, and
+the RC003 streamed after switching back. The run is recorded in
+[`../plans/21-multi-device.md`](../plans/21-multi-device.md).
+
 ## Pending
 
 - A real speech capture and ASR check.
-- Two-device switching with the RC003 on the same host (scheduled for the
-  evening of 2026-11-02).
