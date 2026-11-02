@@ -17,6 +17,7 @@ of this repository. Code reuse follows the license table below.
 | mi-ao | <https://github.com/fanxeon/mi-ao> | `d6019bcede80` | MIT | Hardware calibration vs button-preset model |
 | vimo_remote | <https://github.com/zyxkv/vimo_remote> | `56963df494bf` | MIT | Cursor vs 3D-teleop mode switch |
 | remote-mic-app-windows | <https://github.com/GetSayAll/remote-mic-app-windows> | `6dcc34b663b0` | GPL-3.0-only | Public button-profile host; private preset implementation |
+| google-remote-voice-mac | <https://github.com/zolo1978/google-remote-voice-mac> | `e57c0a47cece` | MIT | Google G9N9N A0 ATVV command dialect; macOS HID/audio capture |
 
 `sayall-omarchy` has no top-level license file in the snapshot; its
 `Cargo.toml` declares `license = "MIT"`. If code is ever reused, preserve the
@@ -28,6 +29,7 @@ copyright and license notice and verify the upstream repository at that commit.
 |---|---|---|
 | ATVV message/state design | ATVVoice `src/atvv.rs`, `src/protocol/`, `src/ble.rs`, `src/pw.rs`, `src/dbus.rs` | Protocol and source structure; MIT |
 | RC003 quirks | sayall `crates/sayall-atvv`, `crates/sayall-core`, `docs/ARCHITECTURE.md` | Field behavior and timing; MIT |
+| G9N9N A0 command dialect | google-remote-voice-mac `docs/PROTOCOL.md`, `Sources/VoiceSession.swift`, `Sources/Engine.swift` | 160-byte frames, `[0E, streamID]` keepalive, `[0D, streamID]` close; MIT, behavior only |
 | Input/gesture/uinput | sayall `crates/sayall-hid`, `crates/sayall-core` | `EVIOCGRAB`, key map, gesture FSM; MIT |
 | Pairing | sayall pairing agent | LE SC numeric-comparison auto-confirm; MIT |
 | Feature semantics | remote-mic-app `TECHNICAL.en.md`, `README.md` | Hold/tap, pre-roll/drain, mapping, permissions; behavior only |
@@ -43,6 +45,7 @@ copyright and license notice and verify the upstream repository at that commit.
 | sayall-omarchy | MIT | Yes, with copyright/license notice; verify snapshot |
 | mi-ao | MIT | Yes, with copyright/license notice |
 | vimo_remote | MIT | Yes, with copyright/license notice |
+| google-remote-voice-mac | MIT | Yes, with copyright/license notice; this change reuses documented facts only |
 | remote-mic-app | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
 | remote-mic-app-windows | GPL-3.0-only | **No** unless the whole combined work becomes GPL-3.0-only |
 | Open Voice Bridge | GPL-3.0 | **No** unless the whole combined work becomes GPL-3.0-only |

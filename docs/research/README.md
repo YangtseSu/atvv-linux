@@ -31,8 +31,9 @@ not a second plan and it does not override `docs/plans/`.
 - [`chromecast-hardware-evidence.md`](chromecast-hardware-evidence.md) — real
   Google Chromecast Remote run (2026-11-02, `74:46:B3:22:2D:D5`): DIS/PnP
   identity and authenticity limits, ten-byte `CAPS_RESP` with 240-byte
-  frames, `MIC_OPEN`/`MIC_CLOSE`, bare keepalive, source contract, and the
-  pending button/reconnect checks.
+  frames, `MIC_OPEN`/`MIC_CLOSE`, bare and stream-id close/keepalive
+  acceptance, source contract, HID map, reconnect, and the pending two-device
+  switch.
 
 ## Evidence rules
 

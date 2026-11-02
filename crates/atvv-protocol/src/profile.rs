@@ -337,12 +337,14 @@ pub const RC003: DeviceProfile = DeviceProfile {
 ///
 /// Observed on 2026-11-02 (`74:46:B3:22:2D:D5`, DIS model `A3`, firmware
 /// `26.0`): ATVV v1.0, ADPCM 16 kHz, hold-to-talk, 240-byte frames, short
-/// `MIC_OPEN`, bare `MIC_CLOSE`. The HID report descriptor is a consumer
-/// control array whose Linux key mapping provides `KEY_COFFEE` (Power),
-/// `KEY_HOMEPAGE`, `KEY_BACK`, `KEY_SELECT`, `KEY_TV` (Input), the arrow keys,
-/// the volume keys, `KEY_MUTE`, and two app keys. The Assistant key emits no
-/// evdev event; it opens ATVV directly, so the daemon synthesizes the
-/// consumer trigger from the session start/stop.
+/// `MIC_OPEN`, and standard stream-id `MIC_CLOSE`/`MIC_EXTEND`. The A3 accepts
+/// both bare and stream-id forms; the stream-id form is shared with the A0
+/// G9N9N firmware recorded by the upstream project. The HID report descriptor
+/// is a consumer control array whose Linux key mapping provides `KEY_COFFEE`
+/// (Power), `KEY_HOMEPAGE`, `KEY_BACK`, `KEY_SELECT`, `KEY_TV` (Input), the
+/// arrow keys, the volume keys, `KEY_MUTE`, and two app keys. The Assistant
+/// key emits no evdev event; it opens ATVV directly, so the daemon synthesizes
+/// the consumer trigger from the session start/stop.
 pub const CHROMECAST: DeviceProfile = DeviceProfile {
     id: "google-chromecast",
     display_name: "Google Chromecast Voice Remote (A3)",
@@ -355,8 +357,8 @@ pub const CHROMECAST: DeviceProfile = DeviceProfile {
     frame_size: 240,
     nibble_order: NibbleOrder::HighFirst,
     mic_open: MicOpenVariant::Short,
-    mic_close: MicCloseVariant::Bare,
-    keepalive: KeepaliveVariant::Bare,
+    mic_close: MicCloseVariant::StreamId,
+    keepalive: KeepaliveVariant::StreamId,
     post_stop_discard_ms: 300,
     sample_rate: 16_000,
     gain_db: 0,
@@ -488,8 +490,8 @@ mod tests {
         assert_eq!(CHROMECAST.sample_rate, 16_000);
         assert_eq!(CHROMECAST.gain_db, 0);
         assert_eq!(CHROMECAST.mic_open, MicOpenVariant::Short);
-        assert_eq!(CHROMECAST.mic_close, MicCloseVariant::Bare);
-        assert_eq!(CHROMECAST.keepalive, KeepaliveVariant::Bare);
+        assert_eq!(CHROMECAST.mic_close, MicCloseVariant::StreamId);
+        assert_eq!(CHROMECAST.keepalive, KeepaliveVariant::StreamId);
         assert!(CHROMECAST.matches_name("Chromecast Remote"));
         assert!(!CHROMECAST.matches_name("Chromecast"));
         assert_eq!(CHROMECAST.primary_key(RemoteButton::Ok), Some("KEY_SELECT"));
@@ -520,8 +522,8 @@ mod tests {
         assert_eq!(RC003.mic_close(StreamId(3)), vec![0x0D]);
         assert_eq!(RC003.mic_extend(StreamId(3)), vec![0x0E]);
         assert_eq!(CHROMECAST.mic_open(), vec![0x0C, 0x00]);
-        assert_eq!(CHROMECAST.mic_close(StreamId(3)), vec![0x0D]);
-        assert_eq!(CHROMECAST.mic_extend(StreamId(3)), vec![0x0E]);
+        assert_eq!(CHROMECAST.mic_close(StreamId(3)), vec![0x0D, 0x03]);
+        assert_eq!(CHROMECAST.mic_extend(StreamId(3)), vec![0x0E, 0x03]);
     }
 
     #[test]

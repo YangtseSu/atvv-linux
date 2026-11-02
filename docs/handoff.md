@@ -65,8 +65,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `atvvctl device list|use|rename`, MCP `devices`/`select_device`, the GUI
   device popover with a dirty block, `StatusView.devices`, and a registry
   doctor check are implemented. The Google Chromecast Remote profile
-  (`google-chromecast`, `18d1:9450`, 240-byte ADPCM frames, bare keepalive)
-  was added and its ATVV audio/pairing/reconnect run recorded. A physical
+  (`google-chromecast`, `18d1:9450`, 240-byte ADPCM frames, stream-id
+  close/keepalive; the A3 accepts both forms) was added and its ATVV
+  audio/pairing/reconnect run recorded. The profile uses the stream-id form so
+  the documented A0 G9N9N firmware shares one profile; an A0 Linux run is
+  pending. A physical
   press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
   Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
   session trigger (`trigger_from_session`). Mock two-device switching and

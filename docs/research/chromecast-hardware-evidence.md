@@ -86,10 +86,48 @@ streamed without a physical key press. After two seconds:
 "streaming": true
 ```
 
-`54 × 480 = 25,920` samples, confirming the 240-byte frame decode. A
-16-second hold sent `[0e]` once and logged `keepalive MIC_EXTEND`, so the
-keepalive variant is `Bare`. A manual `MIC_CLOSE` sent `[0d]` and stopped the
-stream; no `AUDIO_STOP` echo was observed.
+`54 × 480 = 25,920` samples, confirming the 240-byte frame decode. An initial
+16-second hold with the bare profile sent `[0e]` once and logged `keepalive
+MIC_EXTEND`, so the device accepts the bare form.
+
+A later run on the same device (`74:46:B3:22:2D:D5`, DIS `A3`, firmware `26.0`)
+set the keepalive to the standard stream-id form. The daemon sent `[0e, 01]`
+twice while the stream id was `01`; audio continued through both and ended with
+a normal release (`control [00, 02]`), not a timeout:
+
+```text
+atvvd: control [04, 03, 02, 01]
+atvvd: voice started
+atvvd: first frame 240 B ...
+atvvd: send [0e, 01]
+atvvd: keepalive MIC_EXTEND
+atvvd: send [0e, 01]
+atvvd: keepalive MIC_EXTEND
+atvvd: control [00, 02]
+atvvd: voice stopped
+```
+
+A manual session then tested the stream-id close. The daemon sent `[0d, 00]`
+for stream id `00`; the stream stopped and a second manual session subsequently
+streamed 52 frames, so the close did not wedge the device:
+
+```text
+atvvd: control [04, 00, 02, 00]
+atvvd: send [0d, 00]
+atvvd: control [00, 00]
+...
+atvvd: manual MIC_OPEN
+atvvd: control [04, 00, 02, 00]
+atvvd: state: streaming
+```
+
+The A3 therefore accepts both the bare and stream-id `MIC_CLOSE`/`MIC_EXTEND`
+forms. The profile uses the stream-id form because the A0 G9N9N firmware
+recorded by `zolo1978/google-remote-voice-mac@e57c0a4` sends `[0e, streamID]`
+(`Sources/VoiceSession.swift`) and `[0d, streamID]` (`Sources/Engine.swift`);
+this gives the two firmware revisions one command dialect. The A0 path still
+needs a Linux run. The stream-id close produced a `control [00, 00]` echo; the
+state machine ignores it and does not send a second close.
 
 The first frame in one run was:
 

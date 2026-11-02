@@ -206,3 +206,10 @@ released` around two real presses. See
   recorded; the daemon now synthesizes the session trigger for that profile.
   Mock two-device D-Bus smoke passed; the package was rebuilt as
   `0.2.0.r12.g7ec5357-1`. Pending: the real RC003+Chromecast switch.
+- 2026-11-02 — A3 stream-id command test: keepalive `[0E, 01]` was sent twice
+  during a held stream and the stream continued to a normal release; manual
+  close `[0D, 00]` stopped the stream and a second session streamed again.
+  `google-chromecast` now uses stream-id close/keepalive, matching the
+  documented A0 firmware. Recorded in
+  `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
+  pending.
