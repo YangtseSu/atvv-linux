@@ -120,7 +120,10 @@ pub struct Capabilities {
 }
 
 impl Capabilities {
-    /// Fixed v1.0 layout: `0B version(2) codecs(1) interaction(1) frame(2)`.
+    /// Seven-byte prefix: `0B version(2) codecs(1) interaction(1) frame(2)`.
+    ///
+    /// The v1.0 payload is at least eight bytes; extra configuration,
+    /// reserved, and optional firmware data follow and are ignored.
     pub const LEN: usize = 7;
 
     #[must_use]

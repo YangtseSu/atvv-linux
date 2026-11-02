@@ -40,6 +40,7 @@ See `sayall-linux-comparison.md`.
 | Input/gesture/uinput | sayall `crates/sayall-hid`, `crates/sayall-core` | `EVIOCGRAB`, key map, gesture FSM; MIT |
 | Pairing | sayall pairing agent | LE SC numeric-comparison auto-confirm; MIT |
 | Feature semantics | remote-mic-app `TECHNICAL.en.md`, `README.md` | Hold/tap, pre-roll/drain, mapping, permissions; behavior only |
+| ATVV v1.0 semantics | [`google-atvv-1.0-spec.md`](google-atvv-1.0-spec.md) | Payload fields, open/close/extend rules, error codes, timeouts; facts only |
 | Last-mile UX | sayall-linux `sayall_bridge.py`, `sayall_gui.py`, `docs/TROUBLESHOOTING.md` | Level meter, pre-roll, first-run checklist, symptom-based docs; behavior only |
 | Profile schema | Open Voice Bridge `docs/ARCHITECTURE.md`, `specs/device-profile.schema.json` | Fact-directory idea; no code copy |
 | fcitx integration | fcitx5-vinput `src/common/dbus/dbus_interface.h`, settings docs | D-Bus names/methods/signals; GPL-3.0 |
@@ -76,6 +77,10 @@ GPL-only references are documentation/behavior only.
   <https://github.com/bluez/bluer>
 - Google Voice over BLE spec v1.0 (archived copy):
   <https://web.archive.org/web/20260324183034/https://wangefan.github.io/linux_kernel_driver/resources/Google_Voice_over_BLE_spec_v1.0.pdf>
+  - Normative fields, errors, and flow rules are summarized in
+    [`google-atvv-1.0-spec.md`](google-atvv-1.0-spec.md). The PDF is marked
+    Google Confidential and is not vendored here; the archive link is the
+    source of record.
 - Android legacy Voice over HID driver (different transport):
   <https://android.googlesource.com/kernel/x86_64/+/f2aa02f9e6f019f7cee08b6b06d4636b210ffe36/drivers/hid/hid-atv-remote.c>
 - Infineon CYW20829 voice-remote reference firmware:

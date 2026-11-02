@@ -137,27 +137,27 @@ pub enum NibbleOrder {
 /// `MIC_OPEN` payload shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MicOpenVariant {
-    /// `[0C 00]`, used by the RC003.
+    /// `[0C 00]`: v1.0 microphone mode 0 (playback/realtime), used by the RC003.
     Short,
-    /// `[0C 00 codec_hi codec_lo]`, used by older ATVV remotes.
+    /// `[0C 00 codec_hi codec_lo]`, used by older ATVV remotes; not v1.0.
     Codec,
 }
 
 /// `MIC_CLOSE` payload shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MicCloseVariant {
-    /// `[0D]`.
+    /// `[0D]`: RC003 field form; the v1.0 payload is a stream id.
     Bare,
-    /// `[0D stream_id]`.
+    /// `[0D stream_id]`: v1.0 form.
     StreamId,
 }
 
 /// Keepalive payload shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeepaliveVariant {
-    /// `[0E]`, used by the RC003.
+    /// `[0E]`: RC003 field form; the v1.0 payload is a stream id.
     Bare,
-    /// `[0E stream_id]`.
+    /// `[0E stream_id]`: v1.0 form.
     StreamId,
 }
 

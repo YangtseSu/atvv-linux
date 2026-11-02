@@ -10,6 +10,10 @@ not a second plan and it does not override `docs/plans/`.
 - [`protocol-and-device.md`](protocol-and-device.md) — ATVV v1.0 wire facts,
   RC003 profile, session behavior, BlueZ/PipeWire/input facts, fcitx5-vinput
   interface.
+- [`google-atvv-1.0-spec.md`](google-atvv-1.0-spec.md) — original summary of
+  the archived Google Voice over BLE 1.0 spec: payload layouts, open/close
+  rules, error codes, timeouts, and the project deltas; the PDF itself is not
+  redistributed.
 - [`reference-projects.md`](reference-projects.md) — exact source URLs, pinned
   snapshots, licenses, reuse boundaries, and upstream references.
 - [`sayall-linux-comparison.md`](sayall-linux-comparison.md) — ZXC011
@@ -51,6 +55,9 @@ not a second plan and it does not override `docs/plans/`.
   here first.
 - Do not copy GPL-3.0-only code. See the license table in
   [`reference-projects.md`](reference-projects.md).
+- Do not vendor the Google Voice over BLE PDF: it is marked Google
+  Confidential and has no redistribution grant. Cite the archive link and the
+  original summary in [`google-atvv-1.0-spec.md`](google-atvv-1.0-spec.md).
 - Reference external projects by GitHub URL and pinned commit. Do not record
   local clone paths.
 
@@ -58,6 +65,7 @@ not a second plan and it does not override `docs/plans/`.
 
 | Work | Read |
 |---|---|
+| 01/02 protocol | `protocol-and-device.md`, `google-atvv-1.0-spec.md` |
 | 05 input/uinput | `landscape.md` §3.2 and §5, `protocol-and-device.md` §6 |
 | 06 daemon/D-Bus | `landscape.md` §3.1 and §6, `protocol-and-device.md` §7 |
 | 07 RC003 hardware | `protocol-and-device.md` §2–§5, `reference-projects.md`, `rc003-hardware-evidence.md` |

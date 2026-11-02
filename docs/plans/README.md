@@ -196,6 +196,10 @@ blockers, and the next action. This index does not repeat it.
 - Structured `app:` action (shell-free desktop launch) once user demand exists;
   see [`sayall-linux-comparison.md`](../research/sayall-linux-comparison.md)
   §3.6.
+- ATVV v1.0 spec conformance: ignore `MIC_OPEN_ERROR` while `Streaming`, name
+  the error codes, decide the dynamic 8/16 kHz behavior, and add
+  sequence-gap diagnostics; see
+  [`google-atvv-1.0-spec.md`](../research/google-atvv-1.0-spec.md) §7.
 - Optional tray/status indicator: connection, recording, battery, error.
 - PipeWire initial-start retry; suspend/resume and adapter power-cycle tests.
 - Real two-device switch validation with the RC003 and Chromecast on one host.

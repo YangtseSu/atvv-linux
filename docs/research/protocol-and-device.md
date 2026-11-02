@@ -3,14 +3,16 @@
 Status: implementation facts and field reports. RC003 values were verified in
 the step 07 hardware run on 2026-10-30 where
 [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) says so; everything
-else is an upstream or field-report expectation.
+else is an upstream or field-report expectation. The normative v1.0 wire
+semantics, including the payload layouts corrected below, are summarized in
+[`google-atvv-1.0-spec.md`](google-atvv-1.0-spec.md).
 
 ## 1. GATT service
 
 | Role | UUID | Properties | Direction |
 |---|---|---|---|
 | ATVV service | `AB5E0001-5A21-4F05-BC7D-AF01F617B664` | — | — |
-| Command (TX) | `AB5E0002-5A21-4F05-BC7D-AF01F617B664` | Write / Write Without Response | Host → remote |
+| Command (TX) | `AB5E0002-5A21-4F05-BC7D-AF01F617B664` | Write Without Response (spec); field devices may also advertise Write | Host → remote |
 | Audio (RX) | `AB5E0003-5A21-4F05-BC7D-AF01F617B664` | Notify | Remote → host |
 | Control (CTL) | `AB5E0004-5A21-4F05-BC7D-AF01F617B664` | Notify | Remote → host |
 
@@ -26,33 +28,38 @@ Multi-byte fields are big-endian.
 
 | Name | Bytes | Direction | Notes |
 |---|---|---|---|
-| `GET_CAPS` | `0A 01 00 00 03 03` | Host → remote | v1.0, ADPCM 8/16 kHz, PTT + HTT |
-| `MIC_OPEN` short | `0C 00` | Host → remote | RC003 form |
-| `MIC_OPEN` codec | `0C 00 00 <codec>` | Host → remote | Older-device fallback; not used by RC003 profile |
-| `MIC_CLOSE` bare | `0D` | Host → remote | RC003 form |
-| `MIC_CLOSE` stream | `0D <stream>` | Host → remote | Profile variant |
-| `MIC_EXTEND` bare | `0E` | Host → remote | RC003 form |
-| `MIC_EXTEND` stream | `0E <stream>` | Host → remote | Profile variant |
+| `GET_CAPS` | `0A 01 00 00 03 03` | Host → remote | v1.0, legacy `0x0003`, interaction mask `0x03` (HTT/PTT/on-request); no codec field |
+| `MIC_OPEN` mode | `0C 00` | Host → remote | v1.0 microphone mode: `0x00` playback/realtime, `0x01` capture/non-realtime; RC003 uses mode 0 |
+| `MIC_OPEN` legacy | `0C 00 00 <codec>` | Host → remote | Older-device fallback; not the v1.0 payload and not used by the RC003 profile |
+| `MIC_CLOSE` bare | `0D` | Host → remote | RC003 field form |
+| `MIC_CLOSE` stream | `0D <stream>` | Host → remote | v1.0 form: `0x00` MIC_OPEN, `0x01..=0x80` PTT/HTT, `0xFF` any |
+| `MIC_EXTEND` bare | `0E` | Host → remote | RC003 field form |
+| `MIC_EXTEND` stream | `0E <stream>` | Host → remote | v1.0 form, same stream-id rules |
+| `MIC_OPEN` error | `0C <err_hi> <err_lo>` | Remote → host | Control notification; see the error codes below |
 | `CAPS_RESP` | `0B ...` | Remote → host | Control notification |
 | `START_SEARCH` | `08` | Remote → host | Not sent by RC003 |
-| `AUDIO_START` | `04 <reason> <codec> <stream>` | Remote → host | Payload codec is not authoritative |
+| `AUDIO_START` | `04 <reason> <codec> <stream>` | Remote → host | Payload codec is not authoritative on RC003 |
 | `AUDIO_STOP` | `00 [reason]` | Remote → host | Reason optional; absent means mic close |
-| `MIC_OPEN` error | `0C <err_hi> <err_lo>` | Remote → host | Control notification |
 
 ### CAPS_RESP v1.0
 
-Fixed layout, 7 bytes:
+Variable length: at least 9 bytes total (opcode plus 8 payload bytes).
 
 ```text
 0B  version_hi version_lo  codec_mask  interaction  frame_hi frame_lo
+    extra_config  reserved  [firmware_data...]
 ```
 
 - Version: `01 00` = v1.0. Other versions are rejected; v0.4 is out of scope.
-- Codec mask: bit `0x01` = ADPCM 8 kHz, bit `0x02` = ADPCM 16 kHz. Prefer
-  16 kHz when both are present.
+- Codec mask: bit `0x01` = ADPCM 8 kHz, bit `0x02` = ADPCM 16 kHz, `0x03` =
+  both and dynamic-bandwidth capable. Prefer 16 kHz when both are present.
 - Interaction: `0x00` on-request, `0x01` press-to-talk, `0x03` hold-to-talk;
   unknown values are preserved.
 - Frame size: 16-bit big-endian; zero is invalid.
+- `extra_config` bit `0x01` asks the host to enable DLE and a larger ATT MTU.
+  The RC003 reports `0x00`; the parser currently ignores this byte.
+- `reserved` is normally `0x00`; trailing firmware data is optional and
+  ignored.
 - Firmware quirk: some devices report `codec_mask = 0` and put the codec bits
   in the interaction byte. The parser promotes that byte.
 
@@ -61,12 +68,38 @@ Fixed layout, 7 bytes:
 - `AUDIO_START` reason: `0x00` mic-open, `0x01` press-to-talk, `0x03`
   hold-to-talk; other values preserved.
 - `AUDIO_STOP` reason: `0x00` mic-close, `0x02` HTT button release, `0x04`
-  upcoming audio start, `0x08` transfer timeout, `0x10` notifications disabled.
+  upcoming audio start, `0x08` transfer timeout, `0x10` notifications
+  disabled, `0x80` other; unknown values are preserved.
 - RC003 reaches `Streaming` from a direct `AUDIO_START`, without a preceding
   `START_SEARCH`.
 - On `AUDIO_STOP` with reason HTT button release, the session emits
   `VoiceStopped` but does not send another `MIC_CLOSE`. For other reasons while
   streaming it sends one close.
+
+### `MIC_OPEN_ERROR`
+
+| Code | Meaning |
+|---|---|
+| `0x0F02` | remote is not active (Active Remote Timeout) |
+| `0x0F03` | audio notifications are not enabled |
+| `0x0F80` | a PTT/HTT interaction is already in progress |
+| `0x0FFF` | internal error |
+| `0x0F01` | reserved |
+
+`MIC_OPEN` while the microphone is already open restarts the stream if it was
+opened by `MIC_OPEN`, but returns `0x0F80` and does **not** interrupt an
+ongoing PTT/HTT stream. A `MIC_OPEN_ERROR` must therefore not end a session
+that is already `Streaming`.
+
+### Timeouts
+
+- Audio Transfer Timeout is a remote-side timer, recommended 15 s to 1
+  minute. It starts/resets on `AUDIO_START`, is cancelled by `MIC_CLOSE`, and
+  sends `AUDIO_STOP(0x08)` on expiry.
+- `MIC_EXTEND` resets that timer and has no reply; the host may send it every
+  5–10 seconds. The daemon's 10-second keepalive is inside that range.
+- Active Remote Timeout is optional; after about a minute without user
+  interaction, `MIC_OPEN` fails with `0x0F02`.
 
 ## 3. RC003 profile
 
@@ -82,7 +115,7 @@ where the evidence file notes otherwise:
 | Codec | ADPCM 16 kHz |
 | Frame size | 120 bytes, headerless |
 | Nibble order | high first |
-| `MIC_OPEN` | short `[0C 00]` |
+| `MIC_OPEN` | `[0C 00]` (mode 0, playback/realtime) |
 | `MIC_CLOSE` | bare `[0D]` |
 | `MIC_EXTEND` | bare `[0E]` |
 | Audio start | direct, no `START_SEARCH` |
@@ -103,11 +136,18 @@ evidence.
   `FrameAccumulator` and decode only complete `frame_size` frames.
 - A 7-byte `0x0A` control event carries codec, sequence, predictor (big-endian),
   and step index. It is a decoder sync: reset predictor/step and do not append
-  it to the audio accumulator.
-- Do not interpolate over sequence gaps. Record and rate-limit the warning;
-  `Channels=1` in BlueZ avoids EATT ordering problems.
+  it to the audio accumulator. The spec also makes it the rate-change point:
+  the codec byte applies to audio after the sync.
+- Do not interpolate over sequence gaps. The parser currently reads `seq` but
+  the daemon does not track gaps; add bounded-rate gap logging before claiming
+  gap diagnostics. `Channels=1` in BlueZ avoids EATT ordering problems.
 - The `AUDIO_START` payload codec can be garbage on RC003; CAPS is
-  authoritative.
+  authoritative. The spec defines the byte as the stream codec, so this is a
+  documented RC003 quirk, not a general rule for other devices.
+- Dynamic bandwidth adjustment is unsupported: a device that advertises codec
+  mask `0x03` may switch 8/16 kHz via `AUDIO_SYNC`, but the daemon does not
+  rebuild the resampler. Current profiles are fixed 16 kHz; do not claim
+  support for dynamic-rate devices without a recorded run.
 - RC003 sends late audio after `AUDIO_STOP`; discard the 300 ms window. The
   one hardware run saw no late audio after an HTT release (`AUDIO_STOP 00 02`);
   keep the discard for other stop reasons.

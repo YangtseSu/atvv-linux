@@ -37,6 +37,14 @@ same 20 presses with it.
   code (GPL-3.0-only).
 - Our keepalive already extends a streaming session every 10 s and completed a
   59.3 s held press. The open question is latency, not the 60 s hold.
+- The official v1.0 spec adds three constraints that the experiment must
+  respect (`docs/research/google-atvv-1.0-spec.md`):
+  - a second `MIC_OPEN` while the microphone is already open restarts the
+    stream after a previous `MIC_OPEN`, and returns `MIC_OPEN_ERROR(0x0F80)`
+    during an ongoing PTT/HTT interaction;
+  - `0x0F80` must not interrupt a `Streaming` session;
+  - Audio Transfer Timeout is 15 s–1 min and `MIC_EXTEND` may be sent every
+    5–10 s, so the 10 s keepalive is inside the normative range.
 
 ## Design
 
@@ -64,6 +72,10 @@ are useful for `atvvctl doctor`, add them separately with a bounded rate.
   and sends `MIC_EXTEND` every 10 s while armed. An armed session must not
   publish `VoiceStarted`/`VoiceStopped` to consumers and must not be treated
   as dictation.
+- While armed, suppress the voice-edge `MIC_OPEN`: a second open restarts the
+  stream, and during an HTT interaction it returns `0x0F80`. Treat
+  `0x0F80` as expected and keep `Streaming`; never let the error transition a
+  live session to `Ready`.
 - Record 20 presses for B in the same way.
 - Record battery percentage before and after 10 minutes of connected idle for
   A and B, and count unexpected stops/reconnects. Battery is a 1 % cached
@@ -126,6 +138,8 @@ require the real runs.
 - ⬜ [hardware] Idle battery delta and unexpected-stop count recorded for A
   and B.
 - ⬜ Decision recorded: pass and implement, or fail and close.
+- ⬜ Armed path suppresses the voice-edge `MIC_OPEN`; `MIC_OPEN_ERROR(0x0F80)`
+  does not leave `Streaming`.
 - ⬜ If pass: opt-in `preopen_mic` config, armed status, keepalive, re-open,
   no consumer-visible start/stop, tests, and docs; default false.
 - ⬜ If fail: temporary path removed; no dead config or status field remains.

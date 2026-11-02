@@ -52,6 +52,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
   PCM queue flush, opt-in keep-open mic, first-run checklist), a
   troubleshooting-doc gap, and the rejected default-source/Vokie-config
   shortcuts. No code change; the hardware next action below is unchanged.
+- **Google ATVV 1.0 spec summary (research, 2026-11-02)**:
+  `docs/research/google-atvv-1.0-spec.md` summarizes the archived PDF without
+  vendoring it (marked Google Confidential). It corrects the `GET_CAPS`
+  description and the `CAPS_RESP` layout in `protocol-and-device.md`, adds the
+  `MIC_OPEN_ERROR`/timeout/stream-id semantics, and records three spec gaps:
+  `MIC_OPEN_ERROR` must not end a `Streaming` session, dynamic 8/16 kHz
+  switching is unsupported, and `AUDIO_SYNC` sequence numbers are parsed but
+  not used for gap diagnostics. No runtime change.
 - **v0.2.0 release (published 2026-11-02)**: workspace version 0.2.0; the
   annotated tag `v0.2.0` (`073fa93`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0)
@@ -459,6 +467,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
+- **ATVV spec conformance gaps**: `MIC_OPEN_ERROR(0x0F80)` currently moves a
+  `Streaming` session to `Ready`; the spec says it must not interrupt an
+  ongoing PTT/HTT stream. Dynamic-bandwidth `AUDIO_SYNC` codec changes are
+  ignored, and `AUDIO_SYNC` sequence numbers are not used for gap
+  diagnostics. See `docs/research/google-atvv-1.0-spec.md` §7. No code change
+  yet; the existing device profiles are fixed 16 kHz.
 - **10 vinput zero-config (blocked)**: ATVV is the provider; vinput owns
   source selection and trigger binding (ADR 0007). The consumer-side feature
   is a capture-device auto-selection/priority list and auto-binding of the
