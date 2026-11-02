@@ -105,6 +105,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
   presses after switching back, and capture mode ended on a switch. Pairing a
   second device into a schema-2 file now keeps the existing device's profile.
   See `docs/plans/21-multi-device.md`.
+- **Step 21 `-git` packages (built, not installed)**: `atvv-git
+  0.2.0.r27.g90a3894-1` (7,045,883 bytes; sha256
+  `27e49cebd03749b0b4eb872ded445d12ed7176883d45a7adb4a085f98b2e56a9`) and
+  `atvv-gui-git 0.2.0.r27.g90a3894-1` (1,561,163 bytes; sha256
+  `02dcb8e0feed402c8edf624a6c45f2fc988fde4ad3b136705cce9c18cbeaa170`),
+  built from commit `90a3894` with the split recipe pointed at the local
+  repository; the recipe is restored and the local mirror removed. They carry
+  the schema-2 pairing fix. The installed r26 pair remains active until the
+  operator installs them; root installation needs the operator's password.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,

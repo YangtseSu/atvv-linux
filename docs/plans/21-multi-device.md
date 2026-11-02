@@ -153,8 +153,11 @@ released` around two real presses. See
 
 Both devices were connected to this host: RC003 `C0:5D:39:F8:2D:4C` and
 Chromecast `74:46:B3:22:2D:D5`. The existing schema-2 file held only the
-RC003. `atvvctl pair 74:46:B3:22:2D:D5` migrated it to schema 3 and preserved
-the per-device profiles:
+RC003. The first `atvvctl pair` from the installed r26 package exposed the
+migration defect recorded below; the run repeated the pair with the fixed
+workspace CLI. The daemon was the packaged `atvv-git
+0.2.0.r26.g2f788b5-1` binary with `--verbose`. The fixed CLI migrated the
+file to schema 3 and preserved the per-device profiles:
 
 ```text
 schema_version = 3
@@ -250,7 +253,7 @@ schema-2 file.
   Chromecast, event26 for the RC003), and capture mode ended on the switch.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ✅ The `-git` package contains the GUI; GTK stays out of the base package.
-  `atvv-git`/`atvv-gui-git 0.2.0.r21.g9721e88-1` are built.
+  `atvv-git`/`atvv-gui-git 0.2.0.r27.g90a3894-1` are built.
 
 ## Risks
 
