@@ -9,6 +9,12 @@ SUBSYSTEM=="input", ATTRS{id/vendor}=="2717", ATTRS{id/product}=="32b8", TAG+="u
 # id. This matches the same prefix the device profile accepts.
 SUBSYSTEM=="input", ATTRS{name}=="MI RC*", TAG+="uaccess"
 
+# Google Chromecast Remote (BLE HID, USB ids 18d1:9450). The Chromecast
+# remote reports the Google vendor id in its HID-over-GATT descriptor; keep
+# the name fallback for firmware that reports a different product id.
+SUBSYSTEM=="input", ATTRS{id/vendor}=="18d1", ATTRS{id/product}=="9450", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{name}=="Chromecast Remote", TAG+="uaccess"
+
 # The daemon creates its virtual keyboard through /dev/uinput. Some
 # distributions already tag this node; the rule is idempotent.
 SUBSYSTEM=="misc", KERNEL=="uinput", TAG+="uaccess"
