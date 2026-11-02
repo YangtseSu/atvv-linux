@@ -7,15 +7,15 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 238 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 239 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
   presses, and the locale test runs under `LANG=zh_CN.UTF-8`). On 2026-11-02 the
-  suite ran without `xvfb-run` because it is not installed on this machine; the
-  GUI model tests ran, while the GTK window/UI tests were not exercised here.
-  The GUI XTest suite needs `GDK_BACKEND=x11` and an X screen at least as large
-  as the window; it skips the pointer section otherwise.
+  suite and workspace clippy ran on this machine without `xvfb-run` because it
+  is not installed; the GTK window smoke test passed on the live GNOME session.
+  The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at least as
+  large as the window; it skips the pointer section otherwise.
 
 ## Read first
 
@@ -70,7 +70,9 @@ per-session copies; `docs/plans/` remains the canonical plan.
   audio/pairing/reconnect run recorded. The profile uses the stream-id form so
   the documented A0 G9N9N firmware shares one profile; an A0 Linux run is
   pending. The GUI selects an SVG and hotspot table per profile; the
-  Chromecast asset includes the side volume buttons. A physical
+  Chromecast asset includes the side volume buttons. The illustration was
+  redrawn from the product photo on 2026-11-02: stadium body, neutral white
+  palette, photo-derived button geometry, and matching hotspots. A physical
   press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
   Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
   session trigger (`trigger_from_session`). Mock two-device switching and

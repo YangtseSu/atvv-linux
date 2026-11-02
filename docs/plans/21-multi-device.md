@@ -216,4 +216,10 @@ released` around two real presses. See
 - 2026-11-02 — the GUI now selects an SVG asset and hotspot table per device
   profile. The RC003 asset moved to `remote-miremote-rc003.svg`; the new
   `remote-google-chromecast.svg` follows the Chromecast layout and shows the
-  side volume buttons, which the front photo cannot show.
+  side volume buttons, which the front photo cannot show. The Chromecast asset
+  was then redrawn from the product photo: full stadium body, neutral white
+  palette instead of the warm RC003 tones, photo-derived button sizes and row
+  spacing, solid icons, thin black button rings, condensed wordmarks, and
+  `CHROMECAST_LAYOUT` hotspots updated to the new geometry.
+  `cargo test --workspace` (239 passed, 9 ignored) and
+  `cargo clippy --workspace --all-targets -- -D warnings` passed.

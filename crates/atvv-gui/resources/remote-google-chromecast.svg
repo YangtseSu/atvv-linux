@@ -4,113 +4,93 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 950" width="320" height="950">
   <defs>
     <linearGradient id="body-shell" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#d7d6d2"/>
-      <stop offset="0.06" stop-color="#f2f1ed"/>
-      <stop offset="0.22" stop-color="#ffffff"/>
-      <stop offset="0.72" stop-color="#fbfaf7"/>
-      <stop offset="0.92" stop-color="#e8e6e1"/>
-      <stop offset="1" stop-color="#c9c7c1"/>
+      <stop offset="0" stop-color="#dfdfe0"/>
+      <stop offset="0.035" stop-color="#ebebec"/>
+      <stop offset="0.14" stop-color="#f1f1f2"/>
+      <stop offset="0.5" stop-color="#f3f3f4"/>
+      <stop offset="0.86" stop-color="#f0f0f1"/>
+      <stop offset="0.965" stop-color="#e8e8e9"/>
+      <stop offset="1" stop-color="#ddddde"/>
     </linearGradient>
-    <linearGradient id="body-face" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#f4f3ef"/>
-      <stop offset="0.24" stop-color="#ffffff"/>
-      <stop offset="0.78" stop-color="#faf9f6"/>
-      <stop offset="1" stop-color="#ecebe6"/>
+    <linearGradient id="key-face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdfdfd"/>
+      <stop offset="1" stop-color="#f5f5f6"/>
     </linearGradient>
-    <linearGradient id="key-face" x1="0.16" y1="0" x2="0.5" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.65" stop-color="#f7f6f3"/>
-      <stop offset="1" stop-color="#e5e3de"/>
-    </linearGradient>
-    <linearGradient id="assistant-face" x1="0.2" y1="0" x2="0.6" y2="1">
-      <stop offset="0" stop-color="#252527"/>
-      <stop offset="0.6" stop-color="#111113"/>
-      <stop offset="1" stop-color="#050506"/>
-    </linearGradient>
-    <radialGradient id="pad-face" cx="0.45" cy="0.34" r="0.76">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.70" stop-color="#fbfaf7"/>
-      <stop offset="1" stop-color="#efeee9"/>
-    </radialGradient>
-    <radialGradient id="pad-center" cx="0.42" cy="0.30" r="0.85">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#f1f0eb"/>
+    <radialGradient id="assistant-face" cx="0.36" cy="0.28" r="0.9">
+      <stop offset="0" stop-color="#151515"/>
+      <stop offset="1" stop-color="#000000"/>
     </radialGradient>
     <linearGradient id="volume-rocker" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#d2d0ca"/>
-      <stop offset="0.55" stop-color="#faf9f6"/>
-      <stop offset="1" stop-color="#c4c2bc"/>
+      <stop offset="0" stop-color="#e9e9ea"/>
+      <stop offset="0.55" stop-color="#f7f7f7"/>
+      <stop offset="1" stop-color="#d9d9da"/>
     </linearGradient>
-    <filter id="body-shadow" x="-18%" y="-4%" width="136%" height="110%">
-      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.16"/>
+    <filter id="body-shadow" x="-12%" y="-3%" width="124%" height="108%">
+      <feDropShadow dx="-1" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.17"/>
     </filter>
-    <filter id="key-shadow" x="-35%" y="-35%" width="170%" height="180%">
-      <feDropShadow dx="0" dy="1.3" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.16"/>
+    <filter id="key-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.20"/>
     </filter>
   </defs>
 
-  <!-- body -->
-  <rect x="40" y="8" width="240" height="934" rx="54" fill="url(#body-shell)" stroke="#8f8d87" stroke-width="1" filter="url(#body-shadow)"/>
-  <rect x="42.5" y="10.5" width="235" height="929" rx="52" fill="url(#body-face)"/>
-  <rect x="43.5" y="11.5" width="233" height="927" rx="51" fill="none" stroke="#ffffff" stroke-opacity="0.72" stroke-width="1"/>
+  <!-- body: the 2020 voice remote is a slim stadium, not a rounded rectangle -->
+  <rect x="14" y="12" width="292" height="920" rx="146" fill="url(#body-shell)" stroke="#d8d8d9" stroke-width="0.8" filter="url(#body-shadow)"/>
+  <rect x="15.2" y="13.2" width="289.6" height="917.6" rx="144.8" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="1"/>
 
-  <!-- side volume rocker: separate buttons, visible from the front edge -->
-  <rect x="270" y="75" width="20" height="100" rx="10" fill="url(#volume-rocker)" stroke="#6f6d67" stroke-width="1.5"/>
-  <path d="M274 118 h12 M280 112 v12" fill="none" stroke="#3f3e42" stroke-width="2" stroke-linecap="round"/>
-  <rect x="270" y="180" width="20" height="100" rx="10" fill="url(#volume-rocker)" stroke="#6f6d67" stroke-width="1.5"/>
-  <path d="M274 230 h12" fill="none" stroke="#3f3e42" stroke-width="2" stroke-linecap="round"/>
+  <!-- volume rocker: two flush side buttons, no glyphs on the face -->
+  <rect x="303.6" y="166" width="4.8" height="95" rx="2.4" fill="url(#volume-rocker)" stroke="#c7c7c8" stroke-width="0.6"/>
+  <rect x="303.6" y="266" width="4.8" height="90" rx="2.4" fill="url(#volume-rocker)" stroke="#c7c7c8" stroke-width="0.6"/>
 
-  <!-- directional pad -->
-  <circle cx="160" cy="140" r="100" fill="url(#pad-face)" stroke="#3f3f42" stroke-width="2"/>
-  <circle cx="160" cy="140" r="98" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1"/>
-  <circle cx="160" cy="140" r="32" fill="url(#pad-center)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
+  <!-- directional pad: wide, thin ring, matching the ~88% face width -->
+  <circle cx="160" cy="149" r="127.8" fill="none" stroke="#a9a9aa" stroke-width="1.15"/>
+  <circle cx="160" cy="149" r="46" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
 
   <!-- back -->
-  <circle cx="100" cy="315" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
-  <path d="M112 315 H91 M100 304 L89 315 L100 326" fill="none" stroke="#252527" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="88.5" cy="336" r="45.5" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <path d="M99 336H79M87 327l-9 9 9 9" fill="none" stroke="#111111" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Google Assistant -->
-  <circle cx="220" cy="315" r="38" fill="url(#assistant-face)" stroke="#050506" stroke-width="1.2" filter="url(#key-shadow)"/>
-  <g fill="#f7f6f2">
-    <circle cx="215" cy="311" r="6.2"/>
-    <circle cx="226" cy="305" r="2.6"/>
-    <circle cx="222" cy="318" r="3.8"/>
-    <circle cx="227" cy="326" r="2.1"/>
+  <circle cx="231.5" cy="336" r="45.5" fill="url(#assistant-face)" filter="url(#key-shadow)"/>
+  <g fill="#f6f6f6">
+    <circle cx="221.4" cy="330.6" r="9.2"/>
+    <circle cx="242.6" cy="328.1" r="2.2"/>
+    <circle cx="236.6" cy="334.7" r="4.4"/>
+    <circle cx="237.2" cy="346.4" r="5.1"/>
   </g>
 
   <!-- home -->
-  <circle cx="100" cy="405" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
-  <path d="M88 407 L100 395 L112 407 L112 419 L88 419 Z" fill="#252527"/>
+  <circle cx="88.5" cy="455" r="45.5" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <path d="M79.5 463v-10.5l9-9 9 9V463h-6.3v-7.5h-5.4V463z" fill="#111111"/>
 
   <!-- mute -->
-  <circle cx="220" cy="405" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
-  <g fill="none" stroke="#252527" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M209 397 h6 l8 -7 v27 l-8 -7 h-6 z"/>
-    <path d="M227 397 l13 13 M240 397 l-13 13"/>
-  </g>
+  <circle cx="231.5" cy="455" r="45.5" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <path d="M218 451h5.5l6.4-4.7v17.4l-6.4-4.7H218z" fill="#111111"/>
+  <path d="M236 450.5l7 7m0-7l-7 7" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round"/>
 
   <!-- YouTube -->
-  <circle cx="100" cy="495" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
-  <text x="100" y="501" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="17" font-weight="600" fill="#252527">YouTube</text>
+  <circle cx="88.5" cy="572" r="45.5" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <g transform="translate(88.5 0) scale(0.605 1)">
+    <text x="0" y="579.5" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="20" font-weight="600" fill="#111111">YouTube</text>
+  </g>
 
   <!-- Netflix -->
-  <circle cx="220" cy="495" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
-  <text x="220" y="500" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="14" font-weight="700" letter-spacing="0.3" fill="#252527">NETFLIX</text>
+  <circle cx="231.5" cy="572" r="45.5" fill="url(#key-face)" stroke="#111111" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <g transform="translate(231.5 0) scale(0.6375 1)">
+    <text x="0" y="579.5" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="20" font-weight="700" fill="#111111">NETFLIX</text>
+  </g>
 
   <!-- power -->
-  <circle cx="110" cy="600" r="30" fill="url(#key-face)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
-  <g fill="none" stroke="#252527" stroke-width="2" stroke-linecap="round">
-    <path d="M103 594 A9 9 0 1 0 117 594"/>
-    <path d="M110 588 L110 599"/>
-  </g>
+  <circle cx="88.5" cy="683" r="27" fill="url(#key-face)" stroke="#111111" stroke-width="1.1" filter="url(#key-shadow)"/>
+  <path d="M82.6 680a8.3 8.3 0 1 0 11.8 0M88.5 674v12" fill="none" stroke="#111111" stroke-width="2.1" stroke-linecap="round"/>
 
-  <!-- microphone -->
-  <rect x="150" y="597" width="20" height="6" rx="3" fill="#252527"/>
+  <!-- microphone inlet -->
+  <rect x="153.25" y="680.8" width="13.5" height="4.4" rx="2.2" fill="#111111"/>
 
   <!-- input -->
-  <circle cx="210" cy="600" r="30" fill="url(#key-face)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
-  <g fill="none" stroke="#252527" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="199" y="592" width="22" height="16" rx="2.5" stroke-width="1.8"/>
-    <path d="M203 600 h11 M210 595 l4 5 -4 5" stroke-width="1.8"/>
-  </g>
+  <circle cx="231.5" cy="683" r="27" fill="url(#key-face)" stroke="#111111" stroke-width="1.1" filter="url(#key-shadow)"/>
+  <path d="M221.5 674H242V694H221.5" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M221.5 684H233M233 684l-5.5-5.5m5.5 5.5l-5.5 5.5" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- microphone LED, off state: only a faint diffuser ring shows -->
+  <circle cx="160" cy="819" r="10" fill="none" stroke="#e8e8e9" stroke-width="0.6"/>
 </svg>
