@@ -410,6 +410,16 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `direct_audio_start` fields are gone. The 8 kHz conversion is covered by
   `cap_negotiated_8k_is_resampled_to_the_graph_rate`; no real 8 kHz device is
   verified, and the 16 kHz RC003 path is the identity path.
+- **Chromecast redraw `-git` packages (built, not installed)**: `atvv-git
+  0.2.0.r17.g5938e2f-1` (6,240,527 bytes; sha256
+  `c6742df8d9a4f6a3c656a3d69ef2d4e63f33e2930d2eb06091a7df118076960b`) and
+  `atvv-gui-git 0.2.0.r17.g5938e2f-1` (1,429,676 bytes; sha256
+  `5c2a213eae50ec07f9d159b75d23ad5167734238490b061a8f7ebbf7487081ab`) were
+  built from local commit `5938e2f` with the split recipe pointed at the
+  local repository. The packaged `atvv-config` embeds the redrawn Chromecast
+  SVG; `namcap` reports only the expected implicit-library/runtime notes. The
+  installed r10 pair remains active. Both packages are in
+  `~/projects/arch-pkgs/atvv-git/`.
 
 ## Not implemented
 
