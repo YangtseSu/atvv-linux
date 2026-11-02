@@ -46,6 +46,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **v0.3.0 release (tagged)**: workspace version 0.3.0. The annotated tag
+  runs the tag-triggered release workflow for x86_64/aarch64 binaries, the
+  source archive, checksums, and generated notes. Highlights since v0.2.0:
+  live level/gain and the session-boundary PCM flush (23), the first-run
+  checklist and bilingual recovery docs (24), the ATVV v1.0
+  `MIC_OPEN_ERROR`/`AUDIO_SYNC` conformance fixes (25), and the opt-in
+  pre-opened microphone session (26), plus the second-device pairing fix and
+  profile-driven board ordering. AUR/VCS recipes are external; the stable AUR
+  `atvv` needs its `pkgver` and checksum updated after the tag assets exist.
 - **Step 26 keep-open microphone (complete, 2026-11-03)**: B03 was promoted
   and executed on the real RC003 (`C0:5D:39:F8:2D:4C`). With temporary
   verbose timestamps, 25 baseline presses measured a median 155.6 ms from the
@@ -889,11 +898,15 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
+**v0.3.0 is tagged.** The tag push runs the release workflow; the external
+AUR `atvv` recipe update follows the published source archive. `Cargo.toml`
+and `Cargo.lock` carry 0.3.0.
+
 **v0.2.0 is published.** The tag `v0.2.0` (`073fa93`) has the x86_64/aarch64
 binaries, source archive, checksums, and generated notes at
 <https://github.com/YangtseSu/atvv-linux/releases/tag/v0.2.0>. The AUR
 `atvv`/`atvv-gui` `0.2.0-1` update is published from the same source archive.
-`Cargo.toml` and `Cargo.lock` carry 0.2.0.
+The v0.2.0 tag carries 0.2.0.
 
 **Step 20 is complete and published.** The tag `v0.1.0`, the source archive,
 and the x86_64/aarch64 binary archives are on the GitHub release. The AUR

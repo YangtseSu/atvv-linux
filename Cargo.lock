@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-audio"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossbeam-queue",
  "pipewire",
@@ -93,7 +93,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-bluez"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-protocol",
  "bluer",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-audio",
  "atvv-bluez",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-input",
  "atvv-protocol",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-daemon"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-audio",
  "atvv-bluez",
@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-gui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-config",
  "atvv-daemon",
@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-input"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-protocol",
  "evdevil",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atvv-daemon",
  "atvv-protocol",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "atvv-protocol"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "thiserror",
 ]
