@@ -162,8 +162,12 @@ active input context.
   fcitx (which may toggle its recording state), but the remote stops sending
   audio as soon as the key is released. Tap-to-toggle cannot sustain a
   recording on this hardware; use push-to-talk.
-- Allow roughly 0.3 s after pressing before speaking: `MIC_OPEN` reaches the
-  device and the first frames follow `AUDIO_START`.
+- With the default `preopen_mic = false`, allow about 0.2 s after pressing
+  before speaking: the measured RC003 median from the voice press to the first
+  decoded frame is 157 ms. With `preopen_mic = true` the session is already
+  open and the first frame is queued when the key edge arrives, so the
+  device-side wait is gone; the consumer's own capture start-up is outside
+  this measurement.
 - If the device node disappears while the key is held (link loss), the input
   runtime emits the trigger release and the daemon stops the recording.
 

@@ -40,6 +40,12 @@ pub struct StatusView {
     pub state: String,
     pub connected: bool,
     pub streaming: bool,
+    /// Pre-open microphone mode is enabled.
+    #[serde(default)]
+    pub preopen_mic: bool,
+    /// The session is open but the voice key is not held.
+    #[serde(default)]
+    pub mic_armed: bool,
     pub device: DeviceView,
     /// Known devices and which one is active.
     #[serde(default)]

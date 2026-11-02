@@ -286,6 +286,10 @@ struct ConfigSet {
     #[arg(long, num_args = 0..=1, default_missing_value = "true",
           value_parser = clap::value_parser!(bool))]
     input: Option<bool>,
+    /// Keep the ATVV microphone session open while not dictating.
+    #[arg(long, num_args = 0..=1, default_missing_value = "true",
+          value_parser = clap::value_parser!(bool))]
+    preopen_mic: Option<bool>,
     /// Allow `exec:` actions.
     #[arg(long, num_args = 0..=1, default_missing_value = "true",
           value_parser = clap::value_parser!(bool))]
@@ -1081,6 +1085,10 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
     }
     if let Some(input) = args.input {
         document.input = input;
+        changed = true;
+    }
+    if let Some(preopen_mic) = args.preopen_mic {
+        document.preopen_mic = preopen_mic;
         changed = true;
     }
     if let Some(allow_exec) = args.allow_exec {

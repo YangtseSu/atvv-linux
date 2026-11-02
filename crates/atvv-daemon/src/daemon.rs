@@ -303,6 +303,13 @@ pub struct Daemon {
     /// Synthetic trigger currently held by the session path.
     trigger_held: bool,
 
+    /// The voice key is held for the current pre-opened session.
+    recording: bool,
+    /// A pre-opened session owns the microphone without a dictation.
+    armed: bool,
+    /// Earliest time to arm or re-arm the microphone.
+    rearm_at: Option<Instant>,
+
     verbose: bool,
     tick: Duration,
     keepalive_interval: Duration,
@@ -358,6 +365,8 @@ impl Daemon {
             state: "disconnected".to_string(),
             connected: false,
             streaming: false,
+            preopen_mic: config.config.preopen_mic,
+            mic_armed: false,
             device: DeviceView {
                 id: config.profile.id.to_string(),
                 name: config.profile.display_name.to_string(),
@@ -465,6 +474,9 @@ impl Daemon {
             last_button: None,
             voice_key: None,
             trigger_held: false,
+            recording: false,
+            armed: false,
+            rearm_at: None,
             verbose: config.verbose,
             tick: config.tick,
             keepalive_interval: config.keepalive_interval,
@@ -539,14 +551,44 @@ impl Daemon {
         for action in actions {
             match action {
                 SessionAction::Send(bytes) => self.write(&bytes),
-                SessionAction::VoiceStarted => self.on_voice_started(now),
-                SessionAction::VoiceStopped => self.on_voice_stopped(now),
+                SessionAction::VoiceStarted => {
+                    if self.preopen_active() {
+                        // An armed open is internal: consumers only see the
+                        // voice edge. A start while already recording is the
+                        // device echoing the open the press path sent.
+                        if !self.recording {
+                            self.prepare_stream(now);
+                            self.trace("armed session open");
+                        }
+                    } else {
+                        self.on_voice_started(now);
+                    }
+                }
+                SessionAction::VoiceStopped => {
+                    if self.preopen_active() {
+                        self.on_voice_stopped_armed(now);
+                    } else {
+                        self.on_voice_stopped(now);
+                    }
+                }
             }
+        }
+        if self.preopen_active() {
+            self.arm_now(Instant::now());
         }
         self.publish_status();
     }
 
     fn on_voice_started(&mut self, now: Instant) {
+        self.prepare_stream(now);
+        self.signals.publish(DaemonEvent::VoiceStarted);
+        self.trace("voice started");
+        self.on_session_voice(true);
+    }
+
+    /// Reset the decoder and queue for a new stream. Separate from the
+    /// consumer-visible signal so an armed session can reuse it silently.
+    fn prepare_stream(&mut self, now: Instant) {
         let frame_size = self
             .session
             .caps()
@@ -575,21 +617,93 @@ impl Daemon {
         self.audio.clear();
         self.last_audio = Some(now);
         self.next_keepalive = Some(now + self.keepalive_interval);
-        self.signals.publish(DaemonEvent::VoiceStarted);
-        self.trace("voice started");
-        self.on_session_voice(true);
     }
 
     fn on_voice_stopped(&mut self, now: Instant) {
+        self.recording = false;
+        self.finish_stream(now);
+        self.signals.publish(DaemonEvent::VoiceStopped);
+        self.trace("voice stopped");
+        self.on_session_voice(false);
+    }
+
+    fn on_voice_stopped_armed(&mut self, now: Instant) {
+        self.finish_stream(now);
+        self.armed = false;
+        if self.recording {
+            // The device ended the stream while the key was held.
+            self.recording = false;
+            self.signals.publish(DaemonEvent::VoiceStopped);
+            self.trace("voice stopped (armed stream ended)");
+            self.on_session_voice(false);
+        } else {
+            self.trace("armed session stopped; re-arming");
+        }
+        self.rearm_at = Some(now + Duration::from_millis(200));
+    }
+
+    /// Drop the decoder and stream timers, keeping any consumer tail.
+    fn finish_stream(&mut self, now: Instant) {
         self.accumulator = None;
         self.last_audio = None;
         self.next_keepalive = None;
         self.level = 0;
         self.discard_until =
             Some(now + Duration::from_millis(u64::from(self.profile.post_stop_discard_ms)));
-        self.signals.publish(DaemonEvent::VoiceStopped);
-        self.trace("voice stopped");
-        self.on_session_voice(false);
+    }
+
+    /// Open the microphone while the session is ready and not recording.
+    ///
+    /// The retry floor keeps a rejected open (`MIC_OPEN_ERROR`) from spinning
+    /// a `MIC_OPEN` per daemon tick; the next stop resets it to 200 ms.
+    fn arm_now(&mut self, now: Instant) {
+        if !self.preopen_active() || !self.connected || self.recording {
+            return;
+        }
+        if self.session.state() != SessionState::Ready {
+            return;
+        }
+        if self.rearm_at.is_some_and(|deadline| now < deadline) {
+            return;
+        }
+        self.trace("arming MIC_OPEN");
+        let actions = self.session.on_start_search();
+        for action in actions {
+            if let SessionAction::Send(bytes) = action {
+                self.write(&bytes);
+            }
+        }
+        self.rearm_at = Some(now + Duration::from_secs(1));
+        self.armed = true;
+    }
+
+    /// Close an idle pre-opened session when the setting is turned off.
+    ///
+    /// A recording in progress ends through its normal stop path; this only
+    /// closes a session the consumer has never seen start.
+    fn disarm(&mut self, now: Instant) {
+        self.rearm_at = None;
+        if !self.armed {
+            return;
+        }
+        self.armed = false;
+        if self.recording {
+            return;
+        }
+        if !matches!(
+            self.session.state(),
+            SessionState::Opening | SessionState::Streaming
+        ) {
+            return;
+        }
+        self.trace("disarming MIC_CLOSE");
+        let actions = self.session.on_start_search();
+        for action in actions {
+            if let SessionAction::Send(bytes) = action {
+                self.write(&bytes);
+            }
+        }
+        self.finish_stream(now);
     }
 
     /// Emit the consumer trigger for a device whose voice key has no evdev
@@ -666,6 +780,9 @@ impl Daemon {
         self.connected = true;
         self.device_alias = Some(name.clone());
         self.session = Session::new(self.profile);
+        self.recording = false;
+        self.armed = false;
+        self.rearm_at = None;
         self.accumulator = None;
         self.sequence.reset();
         self.caps_deadline = Some(Instant::now() + self.caps_timeout);
@@ -703,6 +820,9 @@ impl Daemon {
         self.trace(format!("disconnected: {reason}"));
         let actions = self.session.disconnect();
         self.execute(actions);
+        self.recording = false;
+        self.armed = false;
+        self.rearm_at = None;
     }
 
     fn on_control(&mut self, bytes: &[u8]) {
@@ -1064,9 +1184,30 @@ impl Daemon {
         }
     }
 
+    /// Whether this device uses the pre-opened session path.
+    ///
+    /// A device whose voice key has no local evdev edge (the Chromecast
+    /// profile) synthesizes its consumer trigger from `AUDIO_START`;
+    /// pre-opening would suppress that edge, so the setting is inert for it.
+    fn preopen_active(&self) -> bool {
+        self.config.preopen_mic && !self.profile.trigger_from_session
+    }
+
     fn request_voice(&mut self, start: bool) {
         if !self.connected {
             self.last_error = Some("the device is not connected".to_string());
+            return;
+        }
+        if self.preopen_active() {
+            // The armed session already owns the microphone; manual control
+            // starts and ends a consumer-visible recording without closing it.
+            if start {
+                self.preopen_press();
+            } else if self.recording {
+                self.preopen_release();
+            } else {
+                self.trace("voice is not active");
+            }
             return;
         }
         match (start, self.session.state()) {
@@ -1381,7 +1522,16 @@ impl Daemon {
         }
 
         self.gain = gain_factor(next.gain_db);
+        let preopen_changed = old.preopen_mic != next.preopen_mic;
         self.config = next;
+        if preopen_changed {
+            let now = Instant::now();
+            if self.preopen_active() {
+                self.arm_now(now);
+            } else {
+                self.disarm(now);
+            }
+        }
         self.publish_config_document();
         Ok(())
     }
@@ -1543,7 +1693,15 @@ impl Daemon {
             self.publish_status();
             return;
         }
-        self.request_voice(pressed);
+        if self.preopen_active() {
+            if pressed {
+                self.preopen_press();
+            } else {
+                self.preopen_release();
+            }
+        } else {
+            self.request_voice(pressed);
+        }
         if self.config.vinput == VinputMode::Dbus
             && let Some(vinput) = &mut self.vinput
         {
@@ -1556,6 +1714,55 @@ impl Daemon {
                 self.trace(format!("{error}"));
             }
         }
+    }
+
+    /// Start a consumer-visible recording inside an already
+    /// open session. The decoder and queue are only reset when the session
+    /// was not armed, so pre-roll frames stay available to the consumer.
+    fn preopen_press(&mut self) {
+        if self.recording {
+            return;
+        }
+        if !self.connected {
+            self.last_error = Some("the device is not connected".to_string());
+            return;
+        }
+        let now = Instant::now();
+        match self.session.state() {
+            SessionState::Streaming => {}
+            SessionState::Ready => {
+                let actions = self.session.on_start_search();
+                for action in actions {
+                    if let SessionAction::Send(bytes) = action {
+                        self.write(&bytes);
+                    }
+                }
+                self.prepare_stream(now);
+            }
+            SessionState::Opening => self.prepare_stream(now),
+            SessionState::Connected | SessionState::Disconnected => {
+                self.last_error = Some("capabilities are not ready".to_string());
+                return;
+            }
+        }
+        self.recording = true;
+        self.armed = true;
+        self.signals.publish(DaemonEvent::VoiceStarted);
+        self.trace("voice started (preopen)");
+        self.on_session_voice(true);
+    }
+
+    /// End the consumer-visible recording without closing the
+    /// armed session.
+    fn preopen_release(&mut self) {
+        if !self.recording {
+            return;
+        }
+        self.recording = false;
+        self.signals.publish(DaemonEvent::VoiceStopped);
+        self.trace("voice stopped (preopen)");
+        self.on_session_voice(false);
+        self.arm_now(Instant::now());
     }
 
     fn run_exec(&mut self, command: &str) {
@@ -1589,7 +1796,8 @@ impl Daemon {
     }
 
     fn next_wait(&self, now: Instant) -> Duration {
-        let frame_deadline = (self.session.state() == SessionState::Streaming)
+        let frame_deadline = (self.session.state() == SessionState::Streaming
+            && !(self.preopen_active() && !self.recording))
             .then(|| {
                 self.last_audio
                     .map(|last| last + self.frame_timeout)
@@ -1602,6 +1810,7 @@ impl Daemon {
             self.next_keepalive,
             self.reconnect_at,
             self.input_retry_at,
+            self.rearm_at,
             frame_deadline,
         ]
         .into_iter()
@@ -1652,6 +1861,7 @@ impl Daemon {
             }
 
             if let Some(last) = self.last_audio
+                && !(self.preopen_active() && !self.recording)
                 && now.duration_since(last) >= self.frame_timeout
             {
                 self.last_error = Some("audio frame timeout".to_string());
@@ -1682,6 +1892,10 @@ impl Daemon {
                 self.reconnect_at = Some(now + self.reconnect_delay);
             }
             changed = true;
+        }
+
+        if self.preopen_active() {
+            self.arm_now(now);
         }
 
         if changed {
@@ -1759,10 +1973,23 @@ impl Daemon {
             &input,
             &vinput,
         );
+        // An armed session is not a dictation; consumers must
+        // keep seeing `ready`/not streaming until the voice key is held.
+        let mic_armed =
+            self.armed && self.session.state() == SessionState::Streaming && !self.recording;
+        let armed_idle = self.armed && !self.recording;
+        let streaming = self.session.state() == SessionState::Streaming
+            && (!self.preopen_active() || self.recording);
         StatusView {
-            state: self.state_name(),
+            state: if armed_idle {
+                "ready".to_string()
+            } else {
+                self.state_name()
+            },
             connected: self.connected,
-            streaming: self.session.state() == SessionState::Streaming,
+            streaming,
+            preopen_mic: self.preopen_active(),
+            mic_armed,
             layout: layout_view(&self.config),
             device: DeviceView {
                 id: self.profile.id.to_string(),
@@ -1780,7 +2007,7 @@ impl Daemon {
             audio: AudioView {
                 source: self.audio.name().to_string(),
                 available: self.audio.is_available(),
-                streaming: self.session.state() == SessionState::Streaming,
+                streaming,
                 queued_samples: self.audio.queued_samples(),
                 stream_rate: self.stream_rate,
                 sequence_gaps: self.sequence.gaps(),
@@ -3064,6 +3291,188 @@ mod tests {
         let events = signals.events.lock().unwrap().clone();
         assert!(events.contains(&DaemonEvent::VoiceStopped), "{events:?}");
         handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn armed_session_is_invisible_and_survives_errors() {
+        // A pre-opened session must not look like a dictation, must not
+        // be closed by the idle frame timeout, and must keep streaming on
+        // 0x0F80.
+        let (mut transport, mock) = MockTransport::new(MockConfig::default());
+        let connected = transport.poll(Duration::ZERO).unwrap().unwrap();
+        let signals = Arc::new(RecordingSink::default());
+        let sink = CaptureSink::default();
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        config.config.preopen_mic = true;
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(sink),
+            signals.clone(),
+            None,
+        );
+        daemon.on_transport_event(connected);
+        // GET_CAPS -> CAPS_RESP -> ready -> arm -> MIC_OPEN -> AUDIO_START.
+        for _ in 0..2 {
+            let event = daemon
+                .transport
+                .poll(Duration::from_secs(1))
+                .unwrap()
+                .unwrap();
+            daemon.on_transport_event(event);
+        }
+
+        let status = daemon.status_view();
+        assert!(status.preopen_mic);
+        assert!(status.mic_armed, "{status:?}");
+        assert_eq!(status.state, "ready", "an armed session is not a dictation");
+        assert!(!status.streaming);
+        assert_eq!(mock.command_count(0x0C), 1, "the arm sends one MIC_OPEN");
+        assert!(
+            !signals.events.lock().unwrap().iter().any(|event| matches!(
+                event,
+                DaemonEvent::VoiceStarted | DaemonEvent::VoiceStopped
+            )),
+            "an armed open must stay invisible"
+        );
+
+        // The voice press is the consumer-visible edge; 0x0F80 must not end
+        // an armed stream.
+        daemon.on_input_event(RemoteEvent::Voice { pressed: true });
+        assert!(daemon.status_view().streaming);
+        daemon.on_control(&[0x0C, 0x0F, 0x80]);
+        let status = daemon.status_view();
+        assert!(status.streaming, "0x0F80 must not leave an armed stream");
+        assert!(
+            !signals
+                .events
+                .lock()
+                .unwrap()
+                .contains(&DaemonEvent::VoiceStopped),
+            "0x0F80 must not stop the recording"
+        );
+
+        daemon.on_input_event(RemoteEvent::Voice { pressed: false });
+        let events = signals.events.lock().unwrap().clone();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| **event == DaemonEvent::VoiceStarted)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| **event == DaemonEvent::VoiceStopped)
+                .count(),
+            1
+        );
+
+        // Idle armed stream: the frame timeout must not close it.
+        daemon.on_timers(Instant::now() + Duration::from_secs(5));
+        assert_eq!(daemon.session.state(), SessionState::Streaming);
+        assert_eq!(mock.command_count(0x0D), 0);
+
+        // The device's stop returns to ready and re-arms after the floor.
+        daemon.on_control(&[0x00, 0x02]);
+        assert_eq!(daemon.session.state(), SessionState::Ready);
+        assert_eq!(mock.command_count(0x0C), 1);
+        daemon.on_timers(Instant::now() + Duration::from_millis(400));
+        assert_eq!(mock.command_count(0x0C), 2, "the armed session re-opens");
+
+        // The reopened session becomes streaming; disabling the setting closes
+        // it without a second consumer-visible stop.
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while daemon.session.state() != SessionState::Streaming {
+            assert!(
+                Instant::now() < deadline,
+                "the re-armed stream did not open"
+            );
+            let event = daemon
+                .transport
+                .poll(Duration::from_millis(100))
+                .unwrap()
+                .unwrap();
+            daemon.on_transport_event(event);
+        }
+        assert!(daemon.status_view().mic_armed);
+
+        // Manual control starts and ends a consumer-visible recording without
+        // closing the armed session.
+        assert!(!daemon.on_command(Command::StartVoice));
+        let status = daemon.status_view();
+        assert!(status.streaming);
+        assert!(!status.mic_armed);
+        assert!(!daemon.on_command(Command::StopVoice));
+        assert!(daemon.status_view().mic_armed);
+        assert_eq!(
+            mock.command_count(0x0D),
+            0,
+            "a manual stop keeps the armed session open"
+        );
+
+        let mut next = daemon.config.clone();
+        next.preopen_mic = false;
+        daemon.apply_config(next).unwrap();
+        assert_eq!(daemon.session.state(), SessionState::Ready);
+        assert_eq!(mock.command_count(0x0D), 1, "disarm closes the idle stream");
+        assert!(!daemon.status_view().preopen_mic);
+        assert_eq!(
+            signals
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|event| **event == DaemonEvent::VoiceStopped)
+                .count(),
+            2,
+            "disarming is not a consumer-visible stop"
+        );
+
+        let mut next = daemon.config.clone();
+        next.preopen_mic = true;
+        daemon.apply_config(next).unwrap();
+        assert!(daemon.status_view().preopen_mic);
+        assert_eq!(mock.command_count(0x0C), 3, "enabling arms immediately");
+        let _ = handle;
+    }
+
+    #[test]
+    fn preopen_is_inert_for_session_triggered_devices() {
+        // The Chromecast voice key sends AUDIO_START without a local evdev
+        // edge; pre-opening would suppress the session edge that synthesizes
+        // its consumer trigger, so the setting must not arm.
+        let (mut transport, mock) = MockTransport::new(MockConfig::default());
+        let connected = transport.poll(Duration::ZERO).unwrap().unwrap();
+        let mut config = DaemonConfig::new(CHROMECAST, mock_address(&transport));
+        config.config.input = false;
+        config.config.preopen_mic = true;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        daemon.on_transport_event(connected);
+        let event = daemon
+            .transport
+            .poll(Duration::from_secs(1))
+            .unwrap()
+            .unwrap();
+        daemon.on_transport_event(event);
+        assert_eq!(daemon.session.state(), SessionState::Ready);
+        let status = daemon.status_view();
+        assert!(!status.preopen_mic, "the setting is inert on this profile");
+        assert!(!status.mic_armed);
+        assert!(
+            mock.commands()
+                .iter()
+                .all(|command| command.first() != Some(&0x0C)),
+            "no MIC_OPEN for a session-triggered voice key"
+        );
     }
 
     #[test]

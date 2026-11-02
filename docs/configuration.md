@@ -18,6 +18,7 @@ active_device = "C0:5D:39:F8:2D:4C"  # written by `atvvctl pair`
 adapter = "hci0"                    # optional BlueZ adapter
 gain_db = 0                         # -24..=24
 input = true                        # evdev/uinput path
+preopen_mic = false                 # keep the mic session open at ready
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # key or chord; none disables
 allow_exec = false                  # opt in to exec: actions
@@ -53,6 +54,7 @@ long = "combo:ctrl+alt+v"
 | `adapter` | BlueZ default | Adapter name such as `hci0`. |
 | `gain_db` | profile value | Clamped to ±24 dB; no AGC. `atvv-config` shows the live level and gain under **Menu → Microphone…**. |
 | `input` | `true` | Disables discovery, grab, and uinput when false. |
+| `preopen_mic` | `false` | Opens the ATVV microphone at `ready`, keeps it armed, and re-opens after a stop. Removes the device's first-frame start-up delay at the cost of a resident BLE session. See [Pre-opened microphone](#pre-opened-microphone). |
 | `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. `dbus` is the explicit fallback when the trigger key conflicts with an application binding. Editing vinput's `[TriggerKey]` requires a full fcitx5 restart, not `fcitx5-remote -r`. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
 | `allow_exec` | `false` | Required for any `exec:` action. |
@@ -96,11 +98,34 @@ match `[a-z0-9][a-z0-9_-]{0,31}`; `default` and the preset ids `mpv`, `slides`,
 and `omp` are reserved. At most 32 user layouts are allowed; a name is 1–40
 characters and a description at most 120.
 
-Global fields (`adapter`, `gain_db`, `input`, `vinput`, `trigger_key`,
-`allow_exec`) are not part of a layout. Switching a layout never changes the
-exec policy, the active device, or the recording key. `default` cannot be
-stored, renamed, deleted, or reset, and it is not listed in `layouts`. The
-active device's `layout` entry is updated when a layout is switched.
+Global fields (`adapter`, `gain_db`, `input`, `preopen_mic`, `vinput`,
+`trigger_key`, `allow_exec`) are not part of a layout. Switching a layout never
+changes the exec policy, the active device, or the recording key. `default`
+cannot be stored, renamed, deleted, or reset, and it is not listed in `layouts`.
+The active device's `layout` entry is updated when a layout is switched.
+
+### Pre-opened microphone
+
+By default the daemon sends `MIC_OPEN` when the voice key is pressed. With
+`preopen_mic = true` it sends `MIC_OPEN` when the device reaches `ready`, sends
+`MIC_EXTEND` every 10 s to keep the session alive, and re-opens the session
+about 200 ms after the device stops it. The session is armed, not dictating:
+`atvvctl status` keeps `state = "ready"` and `streaming = false` while
+`mic_armed = true`, and consumers receive `VoiceStarted`/`VoiceStopped` only
+from the voice key. The frame timeout does not close an idle armed session.
+
+The RC003 still gates microphone data on the physical key, so this is not an
+always-listening microphone. The tradeoff is a resident BLE session and one
+re-open per utterance for a lower first-frame latency. Measured on 2026-11-03
+with an RC003 (`C0:5D:39:F8:2D:4C`): the median voice press to first decoded
+frame fell from **157 ms** to the frame being already queued when the input
+edge arrives (median improvement **169 ms**). This is daemon-side latency, not
+end-to-end latency in a consumer. The default is `false`; see
+[the hardware evidence](research/rc003-hardware-evidence.md#keep-open-mic-ab-2026-11-03).
+
+The setting is inert for a device whose voice key only sends `AUDIO_START`
+(the `google-chromecast` profile): pre-opening would suppress the session
+edge that synthesizes its consumer trigger.
 
 Gesture overrides apply to the whole active layout, so switching a layout can
 change double/long behavior. `atvvctl layout show` prints the effective timing.
@@ -216,8 +241,8 @@ dispatched remote button runs it, and only when `allow_exec` is on.
 validates every field before applying anything, including every stored layout,
 then:
 
-1. applies gain, input, vinput mode, trigger key, gesture timing, and the
-   active layout's action map;
+1. applies gain, input, pre-open mode, vinput mode, trigger key, gesture
+   timing, and the active layout's action map;
 2. restarts the input runtime when the map, timing, trigger, or vinput mode
    changes, because the uinput key registration depends on the map. A failed
    restart restores the previous runtime and reports the error;
@@ -240,6 +265,7 @@ atvvctl config get                 # human-readable effective document
 atvvctl config get --json          # exact GetConfig payload
 atvvctl config set --gain-db 6
 atvvctl config set --input false
+atvvctl config set --preopen-mic true
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
 atvvctl layout list

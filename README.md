@@ -145,8 +145,11 @@ signatures for each symptom, is in [`docs/troubleshooting.md`](docs/troubleshoot
 - The RC003 microphone streams only while the physical voice key is held; a
   host `MIC_OPEN` alone produces no frames
   ([evidence](docs/research/rc003-hardware-evidence.md)).
-- Allow roughly 0.3 s after pressing before speaking. First-frame latency has
-  not been measured yet ([B03](docs/plans/B03-preopen-mic.md)).
+- With the default `preopen_mic = false`, the RC003 takes about 0.2 s from the
+  voice press to the first decoded frame (median 157 ms, measured 2026-11-03).
+  `preopen_mic = true` removes that device-side delay by keeping the BLE
+  session armed; see
+  [configuration](docs/configuration.md#pre-opened-microphone).
 - fcitx5-vinput does not yet select the source or bind the declared keys
   automatically; configure it manually
   ([guide](docs/integrations/fcitx5-vinput.md)).

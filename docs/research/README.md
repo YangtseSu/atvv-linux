@@ -148,6 +148,15 @@ implementation direction:
   runtime synthesizes the configured fcitx trigger program (a key or chord).
   The device may also send its own direct `AUDIO_START`; the session treats
   either order as streaming.
+- **Keep-open microphone.** The 2026-11-03 RC003 A/B measured a 155.6 ms
+  median from the voice edge to the first decoded frame with the default
+  voice-edge `MIC_OPEN` (n=25), and the first frame already queued at the edge
+  with an armed session (n=20; median improvement 167.3 ms). The path is the
+  opt-in `preopen_mic` setting, default `false`; the armed session stays
+  invisible to consumers and the 10-minute idle battery delta matched
+  baseline. See
+  [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md#keep-open-mic-ab-2026-11-03)
+  and [step 26](../plans/26-preopen-mic.md).
 
 ## Open questions
 

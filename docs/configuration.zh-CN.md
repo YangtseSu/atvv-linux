@@ -17,6 +17,7 @@ active_device = "C0:5D:39:F8:2D:4C"  # 由 `atvvctl pair` 写入
 adapter = "hci0"                    # 可选的 BlueZ 适配器
 gain_db = 0                         # -24..=24
 input = true                        # evdev/uinput 路径
+preopen_mic = false                 # 就绪后保持麦克风会话打开
 vinput = "trigger"                  # trigger | dbus | off
 trigger_key = "DICTATE"             # 按键或组合键；none 表示禁用
 allow_exec = false                  # 启用 exec: 操作
@@ -52,6 +53,7 @@ long = "combo:ctrl+alt+v"
 | `adapter` | BlueZ 默认 | 适配器名称，例如 `hci0`。 |
 | `gain_db` | 设备配置文件值 | 限制在 ±24 dB；没有 AGC。`atvv-config` 的**菜单 → 麦克风…**显示实时电平和增益。 |
 | `input` | `true` | 为 false 时禁用发现、独占和 uinput。 |
+| `preopen_mic` | `false` | 在 `ready` 时打开 ATVV 麦克风并保持待命，停止后重新打开。消除设备的首帧启动延迟，代价是常驻 BLE 会话。见[预打开麦克风](#预打开麦克风)。 |
 | `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。触发键与应用快捷键冲突时，`dbus` 是显式回退。修改 vinput 的 `[TriggerKey]` 后必须完全重启 fcitx5，`fcitx5-remote -r` 不够。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
 | `allow_exec` | `false` | 任何 `exec:` 操作都需要它。 |
@@ -85,10 +87,29 @@ Input 是 `KEY_TV`，静音是 `KEY_MUTE`，YouTube 和 Netflix 使用摄像头�
 布局 id 匹配 `[a-z0-9][a-z0-9_-]{0,31}`；`default` 以及预设 id `mpv`、`slides`、
 `omp` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
 
-全局字段（`adapter`、`gain_db`、`input`、`vinput`、`trigger_key`、
-`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、活动设备或录音键。
-`default` 不能被存储、重命名、删除或重置，也不会出现在 `layouts` 中。切换布局时
-会同步更新活动设备的 `layout` 条目。
+全局字段（`adapter`、`gain_db`、`input`、`preopen_mic`、`vinput`、
+`trigger_key`、`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、
+活动设备或录音键。`default` 不能被存储、重命名、删除或重置，也不会出现在
+`layouts` 中。切换布局时会同步更新活动设备的 `layout` 条目。
+
+### 预打开麦克风
+
+默认情况下，守护进程在按下语音键时发送 `MIC_OPEN`。设置
+`preopen_mic = true` 后，它在设备进入 `ready` 时发送 `MIC_OPEN`，每 10 秒发送
+`MIC_EXTEND` 保持会话，并在设备停止会话约 200 ms 后重新打开。该会话处于待命
+状态而非录音：`atvvctl status` 保持 `state = "ready"`、`streaming = false`，
+同时 `mic_armed = true`；消费者只在语音键边沿收到
+`VoiceStarted`/`VoiceStopped`。帧超时不会关闭空闲的待命会话。
+
+RC003 仍由实体按键门控麦克风数据，因此这不是常开麦克风。代价是常驻 BLE 会话和
+每次说话一次重新打开，换取更低的首帧延迟。2026-11-03 在 RC003
+（`C0:5D:39:F8:2D:4C`）上测得：从按下语音键到首个解码帧的中位数从 **157 ms**
+降到输入边沿到达时首帧已经排队（中位数改善 **169 ms**）。这是守护进程侧的延迟，
+不是消费者端的端到端延迟。默认值为 `false`；见
+[硬件证据](research/rc003-hardware-evidence.md#keep-open-mic-ab-2026-11-03)。
+
+对于语音键只发送 `AUDIO_START` 的设备（`google-chromecast` 配置文件），该设置
+不生效：预打开会抑制合成其消费者触发键的会话边沿。
 
 手势覆盖作用于整个活动布局，因此切换布局可能改变双击/长按行为。
 `atvvctl layout show` 会打印实际生效的时序。
@@ -190,7 +211,7 @@ single = "pointer:click:right"
 `atvvctl config set` 通过 D-Bus 发送整个文档。守护进程在应用任何内容之前校验
 每个字段（包括每个已存储的布局），然后：
 
-1. 应用增益、输入、vinput 模式、触发键、手势时序和活动布局的操作映射；
+1. 应用增益、输入、预打开模式、vinput 模式、触发键、手势时序和活动布局的操作映射；
 2. 当映射、时序、触发键或 vinput 模式变化时重启输入运行时，因为 uinput
    按键注册依赖映射。重启失败会恢复之前的运行时并报告错误；
 3. 原子地写入文件。写入失败会回滚运行时。
@@ -209,6 +230,7 @@ atvvctl config get                 # 人类可读的有效文档
 atvvctl config get --json          # 精确的 GetConfig 负载
 atvvctl config set --gain-db 6
 atvvctl config set --input false
+atvvctl config set --preopen-mic true
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
 atvvctl layout list

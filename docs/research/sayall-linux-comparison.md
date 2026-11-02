@@ -134,8 +134,9 @@ Evidence:
   re-opens after every `AUDIO_STOP` while not recording.
 - `docs/PROTOCOL.md` says a `MIC_OPEN` session expires after about 60 s and
   that waiting for `0x04` before opening is "one beat late".
-- Our own fcitx guide tells users to wait roughly 0.3 s after pressing before
-  speaking because the first frames follow `MIC_OPEN` and `AUDIO_START`.
+- Our fcitx guide measured roughly 0.3 s after pressing as a safe wait; the
+  2026-11-03 RC003 run measured a 157 ms median from the voice press to the
+  first decoded frame with the default voice-edge `MIC_OPEN`.
 
 Our gap:
 
@@ -152,6 +153,12 @@ Borrow, as an experiment:
 - Do not copy their lifecycle wholesale: they send no `MIC_EXTEND`, so a hold
   longer than the device's session window is not protected. Our 10 s keepalive
   already covers a 59.3 s hold.
+
+Status (2026-11-03): the RC003 A/B passed and the path is implemented as the
+opt-in `preopen_mic` setting (default `false`). The median voice-press to
+first-frame latency improved by 169 ms, the armed session stays invisible to
+consumers, and the 10-minute idle battery delta matched the baseline. See
+[`rc003-hardware-evidence.md`](rc003-hardware-evidence.md#keep-open-mic-ab-2026-11-03).
 
 Risks:
 
@@ -291,23 +298,25 @@ can fail closed on an unknown desktop id.
 | P1 | Flush the PCM queue on `VoiceStarted` | small | queue-level test; no hardware needed |
 | P1 | `docs/troubleshooting.md` + `.zh-CN.md` | small | link check, no runtime |
 | P2 | First-run checklist in `atvv-gui` | medium | GUI test with a mock daemon; generic checks only |
-| P2 | Opt-in keep-open microphone | medium | RC003 A/B for first-frame latency and battery |
+| P2 | Opt-in keep-open microphone | done | RC003 A/B passed; `preopen_mic` defaults to false |
 | P3 | Structured `app:` action | small | only if users ask; security review of the action grammar |
 
 The P1/P2 items are scheduled: [step 23](../plans/23-audio-feedback.md)
 covers the level, gain, and session-boundary flush;
 [step 24](../plans/24-first-run-and-troubleshooting.md) covers the checklist,
 troubleshooting page, and known-limitations sections. The keep-open experiment
-is [backlog B03](../plans/B03-preopen-mic.md) and needs a recorded real-device
-run before it can become a default or a documented recommendation. The `app:`
-action stays unscheduled until user demand exists.
+passed the 2026-11-03 RC003 A/B and is implemented as opt-in `preopen_mic`
+([step 26](../plans/26-preopen-mic.md)). The `app:` action stays unscheduled
+until user demand exists.
 
 ## 7. Open questions
 
 - Does a consumer ever observe stale queue audio in practice? The flush is
   cheap either way; a queue-level test should prove the behavior before a
   hardware claim.
-- Is the 0.3 s guidance in the fcitx guide causing clipped first words on the
-  real device? Measure with and without a pre-opened session.
+- Is the guidance in the fcitx guide causing clipped first words on the real
+  device? Answered 2026-11-03: the default voice-edge path has a 155.6 ms
+  median, and an armed `preopen_mic` session has the first frame queued when
+  the key edge arrives. Consumer start-up remains outside the measurement.
 - Can Vokie select a capture device or bind `Dictate`? If not, document it as
   an unsupported consumer instead of adding default-source switching.

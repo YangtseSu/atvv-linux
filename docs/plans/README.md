@@ -58,7 +58,6 @@ it can be picked up without re-deriving the design.
 |---|------|--------|------------|-------------------|
 | B01 | [Recording-key press and release actions](B01-recording-key-press-release-actions.md) | ⏸ backlog | 14 | one press and one release action run per edge while the mic, trigger key, and provider contract stay unchanged |
 | B02 | [NFC tag investigation and optional trigger](B02-nfc-tag.md) | ⏸ backlog | — (needs an NFC reader) | the RC003 tag's IC, UID, NDEF, and lock state are recorded, and a read-only trigger is demonstrated or the rewrite path is restored exactly |
-| B03 | [Keep-open microphone experiment](B03-preopen-mic.md) | ⏸ backlog | 02, 04, 06, 07 | an RC003 A/B measures first-frame latency and idle battery, and the opt-in path is implemented only if it clears the gate |
 
 ## Scope
 
@@ -86,6 +85,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 | M — Consumer polish | 23–24 | **done**: 23 added live level/gain and a session-scoped PCM queue; 24 added the first-run checklist and bilingual recovery docs |
 | N — ATVV v1.0 conformance | 25 | **done**: 25 closed the `MIC_OPEN_ERROR`/`AUDIO_SYNC` gaps, rebuilt the resampler on a valid mid-session codec change, and added sequence-gap diagnostics |
+| O — Microphone latency | 26 | **done**: opt-in `preopen_mic` with an armed session and a recorded RC003 A/B |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
@@ -96,7 +96,8 @@ recorded RC003 + Chromecast two-device switch. Step 23 is complete with the
 live level/gain dialog and the session-boundary flush; step 24 is complete with
 the read-only first-run checklist, the bilingual recovery page, and the README
 known-limitations sections; step 25 is complete with the three ATVV v1.0
-conformance fixes. B03 is the hardware-gated keep-open experiment.
+conformance fixes; step 26 is complete with the RC003 keep-open A/B and the
+opt-in `preopen_mic` setting.
 
 ## Step files
 
@@ -137,6 +138,7 @@ verified; they are not reopened. Live work is listed first.
 | 23 | M | [audio-feedback](23-audio-feedback.md) | ✅ done | 04, 06, 14, 19 | status/GUI show the live level and gain, and a new session clears the PCM queue |
 | 24 | M | [first-run-and-troubleshooting](24-first-run-and-troubleshooting.md) | ✅ done | 12, 14, 19, 23 | a generic checklist finds the missing layer and the bilingual recovery docs are linked |
 | 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ✅ done | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
+| 26 | O | [preopen-mic](26-preopen-mic.md) | ✅ done | 02, 04, 06, 07 | the RC003 A/B clears the 100 ms gate and the opt-in armed path is live |
 
 ## Architecture contract
 

@@ -135,8 +135,10 @@ atvvctl doctor
 
 - RC003 的麦克风只在按住实体语音键时传输数据；仅由主机发出 `MIC_OPEN`
   不会产生音频帧（[证据](docs/research/rc003-hardware-evidence.md)）。
-- 按下后请等待约 0.3 秒再说话。首帧延迟尚未测量
-  （[B03](docs/plans/B03-preopen-mic.md)）。
+- 默认 `preopen_mic = false` 时，RC003 从按下语音键到首个解码帧约需 0.2 秒
+  （中位数 157 ms，2026-11-03 实测）。`preopen_mic = true` 通过保持 BLE 会话
+  待命消除这段设备侧延迟；见
+  [配置](docs/configuration.zh-CN.md#预打开麦克风)。
 - fcitx5-vinput 尚未自动选择音频源或绑定声明的按键；请手动配置
   （[指南](docs/integrations/fcitx5-vinput.zh-CN.md)）。
 - Chromecast 遥控器 A0（`G9N9N`）固件尚未在 Linux 上运行；A3 的运行记录见

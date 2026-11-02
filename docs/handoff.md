@@ -1,13 +1,13 @@
 # Handoff
 
-Updated: 2026-11-02
+Updated: 2026-11-03
 
 ## Project
 
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 267 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 269 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -46,6 +46,27 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Step 26 keep-open microphone (complete, 2026-11-03)**: B03 was promoted
+  and executed on the real RC003 (`C0:5D:39:F8:2D:4C`). With temporary
+  verbose timestamps, 25 baseline presses measured a median 155.6 ms from the
+  evdev voice edge to the first decoded frame; 20 armed presses measured
+  -11.7 ms (the first frame is already queued when the edge arrives). Median
+  improvement 167.3 ms, p95 improvement 179.3 ms; 0 failed opens, 0 reconnects
+  beyond the initial connect, 0 unexpected stops, and a 0% 10-minute idle
+  battery delta in both runs. The gate passed. `preopen_mic` (default `false`,
+  `atvvctl config set --preopen-mic`) opens at `ready`, sends `MIC_EXTEND`
+  every 10 s, re-opens 200 ms after a device stop, keeps `state = "ready"` and
+  `streaming = false` with `mic_armed = true`, suppresses armed
+  `VoiceStarted`/`VoiceStopped`, ignores `0x0F80` in `Streaming`, disables the
+  idle frame timeout, and arms/disarms live. The setting is inert on a profile
+  whose voice key has no local evdev edge (the Chromecast), because
+  pre-opening would suppress the `AUDIO_START` that synthesizes its trigger.
+  Verification: 269 workspace tests passed, 9 ignored; clippy and fmt clean; a
+  live `config set --preopen-mic true/false` smoke showed `mic_armed` toggling
+  and `disarming MIC_CLOSE`.
+  Temporary timestamps, the `RemoteEvent::Voice` timestamp, and the
+  environment switch were removed. See `docs/plans/26-preopen-mic.md` and
+  `docs/research/rc003-hardware-evidence.md`.
 - **Step 25 ATVV v1.0 conformance (complete, 2026-11-02)**: a `Streaming`
   session now ignores `MIC_OPEN_ERROR` instead of falling back to `Ready`;
   `Opening` still returns to `Ready` and stores the named code. Added
@@ -925,12 +946,18 @@ rebuilds the resampler, and sequence gaps are counted and summarized. It is
 synthetic evidence only: no current profile switches rate. The plan is in
 `docs/plans/25-atvv-spec-conformance.md`.
 
+**Step 26 (keep-open microphone) is complete and verified.** The RC003 A/B
+measured 155.6 ms median (n=25) with the voice-edge `MIC_OPEN` and -11.7 ms
+(n=20) with an armed session; the opt-in `preopen_mic` default is `false`.
+The plan is in `docs/plans/26-preopen-mic.md` and the evidence in
+`docs/research/rc003-hardware-evidence.md`.
+
 **All numbered steps are complete except step 10, which is blocked on
-upstream.** The remaining hardware work is B03 (keep-open microphone
-experiment), which stays in the backlog until the operator schedules it. The
-immediate action is to watch upstream vinput releases; when one ships its own
-auto-selection/declared-key binding, rebuild vinput and record the zero-config
-RC003 run. Do not reopen the closed PRs.
+upstream.** Step 26 executed the keep-open experiment on the RC003 and set the
+opt-in `preopen_mic` default to `false`. The immediate action is to watch
+upstream vinput releases; when one ships its own auto-selection/declared-key
+binding, rebuild vinput and record the zero-config RC003 run. Do not reopen the
+closed PRs.
 
 ## Commands
 

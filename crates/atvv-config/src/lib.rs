@@ -602,6 +602,8 @@ pub struct FileConfig {
     pub gain_db: Option<i8>,
     /// Start the evdev/uinput input path.
     pub input: Option<bool>,
+    /// Open the microphone at ready and re-open it after a stop.
+    pub preopen_mic: Option<bool>,
     /// fcitx5-vinput integration mode.
     pub vinput: Option<VinputMode>,
     /// Synthetic key emitted while the voice key is held; `none` disables it.
@@ -631,6 +633,8 @@ pub struct Config {
     pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
+    /// Keep an ATVV microphone session open while not dictating.
+    pub preopen_mic: bool,
     pub vinput: VinputMode,
     /// Key name; `None` disables synthetic trigger emission.
     pub trigger_key: Option<String>,
@@ -656,6 +660,7 @@ impl Config {
             adapter: None,
             gain_db: profile.gain_db,
             input: true,
+            preopen_mic: false,
             vinput: VinputMode::Trigger,
             trigger_key: Some(DEFAULT_TRIGGER_KEY.to_string()),
             allow_exec: false,
@@ -1174,6 +1179,7 @@ impl FileConfig {
             adapter: file.adapter.clone(),
             gain_db,
             input: file.input.unwrap_or(true),
+            preopen_mic: file.preopen_mic.unwrap_or(false),
             vinput: file.vinput.unwrap_or_default(),
             trigger_key,
             allow_exec,
@@ -1379,6 +1385,8 @@ pub struct ConfigDocument {
     pub adapter: Option<String>,
     pub gain_db: i8,
     pub input: bool,
+    #[serde(default)]
+    pub preopen_mic: bool,
     pub vinput: VinputMode,
     pub trigger_key: Option<String>,
     pub allow_exec: bool,
@@ -1413,6 +1421,7 @@ impl ConfigDocument {
             adapter: config.adapter.clone(),
             gain_db: config.gain_db,
             input: config.input,
+            preopen_mic: config.preopen_mic,
             vinput: config.vinput,
             trigger_key: config.trigger_key.clone(),
             allow_exec: config.allow_exec,
@@ -1510,6 +1519,7 @@ impl ConfigDocument {
             adapter: self.adapter.clone(),
             gain_db: (self.gain_db != profile.gain_db).then_some(self.gain_db),
             input: (!self.input).then_some(false),
+            preopen_mic: self.preopen_mic.then_some(true),
             vinput: (self.vinput != VinputMode::Trigger).then_some(self.vinput),
             trigger_key,
             allow_exec: self.allow_exec.then_some(true),
@@ -1551,6 +1561,7 @@ impl ConfigDocument {
             adapter: self.adapter.clone(),
             gain_db: Some(self.gain_db),
             input: Some(self.input),
+            preopen_mic: Some(self.preopen_mic),
             vinput: Some(self.vinput),
             trigger_key: self.trigger_key.clone(),
             allow_exec: Some(self.allow_exec),
@@ -2166,7 +2177,8 @@ mod tests {
 
     #[test]
     fn document_round_trips_through_json_and_file() {
-        let document = custom_document();
+        let mut document = custom_document();
+        document.preopen_mic = true;
         let json = serde_json::to_string(&document).unwrap();
         assert_eq!(
             serde_json::from_str::<ConfigDocument>(&json).unwrap(),
@@ -2203,6 +2215,7 @@ mod tests {
         assert!(text.contains("[layouts.editor.buttons.up]"), "{text}");
         assert!(text.contains("single = \"key:KEY_F13\""), "{text}");
         assert!(text.contains("[layouts.editor.gesture]"), "{text}");
+        assert!(text.contains("preopen_mic = true"), "{text}");
         assert!(!text.contains("[buttons]"), "{text}");
         let loaded = load(&path, &RC003).unwrap().config;
         assert_eq!(loaded, config);
@@ -2537,6 +2550,7 @@ mod tests {
         assert_eq!(loaded.config.vinput, VinputMode::Dbus);
         assert_eq!(loaded.config.trigger_key.as_deref(), Some("F18"));
         assert!(!loaded.config.input);
+        assert!(!loaded.config.preopen_mic);
         assert_eq!(loaded.config.active_layout, DEFAULT_LAYOUT);
         assert_eq!(loaded.config.gesture, RC003.gesture_timing);
         let _ = std::fs::remove_file(&path);

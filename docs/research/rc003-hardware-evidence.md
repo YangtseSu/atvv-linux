@@ -446,3 +446,45 @@ hardware   ok   battery 62% · firmware 2671 · hw V2.0 · sw A.7.0.6 · serial 
 The battery is a cached BlueZ property, not a per-poll GATT read. DIS
 characteristics are read once per connection. Both are passive: the daemon
 never writes to these services.
+
+## Keep-open mic A/B (2026-11-03)
+
+Same RC003 (`C0:5D:39:F8:2D:4C`, `hci0`), BlueZ 5.87, workspace
+`target/release/atvvd --verbose`. The installed user unit was stopped for the
+runs and restarted afterwards. Temporary instrumentation prefixed each verbose
+line with a monotonic millisecond timestamp and added a first-non-zero sample
+line; it was removed after the experiment.
+
+Method: each press held the physical voice key for about 2 s, started a fixed
+counting phrase at the press, and was followed by about 3 s of silence. The
+input runtime timestamped the evdev edge; the daemon timestamped the first
+decoded frame. Deltas are `first frame - evdev edge`, so a negative value means
+the audio notification beat the HID edge into the daemon. The first non-zero
+sample carried the same timestamp as the first decoded frame in every sample.
+
+| Run | Mic lifecycle | Presses | median | p95 | min | max |
+|---|---|---|---|---|---|---|
+| A | `MIC_OPEN` on the voice edge | 25 | 155.6 ms | 174.3 ms | -9.7 ms | 184.7 ms |
+| B | armed at ready, re-open after stop | 20 | -11.7 ms | -5.0 ms | -34.4 ms | -4.4 ms |
+
+- B opened the session at ready; the device answered `MIC_OPEN` with
+  `AUDIO_START [04, 00, 02, 00]` after 26 ms. `MIC_EXTEND` followed every 10 s.
+  No audio frames arrived while the key was idle: the device still gates the
+  microphone on the physical key.
+- Every B release produced `AUDIO_STOP 00 02`; the daemon suppressed the
+  consumer stop and re-armed 200 ms later. None of the 20 stops was
+  unexpected.
+- Failed `MIC_OPEN`: 0 in both runs. Reconnects: the initial connect only.
+  B logged 73 `MIC_EXTEND` sends over the presses and the idle window.
+- One A press hit an unsupported 8 kHz `AUDIO_SYNC` and closed the stream
+  through the existing ADR 0009 path; this is a device/link anomaly, not a
+  keep-open failure.
+- Battery: `org.bluez.Battery1` read 60% before and after 10 minutes of
+  connected idle in both runs (delta 0, 1% resolution). A's idle window was
+  00:09:58–00:20:03, B's was 00:23:08–00:33:30 on 2026-11-03.
+
+Decision: pass. The median improved by 167.3 ms and p95 by 179.3 ms, past the
+100 ms gate; there were no new stops, reconnects, or failed opens; the idle
+battery delta matched baseline. The path is implemented as the opt-in
+`preopen_mic` setting (default `false`). The measurement is daemon-side:
+consumer capture start-up is outside it.

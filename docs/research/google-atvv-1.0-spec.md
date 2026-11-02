@@ -228,9 +228,9 @@ proven synthetically against a dual-codec test profile.
   logs and `last_error`; the daemon still reports it as a failed open, not as
   a special state.
 
-## 8. How this affects B03
+## 8. How this affected the keep-open experiment
 
-The keep-open experiment must respect the spec's open-state rules:
+The keep-open experiment had to respect the spec's open-state rules:
 
 - while the session is armed by a pre-opened `MIC_OPEN`, do not send another
   `MIC_OPEN` on the voice edge; a second open can restart the stream (or
@@ -240,6 +240,10 @@ The keep-open experiment must respect the spec's open-state rules:
 - the 10-second `MIC_EXTEND` interval is inside the spec's 5–10 second
   recommendation; the 15 s–1 min Audio Transfer Timeout is the bound the
   experiment is working against.
+
+The 2026-11-03 RC003 A/B respected these rules and passed; `preopen_mic` is
+the opt-in setting described in [step 26](../plans/26-preopen-mic.md) and
+[`rc003-hardware-evidence.md`](rc003-hardware-evidence.md#keep-open-mic-ab-2026-11-03).
 
 ## 9. Source handling
 

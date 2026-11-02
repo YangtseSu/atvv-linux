@@ -94,8 +94,8 @@ and `contract` data. It does not start services, open Bluetooth, write
 - Add a **Known limitations** section to `README.md` and
   `README.zh-CN.md` with links:
   - RC003 microphone data is gated by the physical voice key;
-  - allow roughly 0.3 s after pressing before speaking (until a measured
-    keep-open result changes it; see B03);
+  - allow about 0.2 s after pressing before speaking with the default
+    `preopen_mic = false`; the measured keep-open result is step 26;
   - fcitx5-vinput auto-selection and declared-key binding are upstream-owned
     and still pending; manual configuration is documented;
   - the Chromecast A0 Linux run, HID press map, and two-device switch remain
