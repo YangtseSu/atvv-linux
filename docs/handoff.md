@@ -67,8 +67,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
   doctor check are implemented. The Google Chromecast Remote profile
   (`google-chromecast`, `18d1:9450`, 240-byte ADPCM frames, bare keepalive)
   was added and its ATVV audio/pairing run recorded. Mock two-device switching
-  and persistence passed. Pending: the `uaccess` install and Chromecast HID
-  capture, the real RC003+Chromecast switch, and the final package rebuild.
+  and persistence passed. The dev package `atvv-git 0.2.0.r4.gc186966-1`
+  (sha256 `e76374e8ffcce666b0b68b1c7aeeb519ba7d06758e62b552b564285448d4e583`)
+  and `atvv-gui-git 0.2.0.r4.gc186966-1` were built from commit `c186966`;
+  installation and the `uaccess` reload are the operator's next action.
+  Pending: the `uaccess` install and Chromecast HID capture, the real
+  RC003+Chromecast switch, and any package rebuild after those runs.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
