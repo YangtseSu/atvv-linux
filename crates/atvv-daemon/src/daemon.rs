@@ -969,7 +969,12 @@ impl Daemon {
         }
 
         // Some firmware sends the 0x0A sync on the audio characteristic.
-        if bytes.first() == Some(&0x0A) {
+        // Control payloads are short: v1.0 `AUDIO_SYNC` is exactly 7 bytes
+        // and some firmware uses a 3-byte counter form. A raw ADPCM frame
+        // (or a fragment of one) can also start with 0x0A; only the control
+        // lengths are parsed here, so audio is never dropped or mistaken for
+        // a rate change.
+        if matches!(bytes.len(), 3 | 7) && bytes.first() == Some(&0x0A) {
             match CtlEvent::parse(bytes) {
                 CtlEvent::AudioSync {
                     codec,
@@ -3542,6 +3547,59 @@ mod tests {
             daemon.malformed_sync.suppressed > 0 || daemon.malformed_sync.last_report.is_some(),
             "the anomaly was not counted for rate limiting"
         );
+    }
+
+    #[test]
+    fn audio_frames_starting_with_the_sync_opcode_are_audio() {
+        // A raw ADPCM frame can start with 0x0A. The length-blind classifier
+        // dropped that frame, reset the decoder from its random bytes, and
+        // closed the stream when the second byte happened to be 0x01 (read as
+        // an unsupported 8 kHz codec). One such close is recorded in
+        // `docs/research/rc003-hardware-evidence.md`.
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let sink = CaptureSink::default();
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(sink.clone()),
+            Arc::new(NullSink),
+            None,
+        );
+
+        let caps = atvv_protocol::Capabilities::parse(&DEFAULT_CAPS).unwrap();
+        daemon.session.on_caps(caps);
+        daemon
+            .session
+            .on_audio_start(atvv_protocol::StreamId::MIC_OPEN);
+        let now = Instant::now();
+        daemon.prepare_stream(now);
+
+        let mut frame = [0x11_u8; 120];
+        frame[..7].copy_from_slice(&[0x0A, 0x01, 0x00, 0x2C, 0xFF, 0xF0, 0x1E]);
+        daemon.on_audio(&frame, now);
+
+        assert_eq!(daemon.frames, 1, "the frame must be decoded");
+        assert_eq!(sink.len(), 240, "the frame must reach the sink");
+        assert_eq!(
+            daemon.session.state(),
+            SessionState::Streaming,
+            "a 0x0A-starting audio frame must not close the stream"
+        );
+        assert_eq!(daemon.sequence.gaps(), 0, "no bogus sequence jump");
+        assert_eq!(daemon.stream_rate, 16_000);
+        assert_eq!(daemon.last_error, None);
+
+        // The documented 7-byte sync on the audio characteristic still
+        // applies, and a 3-byte counter form is still control data.
+        daemon.on_audio(&[0x0A, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00], now);
+        assert_eq!(daemon.decoder.predictor(), 0);
+        assert_eq!(daemon.sequence.gaps(), 0);
+        assert_eq!(daemon.stream_rate, 16_000);
+        daemon.on_audio(&[0x0A, 0x00, 0x09], now);
+        assert_eq!(daemon.frames, 1, "a 3-byte form is not audio");
+        assert_eq!(daemon.accumulator.as_ref().unwrap().pending_len(), 0);
     }
 
     #[derive(Default)]

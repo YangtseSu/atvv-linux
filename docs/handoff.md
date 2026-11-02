@@ -7,7 +7,7 @@ Updated: 2026-11-03
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 269 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 270 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -16,6 +16,11 @@ Updated: 2026-11-03
   is not installed; the GTK window smoke test passed on the live GNOME session.
   The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at least as
   large as the window; it skips the pointer section otherwise.
+- Live state (2026-11-03): the installed `atvv 0.3.0-1` predates the audio-sync
+  length fix. `atvvd.service` is stopped and the fixed
+  `target/debug/atvvd --verbose` runs from this checkout (log
+  `/tmp/atvv-fixed.log`). Rebuild and reinstall the package, then start the
+  unit.
 
 ## Read first
 
@@ -46,6 +51,17 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Audio-sync frame misclassification (fixed 2026-11-03)**: a raw 120-byte
+  ADPCM frame beginning with `0x0A` was parsed as `AUDIO_SYNC` on the audio
+  characteristic. The frame was dropped, the decoder reset from its bytes, a
+  bogus 32,334-frame sequence gap was recorded, and a second byte of `0x01`
+  closed the stream as an unsupported 8 kHz codec (the stop seen in the
+  keep-open run). The daemon now parses `0x0A` on the audio characteristic
+  only for the 7-byte v1.0 sync and the 3-byte counter form. Verified on the
+  RC003: three holds, 225 frames / 54,000 samples, 0 dropped, 0 sequence
+  gaps, 0 errors, and fcitx5-vinput transcribed all three phrases. Workspace:
+  270 passed, 9 ignored; fmt and clippy clean. See
+  `docs/research/rc003-hardware-evidence.md`.
 - **v0.3.0 release (published 2026-11-03)**: workspace version 0.3.0; the
   annotated tag `v0.3.0` (`ad39a49`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.3.0)
@@ -902,6 +918,13 @@ udevadm verify packaging/udev/70-atvv-linux.rules
   clean.
 
 ## Next step
+
+**Rebuild and reinstall the package.** The audio-sync length fix in
+`crates/atvv-daemon/src/daemon.rs` is not in the published `0.3.0-1` package.
+Rebuild `atvv`/`atvv-gui` (or the external `atvv-git` recipes) from this tree,
+install, and start `atvvd.service`. Until then the unit stays stopped and the
+fixed `target/debug/atvvd --verbose` runs from the checkout. Pushing needs
+explicit approval.
 
 **v0.3.0 is published.** The annotated tag `v0.3.0` (`ad39a49`) published the
 release with x86_64/aarch64 binaries, the source archive, checksums, and

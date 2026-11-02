@@ -138,6 +138,12 @@ evidence.
   and step index. It is a decoder sync: reset predictor/step and do not append
   it to the audio accumulator. The spec also makes it the rate-change point:
   the codec byte applies to audio after the sync.
+- On the audio characteristic, only a payload whose length is exactly 7 bytes
+  (v1.0 `AUDIO_SYNC`) or 3 bytes (firmware counter form) and whose first byte
+  is `0x0A` is control data. Raw ADPCM frames are arbitrary bytes and can
+  start with `0x0A`; classifying by the first byte alone drops the frame,
+  resets the decoder from the frame bytes, and closes the stream when the
+  second byte reads as an unadvertised 8 kHz codec.
 - Do not interpolate over sequence gaps. The daemon tracks the `seq` of each
   `AUDIO_SYNC`, advances it once per decoded frame, counts skipped frames in
   `audio.sequence_gaps`, and prints one summary per bounded interval. A sync

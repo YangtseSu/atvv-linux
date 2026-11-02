@@ -476,9 +476,9 @@ sample carried the same timestamp as the first decoded frame in every sample.
   unexpected.
 - Failed `MIC_OPEN`: 0 in both runs. Reconnects: the initial connect only.
   B logged 73 `MIC_EXTEND` sends over the presses and the idle window.
-- One A press hit an unsupported 8 kHz `AUDIO_SYNC` and closed the stream
-  through the existing ADR 0009 path; this is a device/link anomaly, not a
-  keep-open failure.
+- One A press was recorded as an unsupported 8 kHz `AUDIO_SYNC` closing the
+  stream. The 2026-11-03 fix trace showed that this was a raw 120-byte audio
+  frame starting with `0x0A`, misclassified as a sync; see the section below.
 - Battery: `org.bluez.Battery1` read 60% before and after 10 minutes of
   connected idle in both runs (delta 0, 1% resolution). A's idle window was
   00:09:58–00:20:03, B's was 00:23:08–00:33:30 on 2026-11-03.
@@ -488,3 +488,31 @@ Decision: pass. The median improved by 167.3 ms and p95 by 179.3 ms, past the
 battery delta matched baseline. The path is implemented as the opt-in
 `preopen_mic` setting (default `false`). The measurement is daemon-side:
 consumer capture start-up is outside it.
+
+## Audio-sync misclassification (2026-11-03)
+
+A verbose trace of one voice-key hold showed:
+
+```text
+AUDIO_SYNC without a valid codec; keeping 16000 Hz
+audio sequence gap 32334 frames (32334 total)
+```
+
+The notification was a normal 120-byte ADPCM frame whose first byte was
+`0x0A`. The daemon treated any payload on the audio characteristic that
+started with the sync opcode as control data: it dropped the frame, reset the
+decoder from the frame's random bytes, and recorded a bogus sequence jump.
+When the second byte read `0x01`, the same classifier produced an
+unadvertised 8 kHz sync and closed the stream; that is the
+`unsupported AUDIO_SYNC codec adpcm-8k` recorded in the keep-open run.
+
+Fix: on the audio characteristic, only 7-byte and 3-byte payloads with first
+byte `0x0A` are parsed as control; every other payload goes to the frame
+accumulator. `crates/atvv-daemon/src/daemon.rs` has the regression test
+`audio_frames_starting_with_the_sync_opcode_are_audio`.
+
+Verification on the same RC003 (`C0:5D:39:F8:2D:4C`) with the fixed
+`target/debug/atvvd --verbose`: three holds produced 225 frames / 54,000
+samples, `dropped_frames=0`, `sequence_gaps=0`, no `last_error`, and
+fcitx5-vinput transcribed all three spoken phrases. Workspace: 270 passed,
+9 ignored; `cargo fmt --check` and workspace clippy clean.
