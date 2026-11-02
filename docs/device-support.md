@@ -11,7 +11,7 @@ transports prove the code path, not the device.
 | Device | USB/HID ids | Profile | ATVV | Audio | State | Evidence |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz, 120 B frames | Verified 2026-10-30 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
-| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Partial 2026-11-02: ATVV audio, keepalive, and pairing verified; HID map and two-device switch pending | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Partial 2026-11-02: ATVV audio, keepalive, pairing, and reconnect verified; HID map and two-device switch pending | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | Xiaomi RC family, other firmware | vendor `2717`, name `MI RC*` | none | unknown | unknown | Not supported; needs a profile and a run | — |
 | ATVV v1.0 remotes without a profile | unknown | none | v1.0 | profile-dependent | Not supported; add a `DeviceProfile` | — |
 | ATVV v0.4 remotes | unknown | none | v0.4 | — | Out of scope | — |

@@ -150,7 +150,8 @@ Real Chromecast run (2026-11-02, `74:46:B3:22:2D:D5`): `atvvctl pair`
 inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
 `atvv-google-chromecast` with `atvv.profile="google-chromecast"`, decoded
 240-byte frames (54 frames / 25,920 samples in two seconds), sent bare
-`MIC_EXTEND`, and stopped cleanly. See
+`MIC_EXTEND`, stopped cleanly, and reconnected after
+`bluetoothctl disconnect` (CAPS re-read, final `state ready`). See
 `docs/research/chromecast-hardware-evidence.md`.
 
 ## Out of scope

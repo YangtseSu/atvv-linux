@@ -10,7 +10,7 @@
 | 设备 | USB/HID ID | 设备配置文件 | ATVV | 音频 | 状态 | 证据 |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz，120 B 帧 | 2026-10-30 已验证 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
-| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz，240 B 帧 | 2026-11-02 部分验证：ATVV 音频、保活和配对已通过；HID 按键映射和双设备切换待完成 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz，240 B 帧 | 2026-11-02 部分验证：ATVV 音频、保活、配对和重连已通过；HID 按键映射和双设备切换待完成 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | 小米 RC 系列，其他固件 | 厂商 `2717`，名称 `MI RC*` | 无 | 未知 | 未知 | 不支持；需要配置文件和运行记录 | — |
 | 没有配置文件的 ATVV v1.0 遥控器 | 未知 | 无 | v1.0 | 取决于配置文件 | 不支持；请添加 `DeviceProfile` | — |
 | ATVV v0.4 遥控器 | 未知 | 无 | v0.4 | — | 超出范围 | — |

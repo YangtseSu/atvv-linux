@@ -121,10 +121,24 @@ was unavailable on this machine until the udev `uaccess` rule was installed.
 This file must gain a recorded press log before the device is called fully
 verified. Unmapped app/mute keys pass through to the compositor.
 
+## Reconnect
+
+With the daemon connected, `bluetoothctl disconnect 74:46:B3:22:2D:D5` caused
+`link lost`, then the daemon reconnected on its own and re-read CAPS:
+
+```text
+atvvd: disconnected: link lost
+atvvd: state: disconnected
+atvvd: reconnecting
+atvvd: connected to Chromecast Remote (74:46:B3:22:2D:D5)
+atvvd: caps v1.0 codecs=0x02 interaction=HoldToTalk frame=240
+```
+
+The final status was `state ready`, `connected true`.
+
 ## Pending
 
 - Physical button capture with the `uaccess` rule installed.
-- Reconnect after `bluetoothctl disconnect` and a daemon restart.
 - A real speech capture and ASR check.
 - Two-device switching with the RC003 on the same host (scheduled for the
   evening of 2026-11-02).
