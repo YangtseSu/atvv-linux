@@ -655,7 +655,7 @@ mod tests {
 
     #[test]
     fn map_policies_are_applied() {
-        let map = ActionMap::defaults();
+        let map = ActionMap::defaults_for(&RC003);
         let timing = RC003.gesture_timing;
         let mut engine = engine();
         for button in RemoteButton::LOGICAL {

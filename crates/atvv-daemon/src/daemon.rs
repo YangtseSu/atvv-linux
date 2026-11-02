@@ -567,6 +567,17 @@ impl Daemon {
         if !self.profile.trigger_from_session {
             return;
         }
+        // Test/learn capture observes the session edge. Do not hold the
+        // configured trigger: capture mode must not type into the focused
+        // application.
+        if capture::is_active(&self.capture) {
+            self.signals.publish(DaemonEvent::ButtonEvent {
+                button: RemoteButton::Voice.name().to_string(),
+                trigger: if started { "single" } else { "release" }.to_string(),
+                pressed: started,
+            });
+            return;
+        }
         match self.config.vinput {
             VinputMode::Trigger => {
                 if started == self.trigger_held {
@@ -1790,7 +1801,7 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    use atvv_protocol::profile::{RC003, RemoteButton};
+    use atvv_protocol::profile::{CHROMECAST, RC003, RemoteButton};
 
     use crate::transport::{DEFAULT_CAPS, MockConfig, MockHandle, MockTransport};
 
@@ -2264,6 +2275,65 @@ mod tests {
             error: None,
         });
         assert_eq!(button_events().len(), 1);
+    }
+
+    #[test]
+    fn session_triggered_voice_publishes_capture_events_without_typing() {
+        let signals = Arc::new(RecordingSink::default());
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(CHROMECAST, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            signals.clone(),
+            None,
+        );
+        let button_events = || {
+            signals
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|event| matches!(event, DaemonEvent::ButtonEvent { .. }))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        let cell = handle.capture();
+        capture::begin(&cell, None);
+        daemon.on_session_voice(true);
+        assert_eq!(
+            button_events(),
+            vec![DaemonEvent::ButtonEvent {
+                button: "voice".to_string(),
+                trigger: "single".to_string(),
+                pressed: true,
+            }]
+        );
+        assert!(
+            !daemon.trigger_held,
+            "capture must not hold the configured trigger"
+        );
+
+        daemon.on_session_voice(false);
+        assert_eq!(
+            button_events(),
+            vec![
+                DaemonEvent::ButtonEvent {
+                    button: "voice".to_string(),
+                    trigger: "single".to_string(),
+                    pressed: true,
+                },
+                DaemonEvent::ButtonEvent {
+                    button: "voice".to_string(),
+                    trigger: "release".to_string(),
+                    pressed: false,
+                },
+            ]
+        );
+        assert!(!daemon.trigger_held);
     }
 
     #[test]

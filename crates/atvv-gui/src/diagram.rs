@@ -16,7 +16,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use crate::i18n::{tr, tr_args};
-use crate::model::button_label;
+use crate::model::{button_label, button_label_for};
 
 const VIEWBOX_WIDTH: f64 = 320.0;
 const VIEWBOX_HEIGHT: f64 = 950.0;
@@ -212,6 +212,27 @@ const CHROMECAST_LAYOUT: RemoteLayout = RemoteLayout {
             height: 0.095789,
         },
         Hotspot {
+            button: RemoteButton::Mute,
+            x: 0.58125,
+            y: 0.4310526315789474,
+            width: 0.284375,
+            height: 0.0957894736842105,
+        },
+        Hotspot {
+            button: RemoteButton::YouTube,
+            x: 0.134375,
+            y: 0.5542105263157895,
+            width: 0.284375,
+            height: 0.0957894736842105,
+        },
+        Hotspot {
+            button: RemoteButton::Netflix,
+            x: 0.58125,
+            y: 0.5542105263157895,
+            width: 0.284375,
+            height: 0.0957894736842105,
+        },
+        Hotspot {
             button: RemoteButton::Power,
             x: 0.192188,
             y: 0.690526,
@@ -252,6 +273,9 @@ fn hotspot_css(button: RemoteButton) -> &'static str {
         RemoteButton::Menu => "hotspot-menu",
         RemoteButton::VolumeUp => "hotspot-volume-up",
         RemoteButton::VolumeDown => "hotspot-volume-down",
+        RemoteButton::Mute => "hotspot-mute",
+        RemoteButton::YouTube => "hotspot-youtube",
+        RemoteButton::Netflix => "hotspot-netflix",
     }
 }
 
@@ -472,6 +496,7 @@ impl RemoteDiagram {
             if pressed == Some(*button) {
                 widget.add_css_class("pressed");
             }
+            let label = button_label_for(&model.profile, *button);
             let suffix = if !editable {
                 tr(", not remappable")
             } else if conflicts.contains(button) {
@@ -481,8 +506,14 @@ impl RemoteDiagram {
             };
             widget.update_property(&[gtk::accessible::Property::Label(&tr_args(
                 "{label} key{suffix}",
-                &[("label", button_label(*button)), ("suffix", suffix)],
+                &[("label", label), ("suffix", suffix)],
             ))]);
+            let tooltip = if !editable {
+                tr("Voice key: drives the ATVV microphone and is not remappable").to_string()
+            } else {
+                tr_args("{label}: click to edit", &[("label", label)])
+            };
+            widget.set_tooltip_text(Some(&tooltip));
         }
     }
 }
@@ -541,9 +572,9 @@ mod tests {
                 assert!(hotspot.x + hotspot.width <= 1.0 + f64::EPSILON);
                 assert!(hotspot.y + hotspot.height <= 1.0 + f64::EPSILON);
             }
-            let google = layout.profile_id == "google-chromecast";
+            let profile = atvv_protocol::find(layout.profile_id).expect("known profile");
             for button in RemoteButton::ALL {
-                let expected = !(google && button == RemoteButton::Menu);
+                let expected = button == RemoteButton::Voice || profile.has_button(button);
                 assert_eq!(
                     seen.contains(&button),
                     expected,

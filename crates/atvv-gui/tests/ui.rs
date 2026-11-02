@@ -17,8 +17,8 @@ use atvv_gui::client::{
 };
 use atvv_gui::model::GuiModel;
 use atvv_input::Trigger;
-use atvv_protocol::RC003;
 use atvv_protocol::profile::RemoteButton;
+use atvv_protocol::{CHROMECAST, RC003};
 use gtk::glib::variant::ToVariant;
 use gtk::prelude::*;
 use libadwaita::prelude::*;
@@ -34,7 +34,11 @@ fn pump(millis: u64) {
 }
 
 fn window() -> std::rc::Rc<AppWindow> {
-    let model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(&RC003)))
+    window_for(&RC003)
+}
+
+fn window_for(profile: &atvv_protocol::profile::DeviceProfile) -> std::rc::Rc<AppWindow> {
+    let model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(profile)))
         .expect("profile is known");
     let window = AppWindow::build(None, Backend::detached());
     window.set_model(model);
@@ -118,7 +122,7 @@ fn window_smoke() {
     assert_eq!(window.battery_text(), "61 % · last known");
 
     // Twelve cards with three readable slots each.
-    for button in RemoteButton::LOGICAL {
+    for &button in RC003.buttons {
         let card = window
             .board()
             .card(button)
@@ -655,7 +659,7 @@ fn window_smoke() {
             window.window().close();
             return;
         }
-        for button in RemoteButton::LOGICAL {
+        for &button in RC003.buttons {
             for trigger in SLOTS {
                 let slot = window.board().slot(button, trigger).expect("slot");
                 window.scroll_slot_into_view(button, trigger);
@@ -673,7 +677,12 @@ fn window_smoke() {
                 pump(400);
             }
         }
-        for button in RemoteButton::ALL {
+        for button in RC003
+            .buttons
+            .iter()
+            .copied()
+            .chain(std::iter::once(RemoteButton::Voice))
+        {
             let hotspot = window.diagram().button(button).expect("hotspot");
             window.scroll_board_to(hotspot);
             pump(40);
@@ -698,6 +707,167 @@ fn window_smoke() {
     }
 
     window.window().close();
+
+    // The Chromecast profile exposes its own button set and app keys.
+    let google = window_for(&CHROMECAST);
+    for &button in CHROMECAST.buttons {
+        let card = google
+            .board()
+            .card(button)
+            .unwrap_or_else(|| panic!("{button} has no card"));
+        assert!(card.root().is_visible(), "{button} card is hidden");
+    }
+    let menu = google.board().card(RemoteButton::Menu).expect("menu card");
+    assert!(!menu.root().is_visible(), "Chromecast has no menu card");
+    assert_eq!(
+        google
+            .board()
+            .card(RemoteButton::Tv)
+            .expect("input card")
+            .label_text(),
+        "Input"
+    );
+    assert_eq!(
+        google
+            .board()
+            .card(RemoteButton::Mute)
+            .expect("mute card")
+            .label_text(),
+        "Mute"
+    );
+    assert!(google.diagram().button(RemoteButton::Mute).is_some());
+    assert!(
+        google
+            .diagram()
+            .button(RemoteButton::Mute)
+            .unwrap()
+            .is_visible()
+    );
+    assert!(
+        google
+            .diagram()
+            .button(RemoteButton::YouTube)
+            .unwrap()
+            .is_visible()
+    );
+    assert!(
+        google
+            .diagram()
+            .button(RemoteButton::Netflix)
+            .unwrap()
+            .is_visible()
+    );
+    assert!(
+        !google
+            .diagram()
+            .button(RemoteButton::Menu)
+            .unwrap()
+            .is_visible()
+    );
+    assert_eq!(
+        google
+            .board()
+            .slot_text(RemoteButton::Mute, Trigger::Single),
+        Some("Mute".to_string())
+    );
+    assert_eq!(
+        google
+            .board()
+            .slot_text(RemoteButton::YouTube, Trigger::Single),
+        Some("Camera Access Disable".to_string())
+    );
+
+    // Every new app key opens the same slot editor.
+    for button in [
+        RemoteButton::Mute,
+        RemoteButton::YouTube,
+        RemoteButton::Netflix,
+        RemoteButton::Tv,
+    ] {
+        google
+            .board()
+            .slot(button, Trigger::Single)
+            .unwrap_or_else(|| panic!("{button} slot"))
+            .emit_clicked();
+        assert_eq!(google.selected(), Some(button));
+        assert!(
+            google.editor().is_open(),
+            "{button} did not open the editor"
+        );
+        google.editor().close();
+        pump(20);
+    }
+    google
+        .diagram()
+        .button(RemoteButton::YouTube)
+        .expect("youtube hotspot")
+        .emit_clicked();
+    assert_eq!(google.selected(), Some(RemoteButton::YouTube));
+    assert!(google.editor().is_open());
+    google.editor().close();
+    pump(20);
+
+    // Preset preview follows the active profile: no Menu row, and buttons the
+    // preset does not define stay at their profile default.
+    google.open_preset_dialog_for_test(None);
+    pump(20);
+    google.select_preset_for_test("mpv");
+    pump(10);
+    assert!(!google.preset_preview_row("menu").unwrap().is_visible());
+    assert!(google.preset_preview_row("mute").unwrap().is_visible());
+    assert_eq!(
+        google
+            .preset_preview_row("mute")
+            .unwrap()
+            .subtitle()
+            .as_deref(),
+        Some("")
+    );
+    assert_eq!(
+        google
+            .preset_preview_row("tv")
+            .unwrap()
+            .subtitle()
+            .as_deref(),
+        Some("F")
+    );
+    google.close_preset_dialog_for_test();
+    pump(20);
+
+    // The session-driven Assistant key reports through the same test bar.
+    google.test_button().set_active(true);
+    google.simulate_button_event(ButtonSignal {
+        button: "voice".to_string(),
+        trigger: "single".to_string(),
+        pressed: true,
+    });
+    assert_eq!(google.test_result_text(), "Voice · Single");
+    assert_eq!(
+        google.last_action_text(),
+        "→ Microphone key (not remappable)"
+    );
+    assert!(
+        google
+            .diagram()
+            .button(RemoteButton::Voice)
+            .unwrap()
+            .has_css_class("pressed")
+    );
+    google.simulate_button_event(ButtonSignal {
+        button: "voice".to_string(),
+        trigger: "single".to_string(),
+        pressed: false,
+    });
+    assert!(
+        !google
+            .diagram()
+            .button(RemoteButton::Voice)
+            .unwrap()
+            .has_css_class("pressed")
+    );
+    google.test_button().set_active(false);
+    pump(20);
+    google.window().close();
 }
 
 /// XTEST pointer driver over the X11 window that GDK created.

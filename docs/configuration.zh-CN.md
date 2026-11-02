@@ -63,15 +63,17 @@ long = "combo:ctrl+alt+v"
 设备的活动布局。已知设备在守护进程重启后仍然存在。
 `atvvctl device rename <address> <label>` 设置或清除可选标签；空标签表示清除。
 
-十二个可映射按键是 `power`、`ok`、`back`、`up`、`down`、`left`、`right`、
-`home`、`menu`、`tv`、`volume_up` 和 `volume_down`。语音键不可映射：它控制
-ATVV 麦克风和 vinput 触发。`google-chromecast` 配置文件的 OK 是 `KEY_SELECT`，主页是 `KEY_HOMEPAGE`，
-Input 是 `KEY_TV`；未映射的应用键和静音键会透传。助手键直接发送 ATVV
-`AUDIO_START`，守护进程从会话开始/停止合成配置的触发键。
+可映射按键是活动设备的实体按键。每个配置文件都有 `power`、`ok`、`back`、
+`up`、`down`、`left`、`right`、`home`、`tv`、`volume_up` 和 `volume_down`；
+RC003 另有 `menu`，Chromecast 另有 `mute`、`youtube` 和 `netflix`。映射板只显示
+活动设备的按键。语音键不可映射：它控制 ATVV 麦克风和 vinput 触发。
+`google-chromecast` 配置文件的 OK 是 `KEY_SELECT`，主页是 `KEY_HOMEPAGE`，
+Input 是 `KEY_TV`，静音是 `KEY_MUTE`，YouTube 和 Netflix 使用摄像头访问按键。
+助手键直接发送 ATVV `AUDIO_START`，守护进程从会话开始/停止合成配置的触发键。
 
 槽位是 `single`、`double` 和 `long`。缺失的槽位表示“使用设备配置文件默认值”，
-而不是“未映射”。默认映射会为每个逻辑按键重新发出原始按键，`power` 除外；
-它默认为 `none`，以免与 logind 竞争。
+而不是“未映射”。默认映射会为配置文件拥有的每个按键重新发出其物理主按键，
+`power` 除外；它默认为 `none`，以免与 logind 竞争。
 
 ## 布局
 
@@ -101,10 +103,11 @@ Input 是 `KEY_TV`；未映射的应用键和静音键会透传。助手键直�
 | `slides` | Slides | LibreOffice Impress 26.8.1、WPS Office 12.1.2 | PageUp/PageDown 翻页，B 黑屏，F5 开始放映，Esc 结束 |
 | `omp` | omp | omp 18.14.2 | Enter 提交，Esc 中断，Ctrl+R 搜索历史，Ctrl+O 展开工具输出，Shift+Tab 切换思考等级，Alt+R 重试 |
 
-每个预设都在单次按下槽位映射全部十二个可操作按键，不含 `none`、`exec:` 或
-`dictation:`。双击和长按保持设备配置文件默认值。映射按各应用的默认键位验证；
-应用内自定义（mpv 的 `input.conf`、omp 的 `~/.omp/agent/keybindings.yml`、omp 的
-Vim 模式）可能改变这些按键。
+每个预设都在单次按下槽位映射其声明的按键，不含 `none`、`exec:` 或
+`dictation:`。在 RC003 上是全部十二个可操作按键；把预设应用到缺少某个按键的
+设备（例如没有 `menu` 的 Chromecast）时会丢弃该槽位。双击和长按保持设备配置
+文件默认值。映射按各应用的默认键位验证；应用内自定义（mpv 的 `input.conf`、
+omp 的 `~/.omp/agent/keybindings.yml`、omp 的 Vim 模式）可能改变这些按键。
 
 预设不是活动状态。应用预设会创建一个用户布局；除非传入 `--activate`，活动布局
 保持不变，`default` 永远不会被修改。预设 id 是保留 id，因此用默认名称应用 `mpv`

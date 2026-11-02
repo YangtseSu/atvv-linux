@@ -67,8 +67,9 @@ pub const RESERVED_LAYOUT_IDS: [&str; 4] = [DEFAULT_LAYOUT, "mpv", "slides", "om
 /// One built-in, read-only layout preset.
 ///
 /// A preset is a template: applying it creates a user layout and never makes
-/// the preset itself active. Every preset maps all twelve action-mapped
-/// buttons on a single press; no slot is `none`.
+/// the preset itself active. Every preset maps its declared buttons on a
+/// single press; no slot is `none`. A layout built for a device profile drops
+/// slots for buttons that profile does not have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutPreset {
     /// Stable id; also reserved against user layout ids.
@@ -79,7 +80,7 @@ pub struct LayoutPreset {
     pub description: &'static str,
     /// Apps and versions the mappings were verified against.
     pub verified_with: &'static str,
-    /// One action per action-mapped button, in [`RemoteButton::LOGICAL`] order.
+    /// One action per preset button, keyed by configuration name.
     pub slots: [(&'static str, &'static str); 12],
     /// Optional long-press timing override.
     pub long_press_ms: Option<u16>,
@@ -661,7 +662,7 @@ impl Config {
             active_layout: DEFAULT_LAYOUT.to_string(),
             layouts: BTreeMap::new(),
             gesture: profile.gesture_timing,
-            map: ActionMap::defaults(),
+            map: ActionMap::defaults_for(profile),
         }
     }
 
@@ -1026,7 +1027,7 @@ fn resolve_layout(
     layouts: &BTreeMap<String, LayoutDocument>,
     allow_exec: bool,
 ) -> Result<(ActionMap, GestureTiming), ConfigError> {
-    let mut map = ActionMap::defaults();
+    let mut map = ActionMap::defaults_for(profile);
     let mut gesture = profile.gesture_timing;
     if id == DEFAULT_LAYOUT {
         return Ok((map, gesture));
@@ -1563,25 +1564,30 @@ impl ConfigDocument {
 }
 
 impl LayoutPreset {
-    /// Build a user layout from this preset.
+    /// Build a user layout from this preset for one device profile.
     ///
-    /// The layout carries every action-mapped button on its single-press
-    /// slot. Double and long presses keep the profile defaults so the preset
-    /// does not add gesture latency.
+    /// Slots for buttons the profile does not have are dropped, so applying a
+    /// preset to a Chromecast never creates a `menu` slot. The layout carries
+    /// every remaining action on its single-press slot. Double and long
+    /// presses keep the profile defaults so the preset does not add gesture
+    /// latency.
     #[must_use]
-    pub fn layout(&self) -> LayoutDocument {
+    pub fn layout_for(&self, profile: &DeviceProfile) -> LayoutDocument {
         let buttons = self
             .slots
             .iter()
-            .map(|(button, action)| {
-                (
-                    (*button).to_string(),
-                    ButtonDocument {
-                        single: Some((*action).to_string()),
-                        double: None,
-                        long: None,
-                    },
-                )
+            .filter_map(|(name, action)| {
+                let button = button_by_name(name)?;
+                profile.has_button(button).then(|| {
+                    (
+                        (*name).to_string(),
+                        ButtonDocument {
+                            single: Some((*action).to_string()),
+                            double: None,
+                            long: None,
+                        },
+                    )
+                })
             })
             .collect();
         LayoutDocument {
@@ -1619,7 +1625,7 @@ impl LayoutPreset {
             return Err(ConfigError::TooManyLayouts);
         }
         let mut next = document.clone();
-        let mut layout = self.layout();
+        let mut layout = self.layout_for(profile);
         if let Some(name) = name {
             let name = name.trim();
             if name.is_empty() {
@@ -1651,7 +1657,7 @@ impl LayoutPreset {
             .layouts
             .get(id)
             .ok_or_else(|| ConfigError::UnknownLayout(id.to_string()))?;
-        let mut replacement = self.layout();
+        let mut replacement = self.layout_for(profile);
         replacement.name = existing.name.clone();
         replacement.description = existing.description.clone();
         next.layouts.insert(id.to_string(), replacement);
@@ -1662,7 +1668,7 @@ impl LayoutPreset {
 }
 
 fn layout_to_toml(layout: &LayoutDocument, profile: &DeviceProfile) -> LayoutToml {
-    let defaults = ActionMap::defaults();
+    let defaults = ActionMap::defaults_for(profile);
     let mut buttons = BTreeMap::new();
     for (name, slots) in &layout.buttons {
         let Some(button) = button_by_name(name) else {
@@ -2557,9 +2563,18 @@ mod tests {
                     preset.id
                 );
             }
-            assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
-            for button in RemoteButton::LOGICAL {
+            assert_eq!(seen.len(), RC003.buttons.len());
+            for &button in RC003.buttons {
                 assert!(seen.contains(&button), "{} misses {button}", preset.id);
+            }
+
+            let google = preset.layout_for(&CHROMECAST);
+            assert!(!google.buttons.contains_key("menu"));
+            assert!(google.buttons.contains_key("tv"));
+            assert_eq!(google.buttons.len(), CHROMECAST.buttons.len() - 3);
+            for name in google.buttons.keys() {
+                let button = button_by_name(name).expect("known button");
+                assert!(CHROMECAST.has_button(button), "{name} is not on the device");
             }
         }
     }
@@ -2632,7 +2647,7 @@ mod tests {
         let layout = &document.layouts["movie"];
         assert_eq!(layout.name, "Movie");
         assert_eq!(layout.description.as_deref(), Some(MPV_PRESET.description));
-        for button in RemoteButton::LOGICAL {
+        for &button in RC003.buttons {
             assert!(layout.slot(button, Trigger::Single).is_some(), "{button}");
         }
         assert_eq!(
@@ -2670,6 +2685,61 @@ mod tests {
             Err(ConfigError::LayoutExists(_))
         ));
         assert_eq!(document.layouts["agent"].name, "omp");
+    }
+
+    #[test]
+    fn chromecast_app_keys_round_trip_through_the_config() {
+        let mut document = ConfigDocument::from_config(&Config::defaults(&CHROMECAST));
+        let mut layout = LayoutDocument {
+            name: "Media".to_string(),
+            ..LayoutDocument::default()
+        };
+        layout.set_slot(
+            RemoteButton::Mute,
+            Trigger::Single,
+            Some("key:KEY_F13".to_string()),
+        );
+        layout.set_slot(
+            RemoteButton::YouTube,
+            Trigger::Single,
+            Some("combo:ctrl+KEY_Y".to_string()),
+        );
+        layout.set_slot(
+            RemoteButton::Netflix,
+            Trigger::Single,
+            Some("key:KEY_F15".to_string()),
+        );
+        document.layouts.insert("media".to_string(), layout);
+        document.active_layout = "media".to_string();
+        let config = document.validate(&CHROMECAST).unwrap();
+        assert_eq!(
+            config.map.resolve(RemoteButton::Mute, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_F13".to_string()
+            })
+        );
+        assert_eq!(
+            config.map.resolve(RemoteButton::YouTube, Trigger::Single),
+            Some(&Action::Combo {
+                mods: vec!["ctrl".to_string()],
+                key: "KEY_Y".to_string()
+            })
+        );
+
+        let path = path("chromecast-app-keys");
+        save_document(&path, &document, &CHROMECAST).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[layouts.media.buttons.mute]"), "{text}");
+        assert!(text.contains("[layouts.media.buttons.youtube]"), "{text}");
+        assert!(text.contains("[layouts.media.buttons.netflix]"), "{text}");
+        let loaded = load(&path, &CHROMECAST).unwrap().config;
+        assert_eq!(
+            loaded.map.resolve(RemoteButton::Netflix, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_F15".to_string()
+            })
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

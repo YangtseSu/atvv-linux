@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Mapping board: twelve key cards around the RC003 diagram.
+//! Mapping board: one card per physical button around the profile diagram.
 //!
 //! The board is a view over [`GuiModel`]. It renders every action slot and
 //! reports clicks through callbacks; selection and document state stay in the
@@ -16,26 +16,32 @@ use gtk::prelude::*;
 
 use crate::diagram::RemoteDiagram;
 use crate::i18n::{tr, tr_args};
-use crate::model::{GuiModel, action_label, button_label, trigger_label};
+use crate::model::{GuiModel, action_label, button_label, button_label_for, trigger_label};
 
 /// Buttons shown left of the remote, top to bottom.
-pub const LEFT_COLUMN: [RemoteButton; 6] = [
+///
+/// The two columns are the superset of every profile's physical buttons; a
+/// card is hidden when the active profile has no such button.
+pub const LEFT_COLUMN: [RemoteButton; 7] = [
     RemoteButton::Power,
     RemoteButton::Up,
     RemoteButton::Left,
     RemoteButton::Back,
     RemoteButton::Home,
     RemoteButton::Menu,
+    RemoteButton::YouTube,
 ];
 
 /// Buttons shown right of the remote, top to bottom.
-pub const RIGHT_COLUMN: [RemoteButton; 6] = [
+pub const RIGHT_COLUMN: [RemoteButton; 8] = [
     RemoteButton::Right,
     RemoteButton::Ok,
     RemoteButton::Down,
     RemoteButton::VolumeUp,
     RemoteButton::VolumeDown,
     RemoteButton::Tv,
+    RemoteButton::Mute,
+    RemoteButton::Netflix,
 ];
 
 /// Gesture slots every card shows, top to bottom.
@@ -55,6 +61,7 @@ fn remove_selection_classes(classed: &impl IsA<gtk::Widget>, classes: &[&str]) {
 /// One button card: the label plus the three gesture slots.
 pub struct KeyCard {
     root: gtk::Box,
+    name: gtk::Label,
     warn: gtk::Image,
     slots: [gtk::Button; 3],
     actions: [gtk::Label; 3],
@@ -65,6 +72,17 @@ impl KeyCard {
     #[must_use]
     pub fn root(&self) -> &gtk::Box {
         &self.root
+    }
+
+    /// Update the visible title after a profile change.
+    pub fn set_label(&self, label: &str) {
+        self.name.set_text(label);
+    }
+
+    /// Rendered card title.
+    #[must_use]
+    pub fn label_text(&self) -> String {
+        self.name.text().to_string()
     }
 
     /// One gesture slot of this card.
@@ -142,6 +160,7 @@ impl KeyCard {
 
         Self {
             root,
+            name,
             warn,
             slots,
             actions,
@@ -156,6 +175,7 @@ pub struct MappingBoard {
     diagram: RemoteDiagram,
     voice_card: gtk::Button,
     voice_output: gtk::Label,
+    voice_sub: gtk::Label,
 }
 
 impl MappingBoard {
@@ -199,7 +219,7 @@ impl MappingBoard {
         center.append(&hint);
         center.append(diagram.root());
 
-        let (voice_card, voice_output) = build_voice_card();
+        let (voice_card, voice_output, voice_sub) = build_voice_card();
         center.append(&voice_card);
 
         root.append(&left);
@@ -212,6 +232,7 @@ impl MappingBoard {
             diagram,
             voice_card,
             voice_output,
+            voice_sub,
         }
     }
 
@@ -281,8 +302,11 @@ impl MappingBoard {
         let conflicts = model.conflicts();
         let selected = (!voice_selected).then_some((model.selected, model.trigger));
         for (button, card) in &self.cards {
-            let selected_card = !voice_selected && *button == model.selected;
-            let conflicted = conflicts.contains(button);
+            let present = model.profile.has_button(*button);
+            card.root.set_visible(present);
+            card.set_label(button_label_for(&model.profile, *button));
+            let selected_card = present && !voice_selected && *button == model.selected;
+            let conflicted = present && conflicts.contains(button);
             remove_selection_classes(&card.root, &["selected", "conflict"]);
             if selected_card {
                 card.root.add_css_class("selected");
@@ -331,6 +355,11 @@ impl MappingBoard {
 
         self.voice_output
             .set_text(model.document.trigger_key.as_deref().unwrap_or("none"));
+        self.voice_sub
+            .set_text(&match model.profile.primary_key(RemoteButton::Voice) {
+                Some(key) => tr_args("Fixed {key} · ATVV microphone", &[("key", key)]),
+                None => tr("Assistant key · ATVV microphone").to_string(),
+            });
         remove_selection_classes(&self.voice_card, &["selected"]);
         if voice_selected {
             self.voice_card.add_css_class("selected");
@@ -347,7 +376,7 @@ impl Default for MappingBoard {
     }
 }
 
-fn build_voice_card() -> (gtk::Button, gtk::Label) {
+fn build_voice_card() -> (gtk::Button, gtk::Label, gtk::Label) {
     let button = gtk::Button::builder()
         .halign(gtk::Align::Fill)
         .tooltip_text(tr("Recording key settings"))
@@ -388,7 +417,7 @@ fn build_voice_card() -> (gtk::Button, gtk::Label) {
     row.append(&copy);
     row.append(&chevron);
     button.set_child(Some(&row));
-    (button, chip)
+    (button, chip, sub)
 }
 
 /// Scroll `target` into view inside `scroller` on both axes.
@@ -435,6 +464,20 @@ mod tests {
             assert!(seen.contains(&button), "{button} has no card");
         }
         assert_eq!(seen.len(), RemoteButton::LOGICAL.len());
+    }
+
+    #[test]
+    fn every_profile_button_has_a_card_in_a_column() {
+        let mut seen = BTreeSet::new();
+        for button in LEFT_COLUMN.into_iter().chain(RIGHT_COLUMN) {
+            seen.insert(button);
+        }
+        for profile in [atvv_protocol::RC003, atvv_protocol::CHROMECAST] {
+            for button in profile.buttons {
+                assert!(seen.contains(button), "{} misses {button}", profile.id);
+            }
+            assert!(!seen.contains(&RemoteButton::Voice));
+        }
     }
 
     #[test]

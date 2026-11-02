@@ -43,7 +43,7 @@ fn open_reader(path: &std::path::Path) -> evdevil::EventReader {
 #[test]
 #[ignore = "needs a connected RC003, /dev/uinput, and manual Up/OK presses"]
 fn rc003_pointer_actions_reach_the_kernel() {
-    let mut map = ActionMap::defaults();
+    let mut map = ActionMap::defaults_for(&RC003);
     map.set(
         RemoteButton::Up,
         Trigger::Single,

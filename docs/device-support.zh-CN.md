@@ -43,8 +43,9 @@
 - HID 使用者控制：电源是 `KEY_COFFEE`，OK 是 `KEY_SELECT`，主页是
   `KEY_HOMEPAGE`，返回是 `KEY_BACK`，Input 是 `KEY_TV`，静音是 `KEY_MUTE`。
   YouTube 和 Netflix 是 `KEY_CAMERA_ACCESS_DISABLE` 与
-  `KEY_CAMERA_ACCESS_TOGGLE`，会透传。助手键不产生 evdev 事件，而是直接发送
-  ATVV `AUDIO_START`；守护进程从会话开始/停止合成消费者触发键。
+  `KEY_CAMERA_ACCESS_TOGGLE`。三者都可映射，默认会重新发出各自的物理按键。
+  助手键不产生 evdev 事件，而是直接发送 ATVV `AUDIO_START`；守护进程从会话
+  开始/停止合成消费者触发键。
 
 ## 添加设备
 

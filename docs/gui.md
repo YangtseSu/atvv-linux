@@ -41,9 +41,15 @@ switch. Restart `atvv-config` after changing the desktop language.
 The window is a three-column board around the active device's vector diagram
 (RC003 or Chromecast Voice Remote):
 
-- Left cards: Power, Up, Left, Back, Home, Menu.
+- Left cards: Power, Up, Left, Back, Home, Menu, and—on the
+  Chromecast—YouTube and Mute.
 - Center: the remote diagram and the voice-key card.
-- Right cards: Right, OK, Down, Volume up, Volume down, TV.
+- Right cards: Right, OK, Down, Volume up, Volume down, TV, and—on the
+  Chromecast—Netflix. The Chromecast has no Menu card, and its `tv` slot is
+  labelled Input.
+
+The card set follows the active profile, so switching devices swaps the
+buttons and the diagram together.
 
 Every card shows its three gesture slots, **Single**, **Double**, and
 **Long**, with the resolved action in compact form (`Return`, `F13`,
@@ -115,10 +121,10 @@ dirty the footer shows **Revert** and **Apply**.
 
 **New from preset…** opens the built-in catalog: mpv, Slides (LibreOffice
 Impress and WPS Presentation), and omp, each with the app version it was
-verified against. Selecting a preset previews all twelve button actions and
-pre-fills a unique name. **Create** stages an inactive user layout; the
-current layout stays active and the document stays dirty until **Apply** and
-then **Use**. **Reset to preset…** in a user layout's menu opens the same
+verified against. Selecting a preset previews the actions for the active
+device's buttons and pre-fills a unique name. **Create** stages an inactive
+user layout; the current layout stays active and the document stays dirty
+until **Apply** and then **Use**. **Reset to preset…** in a user layout's menu opens the same
 picker, names the affected layout, and asks for confirmation before replacing
 its slots; the layout keeps its name and description. Default does not offer
 reset, and preset rows are never edited or deleted. ATVV does not detect the

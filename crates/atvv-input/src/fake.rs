@@ -43,6 +43,8 @@ pub const FAKE_REMOTE: DeviceProfile = DeviceProfile {
     sample_rate: 16_000,
     gain_db: 0,
     button_keys: RC003.button_keys,
+    buttons: RC003.buttons,
+    button_labels: RC003.button_labels,
     trigger_from_session: false,
     // Short windows keep the smoke test quick; timing correctness is
     // exercised with RC003 values in the gesture unit tests.

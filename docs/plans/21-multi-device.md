@@ -29,8 +29,6 @@ Connect the RC003 and Chromecast to this host and record the two-device switch
   no recorded RC003 + Chromecast run on one host.
 - `GetDevices` does not track a last-seen timestamp; it reports the registry,
   active/connected state, layout, name, label, profile, and battery.
-- The board is still RC003-shaped; the Chromecast profile uses the same twelve
-  cards and leaves app/mute keys unmapped.
 
 ## Decision
 
@@ -58,8 +56,8 @@ consumer-side capture selection would need a per-device source and routing.
   device entry, and sets it active; it does not discard other known devices or
   layouts.
 - Devices of different profiles are supported: the active device selects the
-  session profile, source name, input keymap, and layout. The board remains
-  RC003-shaped until a profile-driven diagram exists.
+  session profile, source name, input keymap, layout, and board button set.
+  The diagram, cards, and preset preview follow the active profile.
 
 ## Daemon
 
@@ -93,8 +91,10 @@ consumer-side capture selection would need a per-device source and routing.
   profile, battery, connected/last seen, active check, pair hint.
 - Switching is blocked while the document is dirty; the user applies or
   reverts first. Test mode ends on a switch.
-- The board and editor reload the active device's layout. A failed switch
-  keeps the old device selected and shows an error.
+- The board and editor reload the active device's layout and button set. The
+  Chromecast exposes Mute, YouTube, and Netflix and hides Menu; its `tv` slot
+  is labelled Input. A failed switch keeps the old device selected and shows
+  an error.
 - The GUI never talks to BlueZ or PipeWire; it calls D-Bus only. Pairing stays
   in `atvvctl pair`; the GUI shows the command.
 
@@ -110,7 +110,9 @@ consumer-side capture selection would need a per-device source and routing.
 - Registry persistence, migration, and validation; `pair` preserves entries.
 - Two fake devices on a private bus: switch, layout reload, capture ends,
   failure rollback, old address not grabbed, source name unchanged.
-- GUI: chip/popover, dirty block, per-device map, error state; UI smoke.
+- GUI: chip/popover, dirty block, per-device map, error state; UI smoke with
+  the RC003 and Chromecast button sets, preset preview, and the
+  session-driven Assistant test event.
 - [hardware] Real RC003: switch to a second device and back; the active RC003
   still streams and the source survives. The second device path needs real
   hardware; a fake remote proves only the code path. No hardware claim without
@@ -161,8 +163,6 @@ released` around two real presses. See
 ## Out of scope
 
 - Simultaneous devices and per-device sources (`atvv-<address>`).
-- A second hardware profile's diagram/button geometry; the board is still
-  RC003-shaped. That needs a profile-driven diagram/button set.
 - GUI pairing, forgetting, or BlueZ scanning; `atvvctl pair` remains the
   pairing path.
 
@@ -213,6 +213,17 @@ released` around two real presses. See
   documented A0 firmware. Recorded in
   `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
   pending.
+- 2026-11-02 — profile-driven board: `RemoteButton` gained `mute`, `youtube`,
+  and `netflix`; `DeviceProfile` now declares its physical `buttons` and
+  label overrides, and the Chromecast maps `KEY_MUTE`,
+  `KEY_CAMERA_ACCESS_DISABLE`, and `KEY_CAMERA_ACCESS_TOGGLE` instead of
+  passing them through. Pass-through defaults are derived from the profile's
+  primary keys. The GUI hides buttons the active profile lacks (no Menu on
+  the Chromecast), labels its `tv` slot as Input, adds the three hotspots,
+  and filters the preset preview/application to the profile's buttons.
+  Capture mode now publishes the session-driven Assistant edge as a `voice`
+  `ButtonEvent` and does not hold the configured trigger while testing.
+  `cargo test --workspace` and workspace clippy passed.
 - 2026-11-02 — the GUI now selects an SVG asset and hotspot table per device
   profile. The RC003 asset moved to `remote-miremote-rc003.svg`; the new
   `remote-google-chromecast.svg` follows the Chromecast layout and shows the

@@ -162,10 +162,10 @@ A physical press log with the `uaccess` rule active mapped the buttons
 | Back | `KEY_BACK` | `back` |
 | Home | `KEY_HOMEPAGE` | `home` |
 | Volume +/− | `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN` | volume |
-| Mute | `KEY_MUTE` | unmapped (passes through) |
+| Mute | `KEY_MUTE` | `mute` |
 | Input (bottom right) | `KEY_TV` | `tv` |
-| YouTube | `KEY_CAMERA_ACCESS_DISABLE` | unmapped (passes through) |
-| Netflix | `KEY_CAMERA_ACCESS_TOGGLE` | unmapped (passes through) |
+| YouTube | `KEY_CAMERA_ACCESS_DISABLE` | `youtube` |
+| Netflix | `KEY_CAMERA_ACCESS_TOGGLE` | `netflix` |
 | Assistant/Mic | **no evdev event** | ATVV directly |
 
 The remote has no Menu button and no key labelled TV; the bottom-right Input

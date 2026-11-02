@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
 
-use atvv_protocol::profile::{GestureTiming, RemoteButton};
+use atvv_protocol::profile::{DeviceProfile, GestureTiming, RemoteButton};
 use thiserror::Error;
 
 use crate::gesture::Policy;
@@ -383,45 +383,31 @@ pub struct ActionMap {
     slots: BTreeMap<RemoteButton, ButtonActions>,
 }
 
-impl Default for ActionMap {
-    fn default() -> Self {
-        Self::defaults()
-    }
-}
-
 impl ActionMap {
-    /// Pass-through defaults: each key is re-emitted unchanged so a grabbed
-    /// button still reaches the compositor.
+    /// Pass-through defaults derived from a device profile: each physical
+    /// button re-emits its own primary key so a grabbed button still reaches
+    /// the compositor.
     ///
     /// Power defaults to `none`: emitting `KEY_POWER` would race logind's
     /// `HandlePowerKey`, and the desktop policy belongs to the daemon config
-    /// (step 06). No desktop-specific shortcuts are baked in.
+    /// (step 06). No desktop-specific shortcuts are baked in. Buttons the
+    /// profile does not have get no action.
     #[must_use]
-    pub fn defaults() -> Self {
+    pub fn defaults_for(profile: &DeviceProfile) -> Self {
         let mut map = Self {
             slots: BTreeMap::new(),
         };
-        map.insert(RemoteButton::Power, Trigger::Single, Action::None);
-        for (button, key) in [
-            (RemoteButton::Ok, "KEY_ENTER"),
-            (RemoteButton::Back, "KEY_BACK"),
-            (RemoteButton::Up, "KEY_UP"),
-            (RemoteButton::Down, "KEY_DOWN"),
-            (RemoteButton::Left, "KEY_LEFT"),
-            (RemoteButton::Right, "KEY_RIGHT"),
-            (RemoteButton::Home, "KEY_HOMEPAGE"),
-            (RemoteButton::Menu, "KEY_MENU"),
-            (RemoteButton::Tv, "KEY_GRAVE"),
-            (RemoteButton::VolumeUp, "KEY_VOLUMEUP"),
-            (RemoteButton::VolumeDown, "KEY_VOLUMEDOWN"),
-        ] {
-            map.insert(
-                button,
-                Trigger::Single,
+        for button in profile.buttons {
+            let action = if *button == RemoteButton::Power {
+                Action::None
+            } else if let Some(key) = profile.primary_key(*button) {
                 Action::Key {
                     name: key.to_string(),
-                },
-            );
+                }
+            } else {
+                continue;
+            };
+            map.insert(*button, Trigger::Single, action);
         }
         map
     }
@@ -628,9 +614,9 @@ mod tests {
     }
 
     #[test]
-    fn defaults_cover_all_twelve_buttons() {
-        let map = ActionMap::defaults();
-        for button in RemoteButton::LOGICAL {
+    fn defaults_cover_the_profile_buttons() {
+        let map = ActionMap::defaults_for(&atvv_protocol::RC003);
+        for &button in atvv_protocol::RC003.buttons {
             assert!(
                 map.resolve(button, Trigger::Single).is_some(),
                 "{button} missing"
@@ -643,11 +629,45 @@ mod tests {
             Some(&Action::None)
         );
         assert_eq!(map.resolve(RemoteButton::Voice, Trigger::Single), None);
+        assert_eq!(map.resolve(RemoteButton::Mute, Trigger::Single), None);
+
+        let google = ActionMap::defaults_for(&atvv_protocol::CHROMECAST);
+        for &button in atvv_protocol::CHROMECAST.buttons {
+            assert!(
+                google.resolve(button, Trigger::Single).is_some(),
+                "{button} missing"
+            );
+        }
+        assert_eq!(
+            google.resolve(RemoteButton::Mute, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_MUTE".to_string()
+            })
+        );
+        assert_eq!(
+            google.resolve(RemoteButton::YouTube, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_CAMERA_ACCESS_DISABLE".to_string()
+            })
+        );
+        assert_eq!(
+            google.resolve(RemoteButton::Netflix, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_CAMERA_ACCESS_TOGGLE".to_string()
+            })
+        );
+        assert_eq!(
+            google.resolve(RemoteButton::Tv, Trigger::Single),
+            Some(&Action::Key {
+                name: "KEY_TV".to_string()
+            })
+        );
+        assert_eq!(google.resolve(RemoteButton::Menu, Trigger::Single), None);
     }
 
     #[test]
     fn repeat_policy_matches_the_remote() {
-        let map = ActionMap::defaults();
+        let map = ActionMap::defaults_for(&atvv_protocol::RC003);
         let timing = atvv_protocol::RC003.gesture_timing;
         assert_eq!(
             map.policy(RemoteButton::Back, &timing).repeat,
@@ -668,7 +688,7 @@ mod tests {
     #[test]
     fn secondary_slots_disable_repeat() {
         let timing = atvv_protocol::RC003.gesture_timing;
-        let mut map = ActionMap::defaults();
+        let mut map = ActionMap::defaults_for(&atvv_protocol::RC003);
         map.set(
             RemoteButton::VolumeUp,
             Trigger::Long,
@@ -697,7 +717,7 @@ mod tests {
     #[test]
     fn pointer_actions_use_gesture_slots_without_keyboard_repeat() {
         let timing = atvv_protocol::RC003.gesture_timing;
-        let mut map = ActionMap::defaults();
+        let mut map = ActionMap::defaults_for(&atvv_protocol::RC003);
         map.set(
             RemoteButton::Up,
             Trigger::Single,
@@ -721,7 +741,7 @@ mod tests {
         assert!(policy.long_press);
         assert_eq!(policy.repeat, None);
 
-        let mut single = ActionMap::defaults();
+        let mut single = ActionMap::defaults_for(&atvv_protocol::RC003);
         single
             .set(
                 RemoteButton::Up,
@@ -735,7 +755,7 @@ mod tests {
     #[test]
     fn voice_and_combos_do_not_repeat() {
         let timing = atvv_protocol::RC003.gesture_timing;
-        let mut map = ActionMap::defaults();
+        let mut map = ActionMap::defaults_for(&atvv_protocol::RC003);
         assert_eq!(
             map.set(
                 RemoteButton::Voice,

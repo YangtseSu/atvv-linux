@@ -25,7 +25,7 @@ use crate::actions::{
 };
 use crate::i18n::{tr, tr_args};
 use crate::keypicker::KeyPicker;
-use crate::model::{GuiModel, button_label, trigger_label};
+use crate::model::{GuiModel, button_label_for, trigger_label};
 
 /// Hint shown under the action fields.
 fn action_hint(kind: ActionKind, allow_exec: bool) -> &'static str {
@@ -381,7 +381,7 @@ impl ActionEditor {
         self.title.set_title(&tr_args(
             "{button} · {trigger}",
             &[
-                ("button", button_label(model.selected)),
+                ("button", button_label_for(&model.profile, model.selected)),
                 ("trigger", trigger_label(model.trigger)),
             ],
         ));

@@ -23,13 +23,19 @@ pub enum RemoteButton {
     Tv,
     VolumeUp,
     VolumeDown,
+    /// The mute key on remotes that have one.
+    Mute,
+    /// The YouTube app key on the Chromecast remote.
+    YouTube,
+    /// The Netflix app key on the Chromecast remote.
+    Netflix,
     /// The voice key drives ATVV; it is grabbed but not action-mapped.
     Voice,
 }
 
 impl RemoteButton {
     /// Every button a profile can describe.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 16] = [
         Self::Power,
         Self::Ok,
         Self::Back,
@@ -42,11 +48,15 @@ impl RemoteButton {
         Self::Tv,
         Self::VolumeUp,
         Self::VolumeDown,
+        Self::Mute,
+        Self::YouTube,
+        Self::Netflix,
         Self::Voice,
     ];
 
-    /// The twelve action-mapped buttons; the voice key is excluded.
-    pub const LOGICAL: [Self; 12] = [
+    /// Every action-mapped button; the voice key is excluded. A profile lists
+    /// the subset it physically has in [`DeviceProfile::buttons`].
+    pub const LOGICAL: [Self; 15] = [
         Self::Power,
         Self::Ok,
         Self::Back,
@@ -59,6 +69,9 @@ impl RemoteButton {
         Self::Tv,
         Self::VolumeUp,
         Self::VolumeDown,
+        Self::Mute,
+        Self::YouTube,
+        Self::Netflix,
     ];
 
     /// Stable configuration name.
@@ -77,6 +90,9 @@ impl RemoteButton {
             Self::Tv => "tv",
             Self::VolumeUp => "volume_up",
             Self::VolumeDown => "volume_down",
+            Self::Mute => "mute",
+            Self::YouTube => "youtube",
+            Self::Netflix => "netflix",
             Self::Voice => "voice",
         }
     }
@@ -166,6 +182,12 @@ pub struct DeviceProfile {
     pub gain_db: i8,
     /// Physical key names per logical button; aliases repeat a button.
     pub button_keys: &'static [ButtonKey],
+    /// Action-mapped physical buttons, in board order. The voice key is not
+    /// listed because it drives ATVV and is never action-mapped.
+    pub buttons: &'static [RemoteButton],
+    /// Labels that differ from the logical button name, e.g. the Chromecast
+    /// Input key, which is the logical `tv` slot.
+    pub button_labels: &'static [(RemoteButton, &'static str)],
     /// Synthesize the configured trigger when the ATVV session starts/stops.
     ///
     /// True for remotes whose voice key has no evdev event and opens the
@@ -188,6 +210,22 @@ impl DeviceProfile {
     #[must_use]
     pub fn primary_key(&self, button: RemoteButton) -> Option<&'static str> {
         self.key_names(button).next()
+    }
+
+    /// Whether the device has a physical button for this logical slot.
+    #[must_use]
+    pub fn has_button(&self, button: RemoteButton) -> bool {
+        self.buttons.contains(&button)
+    }
+
+    /// Display label for a physical button, when the profile names it
+    /// differently from the logical slot (Chromecast: `tv` is "Input").
+    #[must_use]
+    pub fn label(&self, button: RemoteButton) -> Option<&'static str> {
+        self.button_labels
+            .iter()
+            .find(|(candidate, _)| *candidate == button)
+            .map(|(_, label)| *label)
     }
 
     #[must_use]
@@ -321,6 +359,22 @@ pub const RC003: DeviceProfile = DeviceProfile {
             key: "KEY_F5",
         },
     ],
+    // Board order: left column, then right column.
+    buttons: &[
+        RemoteButton::Power,
+        RemoteButton::Up,
+        RemoteButton::Left,
+        RemoteButton::Back,
+        RemoteButton::Home,
+        RemoteButton::Menu,
+        RemoteButton::Right,
+        RemoteButton::Ok,
+        RemoteButton::Down,
+        RemoteButton::VolumeUp,
+        RemoteButton::VolumeDown,
+        RemoteButton::Tv,
+    ],
+    button_labels: &[],
     trigger_from_session: false,
     gesture_timing: GestureTiming {
         double_click_ms: 300,
@@ -397,13 +451,8 @@ pub const CHROMECAST: DeviceProfile = DeviceProfile {
             button: RemoteButton::Home,
             key: "KEY_HOMEPAGE",
         },
-        // The 2020/2024 remote has no menu key; the app/input keys stay
-        // unmapped and pass through. Keep the logical slot bound to a key the
-        // descriptor advertises but the device never emits.
-        ButtonKey {
-            button: RemoteButton::Menu,
-            key: "KEY_PLAYPAUSE",
-        },
+        // The 2020/2024 remote has no menu key. The two app keys are the
+        // camera-access usages Linux hid-input assigns to this descriptor.
         ButtonKey {
             button: RemoteButton::Tv,
             key: "KEY_TV",
@@ -416,7 +465,37 @@ pub const CHROMECAST: DeviceProfile = DeviceProfile {
             button: RemoteButton::VolumeDown,
             key: "KEY_VOLUMEDOWN",
         },
+        ButtonKey {
+            button: RemoteButton::Mute,
+            key: "KEY_MUTE",
+        },
+        ButtonKey {
+            button: RemoteButton::YouTube,
+            key: "KEY_CAMERA_ACCESS_DISABLE",
+        },
+        ButtonKey {
+            button: RemoteButton::Netflix,
+            key: "KEY_CAMERA_ACCESS_TOGGLE",
+        },
     ],
+    // Board order: left column, then right column.
+    buttons: &[
+        RemoteButton::Power,
+        RemoteButton::Up,
+        RemoteButton::Left,
+        RemoteButton::Back,
+        RemoteButton::Home,
+        RemoteButton::YouTube,
+        RemoteButton::Mute,
+        RemoteButton::Right,
+        RemoteButton::Ok,
+        RemoteButton::Down,
+        RemoteButton::VolumeUp,
+        RemoteButton::VolumeDown,
+        RemoteButton::Tv,
+        RemoteButton::Netflix,
+    ],
+    button_labels: &[(RemoteButton::Tv, "Input")],
     // The Assistant key emits no evdev key; it opens ATVV directly. The
     // daemon synthesizes the consumer trigger from the session start/stop.
     trigger_from_session: true,
@@ -468,8 +547,8 @@ mod tests {
     }
 
     #[test]
-    fn every_logical_button_has_a_key() {
-        for button in RemoteButton::LOGICAL {
+    fn rc003_every_physical_button_has_a_key() {
+        for &button in RC003.buttons {
             assert!(RC003.primary_key(button).is_some(), "{button} has no key");
         }
         assert_eq!(RC003.primary_key(RemoteButton::Voice), Some("KEY_F5"));
@@ -479,6 +558,10 @@ mod tests {
             RC003.key_names(RemoteButton::Ok).collect::<Vec<_>>(),
             vec!["KEY_ENTER", "KEY_KPENTER"]
         );
+        assert_eq!(RC003.buttons.len(), 12);
+        assert!(!RC003.has_button(RemoteButton::Mute));
+        assert!(!RC003.has_button(RemoteButton::Voice));
+        assert_eq!(RC003.label(RemoteButton::Tv), None);
     }
 
     #[test]
@@ -500,20 +583,37 @@ mod tests {
             Some("KEY_HOMEPAGE")
         );
         assert_eq!(CHROMECAST.primary_key(RemoteButton::Voice), None);
+        assert_eq!(CHROMECAST.primary_key(RemoteButton::Mute), Some("KEY_MUTE"));
+        assert_eq!(
+            CHROMECAST.primary_key(RemoteButton::YouTube),
+            Some("KEY_CAMERA_ACCESS_DISABLE")
+        );
+        assert_eq!(
+            CHROMECAST.primary_key(RemoteButton::Netflix),
+            Some("KEY_CAMERA_ACCESS_TOGGLE")
+        );
         const { assert!(CHROMECAST.trigger_from_session) };
         const { assert!(!RC003.trigger_from_session) };
         assert_eq!(CHROMECAST.primary_key(RemoteButton::Tv), Some("KEY_TV"));
         assert_eq!(CHROMECAST.gesture_timing.stable_release_ms, 0);
+        assert_eq!(CHROMECAST.label(RemoteButton::Tv), Some("Input"));
+        assert!(CHROMECAST.has_button(RemoteButton::Mute));
+        assert!(CHROMECAST.has_button(RemoteButton::YouTube));
+        assert!(CHROMECAST.has_button(RemoteButton::Netflix));
+        assert!(!CHROMECAST.has_button(RemoteButton::Menu));
+        assert!(!CHROMECAST.has_button(RemoteButton::Voice));
     }
 
     #[test]
-    fn chromecast_every_logical_button_has_a_key() {
-        for button in RemoteButton::LOGICAL {
+    fn chromecast_every_physical_button_has_a_key() {
+        for &button in CHROMECAST.buttons {
             assert!(
                 CHROMECAST.primary_key(button).is_some(),
                 "{button} has no key"
             );
         }
+        assert_eq!(CHROMECAST.buttons.len(), 14);
+        assert_eq!(CHROMECAST.primary_key(RemoteButton::Menu), None);
     }
 
     #[test]

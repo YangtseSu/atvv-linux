@@ -620,12 +620,13 @@ impl Drop for InputRuntime {
 mod tests {
     use super::*;
     use crate::Trigger;
+    use crate::fake::FAKE_REMOTE;
 
     #[test]
     fn dispatch_degrades_without_uinput_instead_of_panicking() {
         let (tx, rx) = mpsc::channel();
         let dispatcher = Dispatcher {
-            map: ActionMap::defaults(),
+            map: ActionMap::defaults_for(&FAKE_REMOTE),
             resolver: KeyResolver,
             vkbd: None,
             vptr: None,
@@ -653,7 +654,7 @@ mod tests {
 
     #[test]
     fn pointer_actions_report_a_missing_pointer_device() {
-        let mut map = ActionMap::defaults();
+        let mut map = ActionMap::defaults_for(&FAKE_REMOTE);
         map.set(
             RemoteButton::Up,
             Trigger::Single,
@@ -686,7 +687,7 @@ mod tests {
     fn release_edges_are_forwarded_without_an_action() {
         let (tx, rx) = mpsc::channel();
         let dispatcher = Dispatcher {
-            map: ActionMap::defaults(),
+            map: ActionMap::defaults_for(&FAKE_REMOTE),
             resolver: KeyResolver,
             vkbd: None,
             vptr: None,
@@ -714,7 +715,7 @@ mod tests {
     fn capture_mode_observes_without_emitting_or_erroring() {
         let (tx, rx) = mpsc::channel();
         let dispatcher = Dispatcher {
-            map: ActionMap::defaults(),
+            map: ActionMap::defaults_for(&FAKE_REMOTE),
             resolver: KeyResolver,
             vkbd: None,
             vptr: None,
@@ -814,7 +815,7 @@ mod kernel_tests {
         let mut fake = FakeRemote::open().expect("fake remote");
         let runtime = InputRuntime::start_with_options(
             FAKE_REMOTE,
-            ActionMap::defaults(),
+            ActionMap::defaults_for(&FAKE_REMOTE),
             InputOptions {
                 voice_trigger: Some("DICTATE".to_string()),
                 ..InputOptions::default()
@@ -869,7 +870,7 @@ mod kernel_tests {
         let _fake = FakeRemote::open().expect("fake remote");
         let runtime = InputRuntime::start_with_options(
             FAKE_REMOTE,
-            ActionMap::defaults(),
+            ActionMap::defaults_for(&FAKE_REMOTE),
             InputOptions {
                 voice_trigger: Some("DICTATE".to_string()),
                 ..InputOptions::default()
@@ -959,7 +960,7 @@ mod kernel_tests {
     #[test]
     #[ignore = "needs /dev/uinput and evdev read access"]
     fn pointer_actions_are_dispatched_to_the_pointer_device() {
-        let mut map = ActionMap::defaults();
+        let mut map = ActionMap::defaults_for(&FAKE_REMOTE);
         map.set(
             RemoteButton::Up,
             Trigger::Single,

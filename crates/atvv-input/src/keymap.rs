@@ -819,8 +819,31 @@ mod tests {
             Some(RemoteButton::VolumeDown)
         );
         assert_eq!(map.button(Key::KEY_A), None);
-        // Every logical button is reachable from the profile.
-        for button in RemoteButton::LOGICAL {
+        // Every physical button is reachable from the profile.
+        for &button in RC003.buttons {
+            assert!(
+                map.codes().any(|code| map.button(code) == Some(button)),
+                "{button}"
+            );
+        }
+    }
+
+    #[test]
+    fn chromecast_key_map_covers_app_keys() {
+        let map = KeyMap::from_profile(&atvv_protocol::CHROMECAST).unwrap();
+        for (key, button) in [
+            (Key::KEY_COFFEE, RemoteButton::Power),
+            (Key::KEY_SELECT, RemoteButton::Ok),
+            (Key::KEY_HOMEPAGE, RemoteButton::Home),
+            (Key::KEY_TV, RemoteButton::Tv),
+            (Key::KEY_MUTE, RemoteButton::Mute),
+            (Key::KEY_CAMERA_ACCESS_DISABLE, RemoteButton::YouTube),
+            (Key::KEY_CAMERA_ACCESS_TOGGLE, RemoteButton::Netflix),
+        ] {
+            assert_eq!(map.button(key), Some(button), "{key:?}");
+        }
+        assert_eq!(map.button(Key::KEY_PLAYPAUSE), None);
+        for &button in atvv_protocol::CHROMECAST.buttons {
             assert!(
                 map.codes().any(|code| map.button(code) == Some(button)),
                 "{button}"
@@ -972,10 +995,23 @@ mod tests {
     #[test]
     fn default_map_codes_resolve() {
         let resolver = KeyResolver;
-        let codes = resolver.codes_for(&ActionMap::defaults()).unwrap();
+        let codes = resolver
+            .codes_for(&ActionMap::defaults_for(&RC003))
+            .unwrap();
         assert!(codes.contains(&Key::KEY_ENTER));
         assert!(codes.contains(&Key::KEY_GRAVE));
-        assert!(codes.contains(&Key::KEY_HOMEPAGE));
+        assert!(codes.contains(&Key::KEY_HOME));
+        assert!(codes.contains(&Key::KEY_COMPOSE));
         assert!(!codes.contains(&Key::KEY_POWER));
+
+        let google = resolver
+            .codes_for(&ActionMap::defaults_for(&atvv_protocol::CHROMECAST))
+            .unwrap();
+        assert!(google.contains(&Key::KEY_SELECT));
+        assert!(google.contains(&Key::KEY_TV));
+        assert!(google.contains(&Key::KEY_MUTE));
+        assert!(google.contains(&Key::KEY_CAMERA_ACCESS_DISABLE));
+        assert!(google.contains(&Key::KEY_CAMERA_ACCESS_TOGGLE));
+        assert!(!google.contains(&Key::KEY_ENTER));
     }
 }

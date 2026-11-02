@@ -27,7 +27,9 @@ use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
 use crate::editor::{ActionEditor, VoiceEditor, voice_mode_hint};
 use crate::i18n::{self, tr, tr_args};
 use crate::keylearn;
-use crate::model::{GuiModel, action_label, button_label, trigger_from_name, trigger_label};
+use crate::model::{
+    GuiModel, action_label, button_label, button_label_for, trigger_from_name, trigger_label,
+};
 
 pub const APP_ID: &str = "org.atvv.Config";
 
@@ -648,6 +650,13 @@ enum PresetMode {
     Reset,
 }
 
+/// Resolve a stable configuration name to a logical button.
+fn remote_button(name: &str) -> Option<RemoteButton> {
+    RemoteButton::ALL
+        .into_iter()
+        .find(|button| button.name() == name)
+}
+
 #[derive(Debug, Clone)]
 struct TestResult {
     button: String,
@@ -699,7 +708,7 @@ pub struct AppWindow {
     preset_dialog_title: adw::WindowTitle,
     preset_list: gtk::ListBox,
     preset_rows: RefCell<BTreeMap<&'static str, adw::ActionRow>>,
-    preset_preview_rows: RefCell<BTreeMap<&'static str, adw::ActionRow>>,
+    preset_preview_rows: RefCell<BTreeMap<RemoteButton, adw::ActionRow>>,
     preset_name_row: adw::EntryRow,
     preset_name_list: gtk::ListBox,
     preset_warning: gtk::Label,
@@ -1033,7 +1042,7 @@ impl AppWindow {
                 .build();
             row.set_widget_name(&format!("preset-preview-{}", button.name()));
             preset_preview.append(&row);
-            preset_preview_rows.insert(button.name(), row);
+            preset_preview_rows.insert(button, row);
         }
         let preset_preview_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -1671,12 +1680,13 @@ impl AppWindow {
                     self.refresh_all();
                     self.reload_editor();
                     self.scroll_to_selection();
+                    let label = self.model.borrow().as_ref().map_or_else(
+                        || button_label(button),
+                        |model| button_label_for(&model.profile, button),
+                    );
                     self.toast(&tr_args(
                         "Selected {button} · {trigger}",
-                        &[
-                            ("button", button_label(button)),
-                            ("trigger", trigger_label(trigger)),
-                        ],
+                        &[("button", label), ("trigger", trigger_label(trigger))],
                     ));
                 }
             }
@@ -1708,8 +1718,12 @@ impl AppWindow {
                         || event.trigger.clone(),
                         |trigger| trigger_label(trigger).to_string(),
                     );
+                    let label = self.model.borrow().as_ref().map_or_else(
+                        || button_label(button),
+                        |model| button_label_for(&model.profile, button),
+                    );
                     *self.last_test.borrow_mut() = Some(TestResult {
-                        button: button_label(button).to_string(),
+                        button: label.to_string(),
                         trigger,
                         shown,
                         action,
@@ -1903,6 +1917,7 @@ impl AppWindow {
                 &[("name", name.as_str())],
             ));
         }
+        self.refresh_preset_preview();
         if let Some(preset) = LAYOUT_PRESETS.first() {
             self.select_preset(preset);
             if let Some(row) = self.preset_rows.borrow().get(preset.id) {
@@ -1912,10 +1927,34 @@ impl AppWindow {
         self.preset_dialog.present(Some(&self.window));
     }
 
+    /// Show only the active device's buttons in the preset preview. Slots the
+    /// preset does not define stay blank: the profile default still applies.
+    fn refresh_preset_preview(&self) {
+        let profile = self.model.borrow().as_ref().map(|model| model.profile);
+        for (button, row) in self.preset_preview_rows.borrow().iter() {
+            row.set_visible(profile.is_some_and(|profile| profile.has_button(*button)));
+            row.set_title(profile.map_or_else(
+                || button_label(*button),
+                |profile| button_label_for(&profile, *button),
+            ));
+            row.set_subtitle("");
+        }
+    }
+
     fn select_preset(&self, preset: &'static LayoutPreset) {
         self.preset_selected.set(Some(preset));
-        for (button, action) in preset.slots {
-            if let Some(row) = self.preset_preview_rows.borrow().get(button) {
+        let profile = self.model.borrow().as_ref().map(|model| model.profile);
+        for row in self.preset_preview_rows.borrow().values() {
+            row.set_subtitle("");
+        }
+        for (name, action) in preset.slots {
+            let Some(button) = remote_button(name) else {
+                continue;
+            };
+            if profile.is_some_and(|profile| !profile.has_button(button)) {
+                continue;
+            }
+            if let Some(row) = self.preset_preview_rows.borrow().get(&button) {
                 row.set_subtitle(&action_label(Some(action)).text);
             }
         }
@@ -2886,7 +2925,8 @@ impl AppWindow {
     #[doc(hidden)]
     #[must_use]
     pub fn preset_preview_row(&self, button: &str) -> Option<adw::ActionRow> {
-        self.preset_preview_rows.borrow().get(button).cloned()
+        let button = remote_button(button)?;
+        self.preset_preview_rows.borrow().get(&button).cloned()
     }
 
     #[doc(hidden)]

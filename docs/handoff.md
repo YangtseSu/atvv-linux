@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 239 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 244 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -80,7 +80,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   (sha256 `247870309d6bbd38e2d53747417e46b9740b66b25215f6d885956478b7d2d957`)
   and `atvv-gui-git 0.2.0.r12.g7ec5357-1` were built from commit `7ec5357`;
   the installed r10 pair already runs the same trigger code.
-  Pending: the real RC003+Chromecast switch.
+  The board, editor, and preset dialog now derive the visible key set from
+  `DeviceProfile.buttons`: the Chromecast shows Mute, YouTube, Netflix, and
+  Input, hides Menu, and the preset preview drops slots the device lacks.
+  Capture/test mode publishes the session-driven Assistant edge as a `voice`
+  `ButtonEvent` instead of holding the configured trigger. The r17 `-git`
+  packages predate this fix; rebuild after the commit is pushed. Pending: the
+  real RC003+Chromecast switch.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,

@@ -47,9 +47,10 @@ Package acceptance: [`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-202
 - HID consumer controls: `KEY_COFFEE` is Power, `KEY_SELECT` is OK,
   `KEY_HOMEPAGE` is Home, `KEY_BACK` is Back, `KEY_TV` is Input, and
   `KEY_MUTE` is Mute. YouTube and Netflix are `KEY_CAMERA_ACCESS_DISABLE`
-  and `KEY_CAMERA_ACCESS_TOGGLE` and pass through. The Assistant key emits
-  no evdev key; it sends ATVV `AUDIO_START` directly and the daemon
-  synthesizes the consumer trigger from the session.
+  and `KEY_CAMERA_ACCESS_TOGGLE`; all three are mappable, and their profile
+  defaults re-emit the same keys. The Assistant key emits no evdev key; it
+  sends ATVV `AUDIO_START` directly and the daemon synthesizes the consumer
+  trigger from the session.
 
 ## Adding a device
 

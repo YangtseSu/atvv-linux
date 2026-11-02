@@ -334,8 +334,12 @@ fn zh(text: &str) -> Option<&'static str> {
         "Home" => "主页",
         "Menu" => "菜单",
         "TV" => "电视",
+        "Input" => "输入源",
         "Volume up" => "音量加",
         "Volume down" => "音量减",
+        "Mute" => "静音",
+        "YouTube" => "YouTube",
+        "Netflix" => "Netflix",
         "Voice" => "语音",
 
         // Board and diagram text.
@@ -348,7 +352,8 @@ fn zh(text: &str) -> Option<&'static str> {
         }
         "Recording key settings" => "录音键设置",
         "Voice key" => "语音键",
-        "Fixed KEY_F5 · ATVV microphone" => "固定 KEY_F5 · ATVV 麦克风",
+        "Fixed {key} · ATVV microphone" => "固定 {key} · ATVV 麦克风",
+        "Assistant key · ATVV microphone" => "助理键 · ATVV 麦克风",
         "{button} {trigger}: {action}" => "{button} {trigger}：{action}",
         "{button} · {trigger} · {raw}" => "{button} · {trigger} · {raw}",
         "Voice key: drives the ATVV microphone and is not remappable" => {

@@ -66,18 +66,21 @@ the device entry, so switching reloads the board with that device's layout.
 Known devices persist across daemon restarts. `atvvctl device rename <address>
 <label>` sets or clears the optional label; an empty label clears it.
 
-The twelve mappable buttons are `power`, `ok`, `back`, `up`, `down`, `left`,
-`right`, `home`, `menu`, `tv`, `volume_up`, and `volume_down`. The voice key is
-not mappable: it drives the ATVV microphone and the vinput trigger. The
-`google-chromecast` profile uses `KEY_SELECT` for OK, `KEY_HOMEPAGE` for Home,
-and `KEY_TV` for Input; unmapped app and mute keys pass through. The
-Assistant key sends ATVV `AUDIO_START` directly and the daemon synthesizes
-the configured trigger from the session.
+The mappable buttons are the physical buttons of the active profile. Every
+profile has `power`, `ok`, `back`, `up`, `down`, `left`, `right`, `home`, `tv`,
+`volume_up`, and `volume_down`; the RC003 adds `menu`, and the Chromecast adds
+`mute`, `youtube`, and `netflix`. The board shows only the active device's
+buttons. The voice key is not mappable: it drives the ATVV microphone and the
+vinput trigger. The `google-chromecast` profile uses `KEY_SELECT` for OK,
+`KEY_HOMEPAGE` for Home, `KEY_TV` for Input, `KEY_MUTE` for Mute, and the
+camera-access keys for YouTube and Netflix. The Assistant key sends ATVV
+`AUDIO_START` directly and the daemon synthesizes the configured trigger from
+the session.
 
 Slots are `single`, `double`, and `long`. A missing slot means "use the profile
-default", not "unmapped". The default map re-emits the original key for every
-logical button except `power`, which defaults to `none` so it does not race
-logind.
+default", not "unmapped". The default map re-emits the physical primary key
+for every button the profile has, except `power`, which defaults to `none` so
+it does not race logind.
 
 ## Layouts
 
@@ -112,9 +115,11 @@ Three built-in presets are read-only templates for a user layout:
 | `slides` | Slides | LibreOffice Impress 26.8.1, WPS Office 12.1.2 | PageUp/PageDown, B for a black screen, F5 starts, Esc ends |
 | `omp` | omp | omp 18.14.2 | Enter submits, Esc interrupts, Ctrl+R searches history, Ctrl+O expands tools, Shift+Tab changes thinking, Alt+R retries |
 
-Every preset maps all twelve action-mapped buttons on a single press and
-contains no `none`, `exec:`, or `dictation:`. Double and long presses stay at
-the profile defaults. The mappings were verified against each app's default
+Every preset maps its declared buttons on a single press and contains no
+`none`, `exec:`, or `dictation:`. On the RC003 that is all twelve action
+buttons; applying a preset to a device that lacks a button (for example the
+Chromecast has no `menu`) drops that slot. Double and long presses stay at the
+profile defaults. The mappings were verified against each app's default
 bindings; user remaps in the app (mpv `input.conf`, omp
 `~/.omp/agent/keybindings.yml`, omp Vim mode) can change them.
 

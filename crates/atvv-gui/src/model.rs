@@ -34,8 +34,21 @@ pub fn button_label(button: RemoteButton) -> &'static str {
         RemoteButton::Tv => tr("TV"),
         RemoteButton::VolumeUp => tr("Volume up"),
         RemoteButton::VolumeDown => tr("Volume down"),
+        RemoteButton::Mute => tr("Mute"),
+        RemoteButton::YouTube => tr("YouTube"),
+        RemoteButton::Netflix => tr("Netflix"),
         RemoteButton::Voice => tr("Voice"),
     }
+}
+
+/// Localized button label for a device profile. A profile may name a physical
+/// key differently from its logical slot (Chromecast: the `tv` slot is the
+/// Input key).
+#[must_use]
+pub fn button_label_for(profile: &DeviceProfile, button: RemoteButton) -> &'static str {
+    profile
+        .label(button)
+        .map_or_else(|| button_label(button), tr)
 }
 
 /// Human label for a gesture slot.
@@ -273,7 +286,7 @@ impl GuiModel {
             selected: RemoteButton::Ok,
             trigger: Trigger::Single,
             dirty: false,
-            defaults: ActionMap::defaults(),
+            defaults: ActionMap::defaults_for(&profile),
         })
     }
 
@@ -449,7 +462,7 @@ impl GuiModel {
         let name = name.trim();
         self.check_name(name, None)?;
         let mut next = self.document.clone();
-        let mut layout = preset.layout();
+        let mut layout = preset.layout_for(&self.profile);
         layout.name = name.to_string();
         let id = unique_layout_id(
             &slug_layout_id(name),
@@ -586,7 +599,7 @@ impl GuiModel {
                 .ok_or_else(|| format!("unknown layout {id:?}"))?;
             let name = layout.name.clone();
             let description = layout.description.clone();
-            let mut replacement = preset.layout();
+            let mut replacement = preset.layout_for(&self.profile);
             replacement.name = name;
             replacement.description = description;
             *layout = replacement;
@@ -731,7 +744,7 @@ impl GuiModel {
         let mut conflicts = BTreeSet::new();
         for trigger in [Trigger::Single, Trigger::Double, Trigger::Long] {
             let mut actions: BTreeMap<String, Vec<RemoteButton>> = BTreeMap::new();
-            for button in RemoteButton::LOGICAL {
+            for &button in self.profile.buttons {
                 if let Some(action) = self.effective_slot(button, trigger)
                     && action != "none"
                 {
@@ -790,6 +803,63 @@ mod tests {
         assert_eq!(
             model.effective_slot(RemoteButton::Up, Trigger::Double),
             None
+        );
+    }
+
+    #[test]
+    fn chromecast_model_uses_its_own_buttons_and_defaults() {
+        let mut model = GuiModel::new(ConfigDocument::from_config(&Config::defaults(
+            &atvv_protocol::CHROMECAST,
+        )))
+        .unwrap();
+        for button in [
+            RemoteButton::Mute,
+            RemoteButton::YouTube,
+            RemoteButton::Netflix,
+        ] {
+            assert!(model.profile.has_button(button), "{button}");
+        }
+        assert!(!model.profile.has_button(RemoteButton::Menu));
+        assert_eq!(model.profile.label(RemoteButton::Tv), Some("Input"));
+        assert_eq!(
+            model
+                .effective_slot(RemoteButton::Mute, Trigger::Single)
+                .as_deref(),
+            Some("key:KEY_MUTE")
+        );
+        assert_eq!(
+            model
+                .effective_slot(RemoteButton::YouTube, Trigger::Single)
+                .as_deref(),
+            Some("key:KEY_CAMERA_ACCESS_DISABLE")
+        );
+        assert_eq!(
+            model
+                .effective_slot(RemoteButton::Netflix, Trigger::Single)
+                .as_deref(),
+            Some("key:KEY_CAMERA_ACCESS_TOGGLE")
+        );
+        assert_eq!(
+            model
+                .effective_slot(RemoteButton::Tv, Trigger::Single)
+                .as_deref(),
+            Some("key:KEY_TV")
+        );
+        assert_eq!(
+            model.effective_slot(RemoteButton::Menu, Trigger::Single),
+            None
+        );
+
+        let preset = atvv_config::layout_preset("mpv").expect("mpv preset");
+        let id = model
+            .create_layout_from_preset(preset, "movie")
+            .expect("create");
+        let layout = &model.document.layouts[&id];
+        assert!(layout.slot(RemoteButton::Menu, Trigger::Single).is_none());
+        assert!(layout.slot(RemoteButton::Mute, Trigger::Single).is_none());
+        assert_eq!(
+            layout.slot(RemoteButton::Tv, Trigger::Single),
+            Some("key:KEY_F")
         );
     }
 

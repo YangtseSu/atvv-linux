@@ -699,10 +699,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
             let active = document.active_layout == id;
             if json {
                 let mut slots = serde_json::Map::new();
-                for button in RemoteButton::LOGICAL {
-                    if button == RemoteButton::Voice {
-                        continue;
-                    }
+                for &button in profile.buttons {
                     slots.insert(
                         button.name().to_string(),
                         serde_json::json!({
@@ -756,10 +753,7 @@ fn layout(command: LayoutCommand) -> Result<(), String> {
                     gesture.back_repeat_interval_ms,
                 );
                 println!("slots:");
-                for button in RemoteButton::LOGICAL {
-                    if button == RemoteButton::Voice {
-                        continue;
-                    }
+                for &button in profile.buttons {
                     let slot = |trigger: Trigger| {
                         map.resolve(button, trigger)
                             .map_or_else(|| "-".to_string(), ToString::to_string)
@@ -1079,7 +1073,6 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
     let mut document = client
         .config()
         .map_err(|error| format!("cannot read the configuration: {error}"))?;
-    let status = client.status().ok();
     let mut changed = false;
 
     if let Some(gain_db) = args.gain_db {
@@ -1129,7 +1122,7 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
                 );
             }
             let value = if action.trim().eq_ignore_ascii_case("default") {
-                default_action(status.as_ref(), button, trigger)
+                default_action(&document, button, trigger)
             } else {
                 Some(action.trim().to_string())
             };
@@ -1189,11 +1182,12 @@ fn find_button(name: &str) -> Result<RemoteButton, String> {
 }
 
 fn default_action(
-    _status: Option<&atvv_daemon::StatusView>,
+    document: &ConfigDocument,
     button: RemoteButton,
     trigger: Trigger,
 ) -> Option<String> {
-    ActionMap::defaults()
+    let profile = document.active_profile()?;
+    ActionMap::defaults_for(profile)
         .resolve(button, trigger)
         .map(ToString::to_string)
 }
@@ -1414,7 +1408,7 @@ fn map(command: MapCommand) -> Result<(), String> {
         .as_deref()
         .map(find_button)
         .transpose()?
-        .map_or_else(|| RemoteButton::LOGICAL.to_vec(), |button| vec![button]);
+        .map_or_else(|| profile.buttons.to_vec(), |button| vec![button]);
     if json {
         if let Some(button) = button.as_deref() {
             let button = find_button(button)?;
@@ -2127,7 +2121,7 @@ fn input_fake_remote(hold_seconds: u64) -> Result<(), String> {
         FAKE_REMOTE.bluetooth_names[0]
     );
 
-    let runtime = InputRuntime::start(FAKE_REMOTE, ActionMap::defaults())
+    let runtime = InputRuntime::start(FAKE_REMOTE, ActionMap::defaults_for(&FAKE_REMOTE))
         .map_err(|error| error.to_string())?;
     for message in runtime.degraded() {
         println!("degraded: {message}");
