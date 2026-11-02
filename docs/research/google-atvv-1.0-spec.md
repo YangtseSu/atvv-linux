@@ -204,33 +204,29 @@ interaction, `MIC_OPEN` should fail with `0x0F02`.
 
 ### Real gaps
 
-These three gaps are scheduled as
-[step 25](../plans/25-atvv-spec-conformance.md); the notes below describe the
-current code, not the target state.
+[Step 25](../plans/25-atvv-spec-conformance.md) closed the three protocol
+gaps. No real dynamic-rate device has been run; the rate-change path is
+proven synthetically against a dual-codec test profile.
 
-- **`MIC_OPEN_ERROR` while streaming.** The session currently moves to
-  `Ready` on any `MIC_OPEN_ERROR`, including `0x0F80` while an HTT stream is
-  active. The spec says that error must not interrupt the ongoing stream.
-  The fix is to ignore `MIC_OPEN_ERROR` when the session is already
-  `Streaming`, and to keep the existing `Opening`/`Ready` behavior for a
-  failed open. Add a regression test:
-  `AudioStart -> MicOpenError(0x0F80)` keeps `Streaming`.
-- **Dynamic bandwidth.** `AUDIO_SYNC` parses the codec but the daemon only
-  resets the decoder; it does not change the resampler or close the stream.
-  A device that advertises `0x03` and switches to 8 kHz would be played at
-  the wrong rate. Current profiles are fixed 16 kHz, so this is unsupported,
-  not exercised. Decide between a loud `last_error`/close on a codec change
-  and actual dynamic-rate support; do not silently misplay.
-- **Sequence gaps.** `AUDIO_SYNC` carries the next frame number, but the
-  daemon ignores `seq`; `protocol-and-device.md` previously claimed gap
-  logging. Either add bounded-rate gap logging or correct the doc. The spec
-  makes the sequence number useful for diagnostics.
-- **Extra configuration.** The `CAPS_RESP` extra-config byte is ignored. The
-  current devices transfer whole frames at MTU 242, so DLE is not needed;
+- **`MIC_OPEN_ERROR` while streaming.** Fixed. A `Streaming` session keeps its
+  state, stream id, and keepalive on any `MIC_OPEN_ERROR` (`0x0F80` is the
+  expected response to a `MIC_OPEN` during an active PTT/HTT interaction). An
+  `Opening` session returns to `Ready` so the next edge retries, and records
+  the named error.
+- **Dynamic bandwidth.** Fixed. A valid `AUDIO_SYNC` codec that the profile
+  and `CAPS_RESP` both advertise rebuilds the resampler; an unadvertised codec
+  closes the stream with a named `last_error`; an invalid codec byte keeps the
+  current rate and is reported at a bounded rate. The PipeWire graph rate stays
+  fixed.
+- **Sequence gaps.** Fixed. `AUDIO_SYNC` sequence numbers are tracked, skipped
+  frames are counted in `audio.sequence_gaps`, and a summary is printed at a
+  bounded rate. Rollover and backwards jumps are not counted as gaps.
+- **Extra configuration.** The `CAPS_RESP` extra-config byte is still ignored.
+  The current devices transfer whole frames at MTU 242, so DLE is not needed;
   record the byte if a future device reports it.
-- **Active Remote Timeout.** Error `0x0F02` is logged as a generic
-  `MIC_OPEN error`; naming it in `atvvctl doctor`/logs would explain a manual
-  open after a long idle.
+- **Active Remote Timeout.** Error `0x0F02` is now named `remote inactive` in
+  logs and `last_error`; the daemon still reports it as a failed open, not as
+  a special state.
 
 ## 8. How this affects B03
 

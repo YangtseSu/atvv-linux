@@ -56,6 +56,18 @@ silence. Playback is also double speed and one octave high.
    defines only the 2:1 ratios, so a short halfband FIR can replace the
    kernel if a recorded listening or ASR check shows the image matters.
 
+### Dynamic rate changes
+
+`CAPS_RESP` decides the initial stream rate, but a device that advertises
+both codecs (`codec_mask` `0x03`) may announce a new rate mid-session with
+`AUDIO_SYNC`. The codec byte applies to audio after the sync, so the daemon
+rebuilds the same-stream `Resampler` from the new source rate to the fixed
+graph rate and resets the decoder with the sync's predictor and step index.
+The PipeWire node rate never changes. A codec that the profile or the
+negotiated `CAPS_RESP` does not advertise closes the stream with a named
+error instead of decoding at the wrong rate; an invalid codec byte keeps the
+current rate and is reported at a bounded rate.
+
 ### Rejected alternatives
 
 - **Recreate the `pw_stream` at the device rate when `CAPS_RESP` arrives.**

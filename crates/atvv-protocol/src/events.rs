@@ -4,6 +4,23 @@
 
 use crate::caps::{Capabilities, Codec};
 
+/// Name for a v1.0 `MIC_OPEN_ERROR` code.
+///
+/// The wire value is two bytes; the spec defines the low five codes. Any other
+/// value is reported as `unknown` so a firmware extension stays visible
+/// without being confused with a defined error.
+#[must_use]
+pub fn mic_open_error_name(code: u16) -> &'static str {
+    match code {
+        0x0F01 => "reserved",
+        0x0F02 => "remote inactive",
+        0x0F03 => "notifications disabled",
+        0x0F80 => "interaction in progress",
+        0x0FFF => "internal error",
+        _ => "unknown",
+    }
+}
+
 /// Stream identifier carried by v1.0 `AUDIO_START` and `MIC_CLOSE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StreamId(pub u8);
@@ -53,6 +70,59 @@ impl AudioStopReason {
             0x08 => Self::TransferTimeout,
             0x10 => Self::NotificationsDisabled,
             other => Self::Other(other),
+        }
+    }
+}
+
+/// Tracks the `AUDIO_SYNC` frame sequence so dropped frames are counted.
+///
+/// `AUDIO_SYNC` carries the number of the next frame. The tracker starts on
+/// the first sync, advances once per decoded frame, and treats a sync that is
+/// more than half the `u16` space behind as a backwards/rollover anomaly
+/// rather than a gap. Without a sync there is no expected sequence, so no
+/// false gaps are reported.
+#[derive(Debug, Clone, Default)]
+pub struct SeqTracker {
+    next: Option<u16>,
+    gaps: u64,
+}
+
+impl SeqTracker {
+    /// Forget the sequence; call at a session or link boundary.
+    pub fn reset(&mut self) {
+        self.next = None;
+        self.gaps = 0;
+    }
+
+    /// Total frames skipped since the tracker started.
+    #[must_use]
+    pub fn gaps(&self) -> u64 {
+        self.gaps
+    }
+
+    /// Observe an `AUDIO_SYNC(seq)` discontinuity and return the forward gap.
+    pub fn sync(&mut self, seq: u16) -> u64 {
+        let gap = match self.next {
+            None => 0,
+            Some(expected) if expected == seq => 0,
+            Some(expected) => {
+                let forward = seq.wrapping_sub(expected);
+                if forward > 0x8000 {
+                    0
+                } else {
+                    u64::from(forward)
+                }
+            }
+        };
+        self.gaps += gap;
+        self.next = Some(seq);
+        gap
+    }
+
+    /// Advance after one decoded frame.
+    pub fn advance(&mut self) {
+        if let Some(next) = self.next {
+            self.next = Some(next.wrapping_add(1));
         }
     }
 }
@@ -236,5 +306,52 @@ mod tests {
             CtlEvent::parse(&[0x7F, 0x01]),
             CtlEvent::Unknown(vec![0x7F, 0x01])
         );
+    }
+
+    #[test]
+    fn mic_open_error_names_cover_the_spec_codes() {
+        assert_eq!(mic_open_error_name(0x0F01), "reserved");
+        assert_eq!(mic_open_error_name(0x0F02), "remote inactive");
+        assert_eq!(mic_open_error_name(0x0F03), "notifications disabled");
+        assert_eq!(mic_open_error_name(0x0F80), "interaction in progress");
+        assert_eq!(mic_open_error_name(0x0FFF), "internal error");
+        assert_eq!(mic_open_error_name(0x0F04), "unknown");
+        assert_eq!(mic_open_error_name(0), "unknown");
+    }
+
+    #[test]
+    fn sequence_tracker_counts_forward_gaps() {
+        let mut tracker = SeqTracker::default();
+        assert_eq!(tracker.gaps(), 0);
+        assert_eq!(tracker.sync(10), 0, "the first sync has no expectation");
+
+        tracker.advance();
+        assert_eq!(tracker.sync(11), 0, "consecutive sync has no gap");
+        assert_eq!(tracker.gaps(), 0);
+
+        tracker.advance();
+        assert_eq!(tracker.sync(14), 2, "two frames were skipped");
+        assert_eq!(tracker.gaps(), 2);
+
+        // A backwards sync is an anomaly, not a huge forward gap.
+        assert_eq!(tracker.sync(2), 0);
+        assert_eq!(tracker.gaps(), 2);
+
+        // Advance across the u16 rollover without inventing a gap.
+        tracker.sync(0xFFFF);
+        tracker.advance();
+        assert_eq!(tracker.sync(0x0000), 0);
+        assert_eq!(tracker.gaps(), 2);
+    }
+
+    #[test]
+    fn sequence_tracker_resets_between_sessions() {
+        let mut tracker = SeqTracker::default();
+        tracker.sync(100);
+        tracker.sync(120);
+        assert_eq!(tracker.gaps(), 20);
+        tracker.reset();
+        assert_eq!(tracker.gaps(), 0);
+        assert_eq!(tracker.sync(1), 0, "a reset drops the old expectation");
     }
 }

@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 256 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 267 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -25,7 +25,8 @@ Updated: 2026-11-02
 4. `docs/decisions/0005-pipewire-restart.md` — systemd owns PipeWire restart.
 5. `docs/decisions/0008-gui-toolkit.md` — GTK4/libadwaita/GNOME HIG.
 6. `docs/decisions/0009-caps-authoritative-sample-rate.md` — `CAPS_RESP` owns
-   the stream rate; the daemon resamples to the resident graph rate.
+   the initial stream rate; a valid `AUDIO_SYNC` can change it mid-session and
+   the daemon rebuilds the resampler to the fixed graph rate.
 7. The next step file and its research links before editing code.
 
 This file is updated in place at the end of every step/session. Do not create
@@ -45,6 +46,22 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Step 25 ATVV v1.0 conformance (complete, 2026-11-02)**: a `Streaming`
+  session now ignores `MIC_OPEN_ERROR` instead of falling back to `Ready`;
+  `Opening` still returns to `Ready` and stores the named code. Added
+  `mic_open_error_name` (`0x0F02` remote inactive, `0x0F03` notifications
+  disabled, `0x0F80` interaction in progress, `0x0FFF` internal error) and
+  `SeqTracker`. `apply_audio_sync` is shared by the control and audio
+  characteristics: it resets the decoder, counts sequence gaps, rebuilds the
+  resampler for an advertised codec change, closes the stream with a named
+  error for an unadvertised codec, and keeps the rate for an invalid codec
+  byte. `AudioView` carries `stream_rate` and `sequence_gaps` (both
+  `#[serde(default)]`). ADR 0009 has the mid-session rule, and the research
+  docs no longer claim an unimplemented feature. Verification: 267 workspace
+  tests passed, 9 ignored; clippy and fmt clean; the mock `atvvctl status`
+  shows `"stream_rate": 16000` and `"sequence_gaps": 0`. Synthetic only: the
+  RC003 and Chromecast profiles are fixed 16 kHz, so no real dynamic-rate
+  device was run. See `docs/plans/25-atvv-spec-conformance.md`.
 - **Step 24 first-run checklist and recovery docs (complete, 2026-11-02)**:
   the GUI menu has **Getting started…**, a read-only dialog with four
   independent checks (daemon, device, source, input/trigger) and an
@@ -506,14 +523,6 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Not implemented
 
-- **ATVV spec conformance gaps (scheduled as step 25)**:
-  `MIC_OPEN_ERROR(0x0F80)` currently moves a `Streaming` session to `Ready`;
-  the spec says it must not interrupt an ongoing PTT/HTT stream.
-  Dynamic-bandwidth `AUDIO_SYNC` codec changes are ignored, and `AUDIO_SYNC`
-  sequence numbers are not used for gap diagnostics. See
-  `docs/research/google-atvv-1.0-spec.md` §7 and
-  `docs/plans/25-atvv-spec-conformance.md`; the existing device profiles are
-  fixed 16 kHz.
 - **10 vinput zero-config (blocked)**: ATVV is the provider; vinput owns
   source selection and trigger binding (ADR 0007). The consumer-side feature
   is a capture-device auto-selection/priority list and auto-binding of the
@@ -907,24 +916,21 @@ follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
 **Step 23 is complete and verified.** The live level/gain dialog and the
-session-boundary PCM flush are in `docs/plans/23-audio-feedback.md`. The next
-step is 24 (first-run checklist and troubleshooting), then 25 (ATVV v1.0
-conformance). Step 10 stays blocked on upstream.
+session-boundary PCM flush are in `docs/plans/23-audio-feedback.md`. Step 10
+stays blocked on upstream.
 
-**Steps 24–25 are planned, not started.** Step 24
-(`docs/plans/24-first-run-and-troubleshooting.md`) adds the generic
-**Getting started** checklist, the bilingual troubleshooting page, and the
-README known-limitations sections. Step 25
-(`docs/plans/25-atvv-spec-conformance.md`) fixes `MIC_OPEN_ERROR` handling,
-rebuilds the resampler on a valid mid-session `AUDIO_SYNC` codec change, and
-adds sequence-gap diagnostics. B03
-(`docs/plans/B03-preopen-mic.md`) is the hardware-gated keep-open experiment
-and stays in the backlog.
+**Step 25 (ATVV v1.0 conformance) is complete.** `MIC_OPEN_ERROR` no longer
+interrupts a streaming session, a valid mid-session `AUDIO_SYNC` codec change
+rebuilds the resampler, and sequence gaps are counted and summarized. It is
+synthetic evidence only: no current profile switches rate. The plan is in
+`docs/plans/25-atvv-spec-conformance.md`.
 
-Immediate action: start step 24
-(`docs/plans/24-first-run-and-troubleshooting.md`). In parallel, watch upstream
-releases; when one ships its own auto-selection/declared-key binding, rebuild
-vinput and record the zero-config RC003 run. Do not reopen the PRs.
+**All numbered steps are complete except step 10, which is blocked on
+upstream.** The remaining hardware work is B03 (keep-open microphone
+experiment), which stays in the backlog until the operator schedules it. The
+immediate action is to watch upstream vinput releases; when one ships its own
+auto-selection/declared-key binding, rebuild vinput and record the zero-config
+RC003 run. Do not reopen the closed PRs.
 
 ## Commands
 

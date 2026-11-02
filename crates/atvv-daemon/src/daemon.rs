@@ -14,7 +14,7 @@ use atvv_input::{Action, ActionMap, DictationMode, InputOptions, InputRuntime, R
 use atvv_protocol::adpcm::Decoder;
 use atvv_protocol::caps::{Codec, InteractionModel};
 use atvv_protocol::commands;
-use atvv_protocol::events::{AudioStopReason, CtlEvent};
+use atvv_protocol::events::{AudioStopReason, CtlEvent, SeqTracker, mic_open_error_name};
 use atvv_protocol::frame::FrameAccumulator;
 use atvv_protocol::profile::{DeviceProfile, NibbleOrder, RemoteButton};
 use atvv_protocol::session::{Session, SessionAction, SessionState};
@@ -249,6 +249,12 @@ pub struct Daemon {
     pcm: Vec<i16>,
     /// Converts device PCM into the resident graph rate (ADR 0009).
     resampler: Resampler,
+    /// Codec the current stream is decoded as; `None` before a session.
+    stream_codec: Option<Codec>,
+    /// Rate of the incoming stream, shown in status.
+    stream_rate: u32,
+    /// `AUDIO_SYNC` frame sequence and gap count.
+    sequence: SeqTracker,
     /// Buffer for the converted stream handed to the sink.
     converted: Vec<i16>,
     /// Rate the resident PipeWire source runs at.
@@ -283,6 +289,12 @@ pub struct Daemon {
     traced_audio: bool,
     /// Truncated `AUDIO_SYNC` notifications, rate limited.
     malformed_sync: Anomaly,
+    /// `AUDIO_SYNC` without a valid codec, rate limited.
+    invalid_sync: Anomaly,
+    /// `AUDIO_SYNC` with an unadvertised codec, rate limited.
+    unsupported_sync: Anomaly,
+    /// Sequence-gap summaries, rate limited.
+    gap_report: Anomaly,
     /// Unrecognized control opcodes, rate limited.
     unknown_control: Anomaly,
     input_degraded: Vec<String>,
@@ -362,6 +374,8 @@ impl Daemon {
                 available: audio.is_available(),
                 streaming: false,
                 queued_samples: audio.queued_samples(),
+                stream_rate: config.profile.sample_rate,
+                sequence_gaps: 0,
                 gain_db: config.config.gain_db,
                 level: 0,
                 frames: 0,
@@ -415,6 +429,9 @@ impl Daemon {
             swap: Vec::new(),
             pcm: Vec::new(),
             resampler: Resampler::new(config.profile.sample_rate, config.graph_rate),
+            stream_codec: None,
+            stream_rate: config.profile.sample_rate,
+            sequence: SeqTracker::default(),
             converted: Vec::new(),
             graph_rate: config.graph_rate,
             gain: gain_factor(config.config.gain_db),
@@ -440,6 +457,9 @@ impl Daemon {
             level: 0,
             traced_audio: false,
             malformed_sync: Anomaly::default(),
+            invalid_sync: Anomaly::default(),
+            unsupported_sync: Anomaly::default(),
+            gap_report: Anomaly::default(),
             unknown_control: Anomaly::default(),
             input_degraded,
             last_button: None,
@@ -535,12 +555,16 @@ impl Daemon {
         self.decoder = Decoder::new();
         // `CAPS_RESP` is authoritative for the stream rate (ADR 0009); the
         // profile rate is only the fallback before it arrives.
-        let device_rate = self
+        let codec = self
             .session
             .caps()
             .and_then(|caps| caps.best_codec())
-            .map_or(self.profile.sample_rate, |codec| codec.sample_rate());
+            .unwrap_or_else(|| self.profile.preferred_codec());
+        let device_rate = codec.sample_rate();
         self.resampler = Resampler::new(device_rate, self.graph_rate);
+        self.stream_codec = Some(codec);
+        self.stream_rate = device_rate;
+        self.sequence.reset();
         self.frames = 0;
         self.samples = 0;
         self.dropped_frames = 0;
@@ -643,6 +667,7 @@ impl Daemon {
         self.device_alias = Some(name.clone());
         self.session = Session::new(self.profile);
         self.accumulator = None;
+        self.sequence.reset();
         self.caps_deadline = Some(Instant::now() + self.caps_timeout);
         self.caps_attempts = 0;
         self.last_audio = None;
@@ -667,6 +692,7 @@ impl Daemon {
         self.connected = false;
         self.last_error = Some(format!("disconnected: {reason}"));
         self.accumulator = None;
+        self.sequence.reset();
         self.level = 0;
         self.caps_deadline = None;
         self.last_audio = None;
@@ -703,18 +729,23 @@ impl Daemon {
                 self.execute(actions);
             }
             CtlEvent::AudioSync {
+                codec,
+                seq,
                 predictor,
                 step_index,
-                ..
             } => {
-                self.decoder.reset(predictor, step_index);
-                self.trace(format!(
-                    "audio sync predictor={predictor} step_index={step_index}"
-                ));
+                self.apply_audio_sync(codec, seq, predictor, step_index, Instant::now());
             }
             CtlEvent::MicOpenError(code) => {
-                self.last_error = Some(format!("MIC_OPEN error 0x{code:04x}"));
-                self.trace(format!("mic open error 0x{code:04x}"));
+                let was_opening = self.session.state() == SessionState::Opening;
+                let name = mic_open_error_name(code);
+                self.trace(format!("mic open error 0x{code:04x} ({name})"));
+                // While streaming the error is expected (`0x0F80` during a
+                // PTT/HTT interaction) and must not replace the cause of an
+                // earlier failure. A failed open is diagnosable.
+                if was_opening {
+                    self.last_error = Some(format!("MIC_OPEN error 0x{code:04x} ({name})"));
+                }
                 let actions = self.session.on_event(CtlEvent::MicOpenError(code));
                 self.execute(actions);
             }
@@ -739,6 +770,74 @@ impl Daemon {
         }
     }
 
+    /// Apply an `AUDIO_SYNC`: reset the decoder, track the frame sequence,
+    /// and change the decode rate when the packet carries a valid new codec.
+    ///
+    /// The PipeWire graph rate never changes mid-session; the resampler is
+    /// rebuilt for the new source rate (ADR 0009). An unadvertised codec ends
+    /// the stream instead of decoding it at the wrong rate.
+    fn apply_audio_sync(
+        &mut self,
+        codec: Option<Codec>,
+        seq: u16,
+        predictor: i16,
+        step_index: u8,
+        now: Instant,
+    ) {
+        self.decoder.reset(predictor, step_index);
+
+        let gap = self.sequence.sync(seq);
+        if gap > 0
+            && let Some(folded) = self.gap_report.record(now)
+        {
+            self.trace(format!(
+                "audio sequence gap {gap} frames ({} total); {folded} earlier gaps suppressed",
+                self.sequence.gaps()
+            ));
+        }
+
+        let Some(codec) = codec else {
+            if let Some(folded) = self.invalid_sync.record(now) {
+                self.trace(format!(
+                    "AUDIO_SYNC without a valid codec; keeping {} Hz; {folded} more suppressed",
+                    self.stream_rate
+                ));
+            }
+            return;
+        };
+        if self.stream_codec == Some(codec) {
+            return;
+        }
+
+        let advertised = self.session.caps().is_some_and(|caps| caps.supports(codec));
+        if !self.profile.supports(codec) || !advertised {
+            self.last_error = Some(format!(
+                "unsupported AUDIO_SYNC codec {} ({} Hz)",
+                codec_name(codec),
+                codec.sample_rate()
+            ));
+            if let Some(folded) = self.unsupported_sync.record(now) {
+                self.trace(format!(
+                    "unsupported AUDIO_SYNC codec {} ({} Hz); closing the stream; {folded} more suppressed",
+                    codec_name(codec),
+                    codec.sample_rate()
+                ));
+            }
+            let actions = self.session.on_audio_stop(AudioStopReason::MicClose);
+            self.execute(actions);
+            return;
+        }
+
+        let old_rate = self.stream_rate;
+        self.resampler = Resampler::new(codec.sample_rate(), self.graph_rate);
+        self.stream_codec = Some(codec);
+        self.stream_rate = codec.sample_rate();
+        self.trace(format!(
+            "audio rate changed {old_rate} Hz -> {} Hz (graph {} Hz)",
+            self.stream_rate, self.graph_rate
+        ));
+    }
+
     fn on_audio(&mut self, bytes: &[u8], now: Instant) {
         if let Some(until) = self.discard_until {
             if now < until {
@@ -753,11 +852,12 @@ impl Daemon {
         if bytes.first() == Some(&0x0A) {
             match CtlEvent::parse(bytes) {
                 CtlEvent::AudioSync {
+                    codec,
+                    seq,
                     predictor,
                     step_index,
-                    ..
                 } => {
-                    self.decoder.reset(predictor, step_index);
+                    self.apply_audio_sync(codec, seq, predictor, step_index, now);
                     return;
                 }
                 CtlEvent::MalformedAudioSync { len } => {
@@ -863,6 +963,7 @@ impl Daemon {
         }
         self.frames += 1;
         self.samples += written as u64;
+        self.sequence.advance();
     }
 
     fn on_command(&mut self, command: Command) -> bool {
@@ -1211,6 +1312,9 @@ impl Daemon {
             self.audio_config = Some(next);
         }
         self.resampler = Resampler::new(profile.sample_rate, self.graph_rate);
+        self.stream_codec = None;
+        self.stream_rate = profile.sample_rate;
+        self.sequence.reset();
     }
 
     /// Apply a validated configuration to the live runtime.
@@ -1678,6 +1782,8 @@ impl Daemon {
                 available: self.audio.is_available(),
                 streaming: self.session.state() == SessionState::Streaming,
                 queued_samples: self.audio.queued_samples(),
+                stream_rate: self.stream_rate,
+                sequence_gaps: self.sequence.gaps(),
                 gain_db: self.config.gain_db,
                 level: self.level,
                 frames: self.frames,
@@ -2659,6 +2765,14 @@ mod tests {
         caps: Vec<u8>,
         frame_size: usize,
     ) -> (DaemonHandle, MockHandle, CaptureSink, Arc<RecordingSink>) {
+        start_with_profile(RC003, caps, frame_size)
+    }
+
+    fn start_with_profile(
+        profile: DeviceProfile,
+        caps: Vec<u8>,
+        frame_size: usize,
+    ) -> (DaemonHandle, MockHandle, CaptureSink, Arc<RecordingSink>) {
         let (transport, mock) = MockTransport::new(MockConfig {
             caps,
             frame_size,
@@ -2666,7 +2780,7 @@ mod tests {
         });
         let signals = Arc::new(RecordingSink::default());
         let sink = CaptureSink::default();
-        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        let mut config = DaemonConfig::new(profile, mock_address(&transport));
         config.config.input = false;
         config.tick = Duration::from_millis(5);
         config.keepalive_interval = Duration::from_millis(40);
@@ -2814,6 +2928,168 @@ mod tests {
         let status = wait_for(&handle, |status| !status.streaming);
         assert_eq!(sink.len() as u64, status.audio.samples);
         handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn audio_sync_rebuilds_the_resampler_for_a_new_codec() {
+        // A device that advertises both codecs may switch rate mid-stream.
+        // The graph rate stays 16 kHz (the profile rate here), so 8 kHz
+        // source frames must produce twice as many graph samples.
+        const DYNAMIC: DeviceProfile = DeviceProfile {
+            id: "test-dynamic",
+            display_name: "Dynamic rate test remote",
+            bluetooth_names: &["Dynamic test remote"],
+            codecs: &[Codec::Adpcm16k, Codec::Adpcm8k],
+            ..RC003
+        };
+        let caps = vec![0x0B, 0x01, 0x00, 0x03, 0x03, 0x00, 0x78];
+        let (transport, _mock) = MockTransport::new(MockConfig {
+            caps: caps.clone(),
+            frame_size: 120,
+            ..MockConfig::default()
+        });
+        let sink = CaptureSink::default();
+        let mut config = DaemonConfig::new(DYNAMIC, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(sink.clone()),
+            Arc::new(NullSink),
+            None,
+        );
+
+        daemon
+            .session
+            .on_caps(atvv_protocol::Capabilities::parse(&caps).unwrap());
+        daemon
+            .session
+            .on_audio_start(atvv_protocol::StreamId::MIC_OPEN);
+        daemon.on_voice_started(Instant::now());
+        assert_eq!(daemon.stream_rate, 16_000);
+
+        daemon.output_frame(&[0x11; 120]);
+        let at_16k = sink.len();
+        assert_eq!(at_16k, 240, "16 kHz is a passthrough");
+
+        daemon.apply_audio_sync(Some(Codec::Adpcm8k), 1, 0, 0, Instant::now());
+        let status = daemon.status_view();
+        assert_eq!(status.audio.stream_rate, 8_000);
+        daemon.output_frame(&[0x11; 120]);
+        let at_8k = sink.len() - at_16k;
+        assert!(
+            (478..=480).contains(&at_8k),
+            "one 8 kHz frame produced {at_8k} graph samples"
+        );
+        let _ = handle;
+    }
+
+    #[test]
+    fn unsupported_audio_sync_closes_the_stream() {
+        let (handle, mock, _signals) = start();
+        wait_for(&handle, |status| status.state == "ready");
+        mock.start_audio();
+        wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames > 0
+        });
+
+        // The RC003 profile and its CAPS_RESP advertise 16 kHz only.
+        mock.send_control(vec![0x0A, 0x01, 0x00, 0x08, 0x00, 0x00, 0x00]);
+        let status = wait_for(&handle, |status| !status.streaming);
+        assert_eq!(
+            status.last_error.as_deref(),
+            Some("unsupported AUDIO_SYNC codec adpcm-8k (8000 Hz)")
+        );
+        assert_eq!(status.audio.stream_rate, 16_000, "the rate must not change");
+        assert_eq!(mock.command_count(0x0D), 1, "the stream is closed once");
+        handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn audio_sync_sequence_gaps_are_counted_and_reset() {
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        let caps = atvv_protocol::Capabilities::parse(&DEFAULT_CAPS).unwrap();
+        daemon.session.on_caps(caps);
+        daemon
+            .session
+            .on_audio_start(atvv_protocol::StreamId::MIC_OPEN);
+        daemon.on_voice_started(Instant::now());
+
+        let now = Instant::now();
+        daemon.apply_audio_sync(Some(Codec::Adpcm16k), 10, 0, 0, now);
+        for _ in 0..4 {
+            daemon.output_frame(&[0x11; 120]);
+        }
+        assert_eq!(daemon.sequence.gaps(), 0);
+        daemon.apply_audio_sync(Some(Codec::Adpcm16k), 16, 0, 0, now);
+        assert_eq!(daemon.sequence.gaps(), 2);
+        assert_eq!(daemon.status_view().audio.sequence_gaps, 2);
+
+        // A new session starts without the previous sequence.
+        daemon.on_connected("02:00:00:00:00:01".to_string(), "mock".to_string());
+        assert_eq!(daemon.sequence.gaps(), 0);
+    }
+
+    #[test]
+    fn mic_open_error_during_a_stream_keeps_it_alive() {
+        let (handle, mock, signals) = start();
+        wait_for(&handle, |status| status.state == "ready");
+        mock.start_audio();
+        let before = wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames > 2
+        });
+        assert_eq!(before.last_error, None);
+
+        mock.send_control(vec![0x0C, 0x0F, 0x80]);
+        let status = wait_for(&handle, |status| {
+            status.audio.frames > before.audio.frames + 2
+        });
+        assert_eq!(status.state, "streaming");
+        assert_eq!(
+            status.last_error, None,
+            "0x0F80 while streaming must not be an error state"
+        );
+
+        mock.stop_audio(0x02);
+        wait_for(&handle, |status| status.state == "ready");
+        let events = signals.events.lock().unwrap().clone();
+        assert!(events.contains(&DaemonEvent::VoiceStopped), "{events:?}");
+        handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn mic_open_error_during_opening_names_the_failure() {
+        let (transport, _mock) = MockTransport::new(MockConfig::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let (mut daemon, _handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            Arc::new(NullSink),
+            None,
+        );
+        daemon
+            .session
+            .on_caps(atvv_protocol::Capabilities::parse(&DEFAULT_CAPS).unwrap());
+        daemon.on_control(&[0x08]);
+        assert_eq!(daemon.session.state(), SessionState::Opening);
+
+        daemon.on_control(&[0x0C, 0x0F, 0x02]);
+        assert_eq!(daemon.session.state(), SessionState::Ready);
+        assert_eq!(
+            daemon.last_error.as_deref(),
+            Some("MIC_OPEN error 0x0f02 (remote inactive)")
+        );
     }
 
     #[test]

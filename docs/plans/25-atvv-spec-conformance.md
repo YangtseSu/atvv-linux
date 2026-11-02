@@ -1,6 +1,6 @@
 # Step 25 — ATVV v1.0 conformance fixes
 
-Status: ⬜ not-started
+Status: ✅ done
 Depends on: 01, 02, 04, 06
 Touches: `crates/atvv-protocol/`, `crates/atvv-daemon/`,
 `crates/atvv-audio/`, `docs/decisions/`, `docs/research/`, `docs/`
@@ -141,20 +141,20 @@ No hardware claim is made: the current RC003 and Chromecast profiles are fixed
 
 ## Deliverables
 
-- ⬜ `Session` keeps `Streaming` on `MIC_OPEN_ERROR`; `Opening` still returns
+- ✅ `Session` keeps `Streaming` on `MIC_OPEN_ERROR`; `Opening` still returns
   to `Ready`.
-- ⬜ `mic_open_error_name` mapping and named daemon logs/`last_error`.
-- ⬜ `apply_audio_sync` shared by both sync paths; valid codec changes rebuild
+- ✅ `mic_open_error_name` mapping and named daemon logs/`last_error`.
+- ✅ `apply_audio_sync` shared by both sync paths; valid codec changes rebuild
   the resampler; invalid/absent codecs keep the current rate and warn.
-- ⬜ `AudioView.stream_rate` and `AudioView.sequence_gaps` with
+- ✅ `AudioView.stream_rate` and `AudioView.sequence_gaps` with
   `#[serde(default)]`.
-- ⬜ `SeqTracker` with forward-gap counting, rollover handling, and reset on
+- ✅ `SeqTracker` with forward-gap counting, rollover handling, and reset on
   start/disconnect.
-- ⬜ Tests for all three areas, including a daemon mock sequence
+- ✅ Tests for all three areas, including a daemon mock sequence
   `AUDIO_START -> MIC_OPEN_ERROR(0x0F80) -> AUDIO_STOP` that still produces
   `VoiceStopped`, and an `AUDIO_SYNC` 16 kHz -> 8 kHz switch that changes the
   decode rate and the output sample count.
-- ⬜ ADR 0009 amended; research docs, plan index, and handoff updated.
+- ✅ ADR 0009 amended; research docs, plan index, and handoff updated.
 
 ## Verification
 
@@ -182,20 +182,38 @@ The mock should expose `audio.stream_rate` and `audio.sequence_gaps`; no
 hardware is required for the pass. A real dynamic-rate device run is a
 separate evidence item and is not claimed here.
 
+Results (2026-11-02):
+
+```text
+cargo fmt --all -- --check                      clean
+cargo clippy --workspace --all-targets -D warnings  clean
+cargo test --workspace                          267 passed, 9 ignored
+cargo test -p atvv-protocol mic_open_error      5 passed
+cargo test -p atvv-protocol seq                 2 passed (sequence_tracker)
+cargo test -p atvv-daemon sync                  4 passed
+cargo test -p atvv-daemon mic_open_error        2 passed
+```
+
+`atvvd --mock` under `dbus-run-session`, then `atvvctl status`:
+`"stream_rate": 16000`, `"sequence_gaps": 0`, `"frames": 0`. The dynamic-rate
+path is covered by `audio_sync_rebuilds_the_resampler_for_a_new_codec` with a
+dual-codec test profile (16 kHz -> 8 kHz, 240 decoded samples produce 480
+graph samples); the RC003 and Chromecast profiles remain fixed 16 kHz.
+
 ## Exit criteria
 
-- ⬜ `MIC_OPEN_ERROR` while `Streaming` leaves the state, stream id, and
+- ✅ `MIC_OPEN_ERROR` while `Streaming` leaves the state, stream id, and
   keepalive unchanged; `0x0F80` does not set `last_error`.
-- ⬜ `MIC_OPEN_ERROR` while `Opening` returns to `Ready` and names the code.
-- ⬜ A valid `AUDIO_SYNC` codec change updates `stream_rate` and the
+- ✅ `MIC_OPEN_ERROR` while `Opening` returns to `Ready` and names the code.
+- ✅ A valid `AUDIO_SYNC` codec change updates `stream_rate` and the
   resampler; an unsupported codec closes the stream with a named error; an
   invalid/absent codec keeps the current rate and is reported at a bounded
   rate.
-- ⬜ Sequence gaps are counted in `audio.sequence_gaps` and summarized at a
+- ✅ Sequence gaps are counted in `audio.sequence_gaps` and summarized at a
   bounded rate; rollover is not reported as a gap.
-- ⬜ ADR 0009 states the CAPS-at-start / AUDIO_SYNC-mid-stream rule.
-- ⬜ The research docs no longer claim an unimplemented feature.
-- ⬜ Tests cover the three paths; no hardware claim is made.
+- ✅ ADR 0009 states the CAPS-at-start / AUDIO_SYNC-mid-stream rule.
+- ✅ The research docs no longer claim an unimplemented feature.
+- ✅ Tests cover the three paths; no hardware claim is made.
 
 ## Risks
 
@@ -219,9 +237,12 @@ separate evidence item and is not claimed here.
 
 - 2026-11-02 — plan created from
   `docs/research/google-atvv-1.0-spec.md` §7 and the current session code.
-
-## Next action
-
-Add the `MIC_OPEN_ERROR` state tests and the named error mapping first; then
-factor `apply_audio_sync`, add the `SeqTracker`, and update ADR 0009 and the
-research docs.
+- 2026-11-02 — implemented and verified. `Session` keeps `Streaming` on
+  `MIC_OPEN_ERROR` and returns `Opening` to `Ready`; `mic_open_error_name`
+  names the spec codes; `apply_audio_sync` handles both notification
+  characteristics, tracks `SeqTracker` gaps, rebuilds the resampler for an
+  advertised codec change, closes on an unadvertised codec, and warns on an
+  invalid codec; `AudioView` gained `stream_rate`/`sequence_gaps`. ADR 0009,
+  `protocol-and-device.md`, and the spec summary were updated. 267 workspace
+  tests passed, 9 ignored; clippy/fmt clean; mock status exposed both new
+  fields. No hardware claim: both profiles are fixed 16 kHz.

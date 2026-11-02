@@ -89,15 +89,25 @@ impl Session {
             CtlEvent::StartSearch => self.on_start_search(),
             CtlEvent::AudioStart { stream_id, .. } => self.on_audio_start(stream_id),
             CtlEvent::AudioStop { reason } => self.on_audio_stop(reason),
-            CtlEvent::MicOpenError(_) => {
-                self.state = SessionState::Ready;
-                self.stream_id = None;
-                Vec::new()
-            }
+            CtlEvent::MicOpenError(_) => self.on_mic_open_error(),
             CtlEvent::AudioSync { .. }
             | CtlEvent::MalformedAudioSync { .. }
             | CtlEvent::Unknown(_) => Vec::new(),
         }
+    }
+
+    /// A failed `MIC_OPEN`.
+    ///
+    /// v1.0 returns `MIC_OPEN_ERROR` without interrupting an ongoing
+    /// PTT/HTT stream (`0x0F80` during an active interaction), so a streaming
+    /// session keeps its state, stream id, and keepalive. A failed open in
+    /// `Opening` returns to `Ready`; the next voice edge may retry.
+    fn on_mic_open_error(&mut self) -> Vec<SessionAction> {
+        if self.state == SessionState::Opening {
+            self.state = SessionState::Ready;
+            self.stream_id = None;
+        }
+        Vec::new()
     }
 
     /// The remote's voice key was pressed.
@@ -293,6 +303,45 @@ mod tests {
             session.on_start_search(),
             vec![SessionAction::VoiceStopped, SessionAction::Send(vec![0x0D])]
         );
+        assert_eq!(session.state(), SessionState::Ready);
+    }
+
+    #[test]
+    fn mic_open_error_keeps_a_streaming_session() {
+        let mut session = ready();
+        session.on_audio_start(StreamId(3));
+        let keepalive = session.keepalive();
+        assert_eq!(session.on_event(CtlEvent::MicOpenError(0x0F80)), Vec::new());
+        assert_eq!(session.state(), SessionState::Streaming);
+        assert_eq!(session.keepalive(), keepalive, "keepalive must survive");
+        assert_eq!(
+            session.on_event(CtlEvent::AudioStop {
+                reason: AudioStopReason::HttButtonRelease,
+            }),
+            vec![SessionAction::VoiceStopped],
+            "the stream still ends on its own stop"
+        );
+    }
+
+    #[test]
+    fn mic_open_error_during_opening_returns_to_ready() {
+        let mut session = ready();
+        session.on_event(CtlEvent::StartSearch);
+        assert_eq!(session.state(), SessionState::Opening);
+        assert_eq!(session.on_event(CtlEvent::MicOpenError(0x0F02)), Vec::new());
+        assert_eq!(session.state(), SessionState::Ready);
+        assert_eq!(session.keepalive(), None);
+        assert_eq!(
+            session.on_event(CtlEvent::StartSearch),
+            vec![SessionAction::Send(vec![0x0C, 0x00])],
+            "the next edge retries the open"
+        );
+    }
+
+    #[test]
+    fn mic_open_error_outside_a_session_is_a_no_op() {
+        let mut session = ready();
+        assert_eq!(session.on_event(CtlEvent::MicOpenError(0x0F03)), Vec::new());
         assert_eq!(session.state(), SessionState::Ready);
     }
 

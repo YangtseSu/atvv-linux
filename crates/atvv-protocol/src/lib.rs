@@ -18,7 +18,9 @@ pub mod session;
 
 pub use adpcm::Decoder;
 pub use caps::{Capabilities, CapsError, Codec, InteractionModel, ProtocolVersion};
-pub use events::{AudioStartReason, AudioStopReason, CtlEvent, StreamId};
+pub use events::{
+    AudioStartReason, AudioStopReason, CtlEvent, SeqTracker, StreamId, mic_open_error_name,
+};
 pub use frame::{FrameAccumulator, FrameError};
 pub use profile::{
     ButtonKey, CHROMECAST, DeviceProfile, GestureTiming, KeepaliveVariant, MicCloseVariant,

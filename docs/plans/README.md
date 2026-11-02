@@ -85,7 +85,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | K — Device management | 21 | **done**: single-active device registry and switching, per-device layouts, Chromecast profile, and a recorded real two-device switch |
 | L — Pointer input | 22 | **done**: mouse clicks and relative pointer motion from remote buttons on a dedicated uinput device, verified with the RC003 |
 | M — Consumer polish | 23–24 | **done**: 23 added live level/gain and a session-scoped PCM queue; 24 added the first-run checklist and bilingual recovery docs |
-| N — ATVV v1.0 conformance | 25 | **not started**: `MIC_OPEN_ERROR`/`AUDIO_SYNC` handling, dynamic-rate resampler rebuild, sequence-gap diagnostics |
+| N — ATVV v1.0 conformance | 25 | **done**: 25 closed the `MIC_OPEN_ERROR`/`AUDIO_SYNC` gaps, rebuilt the resampler on a valid mid-session codec change, and added sequence-gap diagnostics |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
@@ -95,8 +95,8 @@ on mpv, Impress, WPS Presentation, and omp. Step 21 is complete with the
 recorded RC003 + Chromecast two-device switch. Step 23 is complete with the
 live level/gain dialog and the session-boundary flush; step 24 is complete with
 the read-only first-run checklist, the bilingual recovery page, and the README
-known-limitations sections; step 25 is the ATVV v1.0 conformance fixes; B03 is
-the hardware-gated keep-open experiment.
+known-limitations sections; step 25 is complete with the three ATVV v1.0
+conformance fixes. B03 is the hardware-gated keep-open experiment.
 
 ## Step files
 
@@ -108,7 +108,6 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ⬜ not-started | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
 
 ### Completed steps
 
@@ -137,6 +136,7 @@ verified; they are not reopened. Live work is listed first.
 | 22 | L | [pointer-actions](22-pointer-actions.md) | ✅ done | 05, 13, 14, 15 | pointer clicks and relative motion on a dedicated uinput device, verified with the RC003 |
 | 23 | M | [audio-feedback](23-audio-feedback.md) | ✅ done | 04, 06, 14, 19 | status/GUI show the live level and gain, and a new session clears the PCM queue |
 | 24 | M | [first-run-and-troubleshooting](24-first-run-and-troubleshooting.md) | ✅ done | 12, 14, 19, 23 | a generic checklist finds the missing layer and the bilingual recovery docs are linked |
+| 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ✅ done | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
 
 ## Architecture contract
 

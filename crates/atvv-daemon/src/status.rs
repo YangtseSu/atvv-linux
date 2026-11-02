@@ -117,6 +117,14 @@ pub struct AudioView {
     pub available: bool,
     pub streaming: bool,
     pub queued_samples: usize,
+    /// Rate of the incoming device stream. The resident source runs at
+    /// `contract.sample_rate`; a valid `AUDIO_SYNC` can change this
+    /// mid-session.
+    #[serde(default)]
+    pub stream_rate: u32,
+    /// Frames skipped between `AUDIO_SYNC` sequence numbers this session.
+    #[serde(default)]
+    pub sequence_gaps: u64,
     pub gain_db: i8,
     /// Decaying peak of the post-gain signal, in permille of full scale.
     #[serde(default)]

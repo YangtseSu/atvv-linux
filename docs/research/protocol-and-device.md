@@ -138,16 +138,20 @@ evidence.
   and step index. It is a decoder sync: reset predictor/step and do not append
   it to the audio accumulator. The spec also makes it the rate-change point:
   the codec byte applies to audio after the sync.
-- Do not interpolate over sequence gaps. The parser currently reads `seq` but
-  the daemon does not track gaps; add bounded-rate gap logging before claiming
-  gap diagnostics. `Channels=1` in BlueZ avoids EATT ordering problems.
+- Do not interpolate over sequence gaps. The daemon tracks the `seq` of each
+  `AUDIO_SYNC`, advances it once per decoded frame, counts skipped frames in
+  `audio.sequence_gaps`, and prints one summary per bounded interval. A sync
+  more than half the `u16` space behind the expected value is treated as a
+  backwards/rollover anomaly, not a gap. `Channels=1` in BlueZ avoids EATT
+  ordering problems.
 - The `AUDIO_START` payload codec can be garbage on RC003; CAPS is
   authoritative. The spec defines the byte as the stream codec, so this is a
   documented RC003 quirk, not a general rule for other devices.
-- Dynamic bandwidth adjustment is unsupported: a device that advertises codec
-  mask `0x03` may switch 8/16 kHz via `AUDIO_SYNC`, but the daemon does not
-  rebuild the resampler. Current profiles are fixed 16 kHz; do not claim
-  support for dynamic-rate devices without a recorded run.
+- Dynamic bandwidth adjustment is implemented: a device that advertises codec
+  mask `0x03` may switch 8/16 kHz via `AUDIO_SYNC`, and the daemon rebuilds
+  the resampler while the graph rate stays fixed. An unadvertised codec closes
+  the stream with a named error. Current profiles are fixed 16 kHz, so no
+  real dynamic-rate device has been run.
 - RC003 sends late audio after `AUDIO_STOP`; discard the 300 ms window. The
   one hardware run saw no late audio after an HTT release (`AUDIO_STOP 00 02`);
   keep the discard for other stop reasons.
