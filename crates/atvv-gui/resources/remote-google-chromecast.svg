@@ -1,0 +1,116 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Original vector illustration of the Chromecast Voice Remote button
+     layout, drawn from the visible controls; not a copied product photo. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 950" width="320" height="950">
+  <defs>
+    <linearGradient id="body-shell" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d7d6d2"/>
+      <stop offset="0.06" stop-color="#f2f1ed"/>
+      <stop offset="0.22" stop-color="#ffffff"/>
+      <stop offset="0.72" stop-color="#fbfaf7"/>
+      <stop offset="0.92" stop-color="#e8e6e1"/>
+      <stop offset="1" stop-color="#c9c7c1"/>
+    </linearGradient>
+    <linearGradient id="body-face" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4f3ef"/>
+      <stop offset="0.24" stop-color="#ffffff"/>
+      <stop offset="0.78" stop-color="#faf9f6"/>
+      <stop offset="1" stop-color="#ecebe6"/>
+    </linearGradient>
+    <linearGradient id="key-face" x1="0.16" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.65" stop-color="#f7f6f3"/>
+      <stop offset="1" stop-color="#e5e3de"/>
+    </linearGradient>
+    <linearGradient id="assistant-face" x1="0.2" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#252527"/>
+      <stop offset="0.6" stop-color="#111113"/>
+      <stop offset="1" stop-color="#050506"/>
+    </linearGradient>
+    <radialGradient id="pad-face" cx="0.45" cy="0.34" r="0.76">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.70" stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#efeee9"/>
+    </radialGradient>
+    <radialGradient id="pad-center" cx="0.42" cy="0.30" r="0.85">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1f0eb"/>
+    </radialGradient>
+    <linearGradient id="volume-rocker" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d2d0ca"/>
+      <stop offset="0.55" stop-color="#faf9f6"/>
+      <stop offset="1" stop-color="#c4c2bc"/>
+    </linearGradient>
+    <filter id="body-shadow" x="-18%" y="-4%" width="136%" height="110%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+    <filter id="key-shadow" x="-35%" y="-35%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="1.3" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <!-- body -->
+  <rect x="40" y="8" width="240" height="934" rx="54" fill="url(#body-shell)" stroke="#8f8d87" stroke-width="1" filter="url(#body-shadow)"/>
+  <rect x="42.5" y="10.5" width="235" height="929" rx="52" fill="url(#body-face)"/>
+  <rect x="43.5" y="11.5" width="233" height="927" rx="51" fill="none" stroke="#ffffff" stroke-opacity="0.72" stroke-width="1"/>
+
+  <!-- side volume rocker: separate buttons, visible from the front edge -->
+  <rect x="270" y="75" width="20" height="100" rx="10" fill="url(#volume-rocker)" stroke="#6f6d67" stroke-width="1.5"/>
+  <path d="M274 118 h12 M280 112 v12" fill="none" stroke="#3f3e42" stroke-width="2" stroke-linecap="round"/>
+  <rect x="270" y="180" width="20" height="100" rx="10" fill="url(#volume-rocker)" stroke="#6f6d67" stroke-width="1.5"/>
+  <path d="M274 230 h12" fill="none" stroke="#3f3e42" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- directional pad -->
+  <circle cx="160" cy="140" r="100" fill="url(#pad-face)" stroke="#3f3f42" stroke-width="2"/>
+  <circle cx="160" cy="140" r="98" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1"/>
+  <circle cx="160" cy="140" r="32" fill="url(#pad-center)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
+
+  <!-- back -->
+  <circle cx="100" cy="315" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
+  <path d="M112 315 H91 M100 304 L89 315 L100 326" fill="none" stroke="#252527" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Google Assistant -->
+  <circle cx="220" cy="315" r="38" fill="url(#assistant-face)" stroke="#050506" stroke-width="1.2" filter="url(#key-shadow)"/>
+  <g fill="#f7f6f2">
+    <circle cx="215" cy="311" r="6.2"/>
+    <circle cx="226" cy="305" r="2.6"/>
+    <circle cx="222" cy="318" r="3.8"/>
+    <circle cx="227" cy="326" r="2.1"/>
+  </g>
+
+  <!-- home -->
+  <circle cx="100" cy="405" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
+  <path d="M88 407 L100 395 L112 407 L112 419 L88 419 Z" fill="#252527"/>
+
+  <!-- mute -->
+  <circle cx="220" cy="405" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
+  <g fill="none" stroke="#252527" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M209 397 h6 l8 -7 v27 l-8 -7 h-6 z"/>
+    <path d="M227 397 l13 13 M240 397 l-13 13"/>
+  </g>
+
+  <!-- YouTube -->
+  <circle cx="100" cy="495" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
+  <text x="100" y="501" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="17" font-weight="600" fill="#252527">YouTube</text>
+
+  <!-- Netflix -->
+  <circle cx="220" cy="495" r="38" fill="url(#key-face)" stroke="#3f3f42" stroke-width="2" filter="url(#key-shadow)"/>
+  <text x="220" y="500" text-anchor="middle" font-family="'Noto Sans', 'DejaVu Sans', sans-serif" font-size="14" font-weight="700" letter-spacing="0.3" fill="#252527">NETFLIX</text>
+
+  <!-- power -->
+  <circle cx="110" cy="600" r="30" fill="url(#key-face)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
+  <g fill="none" stroke="#252527" stroke-width="2" stroke-linecap="round">
+    <path d="M103 594 A9 9 0 1 0 117 594"/>
+    <path d="M110 588 L110 599"/>
+  </g>
+
+  <!-- microphone -->
+  <rect x="150" y="597" width="20" height="6" rx="3" fill="#252527"/>
+
+  <!-- input -->
+  <circle cx="210" cy="600" r="30" fill="url(#key-face)" stroke="#3f3f42" stroke-width="1.8" filter="url(#key-shadow)"/>
+  <g fill="none" stroke="#252527" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="199" y="592" width="22" height="16" rx="2.5" stroke-width="1.8"/>
+    <path d="M203 600 h11 M210 595 l4 5 -4 5" stroke-width="1.8"/>
+  </g>
+</svg>

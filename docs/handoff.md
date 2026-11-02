@@ -69,7 +69,8 @@ per-session copies; `docs/plans/` remains the canonical plan.
   close/keepalive; the A3 accepts both forms) was added and its ATVV
   audio/pairing/reconnect run recorded. The profile uses the stream-id form so
   the documented A0 G9N9N firmware shares one profile; an A0 Linux run is
-  pending. A physical
+  pending. The GUI selects an SVG and hotspot table per profile; the
+  Chromecast asset includes the side volume buttons. A physical
   press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
   Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
   session trigger (`trigger_from_session`). Mock two-device switching and

@@ -335,6 +335,7 @@ impl MappingBoard {
         if voice_selected {
             self.voice_card.add_css_class("selected");
         }
+        self.diagram.set_profile(model.profile.id);
         self.diagram
             .refresh(model, pressed.map(|(button, _)| button), voice_selected);
     }

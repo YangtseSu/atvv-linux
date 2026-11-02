@@ -213,3 +213,7 @@ released` around two real presses. See
   documented A0 firmware. Recorded in
   `docs/research/chromecast-hardware-evidence.md`; A0 Linux run remains
   pending.
+- 2026-11-02 — the GUI now selects an SVG asset and hotspot table per device
+  profile. The RC003 asset moved to `remote-miremote-rc003.svg`; the new
+  `remote-google-chromecast.svg` follows the Chromecast layout and shows the
+  side volume buttons, which the front photo cannot show.

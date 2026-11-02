@@ -53,17 +53,6 @@ const CSS: &str = r#"
   outline: 2px solid @accent_color;
   outline-offset: 2px;
 }
-.remote-hotspot.bound {
-  border-color: alpha(@accent_color, 0.30);
-}
-.remote-hotspot.unbound {
-  border-style: dashed;
-  border-color: alpha(currentColor, 0.32);
-}
-.remote-hotspot.voice {
-  border-style: dotted;
-  border-color: alpha(currentColor, 0.30);
-}
 .remote-hotspot.selected {
   background: alpha(@accent_bg_color, 0.38);
   border: 2px solid @accent_color;

@@ -38,7 +38,8 @@ switch. Restart `atvv-config` after changing the desktop language.
 
 ## Mapping board
 
-The window is a three-column board around the original RC003 vector diagram:
+The window is a three-column board around the active device's vector diagram
+(RC003 or Chromecast Voice Remote):
 
 - Left cards: Power, Up, Left, Back, Home, Menu.
 - Center: the remote diagram and the voice-key card.
@@ -57,9 +58,9 @@ card and edit its **Single** slot; the diagram and the card always show the
 same selection. The board scrolls horizontally when the window is narrower
 than the board; the header and the test bar stay visible.
 
-The voice key in the top-right of the diagram is not an action slot. Clicking
-it, or the **Voice key** card under the diagram, opens the recording-key
-dialog.
+The voice key on the diagram (the microphone on the RC003, the black Google
+Assistant button on the Chromecast) is not an action slot. Clicking it, or the
+**Voice key** card under the diagram, opens the recording-key dialog.
 
 ## Header
 
@@ -129,9 +130,10 @@ Test mode active while clearing the last pressed result. A failed switch keeps
 the previous layout and shows the error.
 
 Global settings (device, gain, vinput mode, recording key, exec policy) do not
-belong to a layout, and the diagram and hotspot geometry do not change per
-layout. The selected layout is persisted as `active_layout`; the Default
-template is never stored in `daemon.toml`.
+belong to a layout. The diagram asset and hotspot geometry follow the active
+device profile; they do not change per layout. The selected layout is
+persisted as `active_layout`; the Default template is never stored in
+`daemon.toml`.
 
 ## Edit a mapping
 

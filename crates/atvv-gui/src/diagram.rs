@@ -5,8 +5,11 @@
 //! Hotspot positions are fractions of the SVG view box, so the buttons and the
 //! picture share one coordinate system. `GtkAspectFrame` keeps the picture at
 //! the view-box ratio; a size change only recomputes the scaled rectangles.
+//! Each device family supplies its own vector asset and hotspot table.
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use atvv_protocol::profile::RemoteButton;
 use gtk::prelude::*;
@@ -27,115 +30,230 @@ struct Hotspot {
     height: f64,
 }
 
-const HOTSPOTS: [Hotspot; 13] = [
-    Hotspot {
-        button: RemoteButton::Power,
-        x: 0.222813,
-        y: 0.036632,
-        width: 0.1875,
-        height: 0.063158,
-    },
-    Hotspot {
-        button: RemoteButton::Voice,
-        x: 0.589688,
-        y: 0.036632,
-        width: 0.1875,
-        height: 0.063158,
-    },
-    Hotspot {
-        button: RemoteButton::Tv,
-        x: 0.519375,
-        y: 0.497158,
-        width: 0.25,
-        height: 0.084211,
-    },
-    Hotspot {
-        button: RemoteButton::Up,
-        x: 0.353125,
-        y: 0.115789,
-        width: 0.29375,
-        height: 0.048421,
-    },
-    Hotspot {
-        button: RemoteButton::Down,
-        x: 0.353125,
-        y: 0.258947,
-        width: 0.29375,
-        height: 0.048421,
-    },
-    Hotspot {
-        button: RemoteButton::Left,
-        x: 0.20625,
-        y: 0.162105,
-        width: 0.146875,
-        height: 0.098947,
-    },
-    Hotspot {
-        button: RemoteButton::Right,
-        x: 0.646875,
-        y: 0.162105,
-        width: 0.146875,
-        height: 0.098947,
-    },
-    Hotspot {
-        button: RemoteButton::Ok,
-        x: 0.353125,
-        y: 0.162105,
-        width: 0.29375,
-        height: 0.098947,
-    },
-    Hotspot {
-        button: RemoteButton::Back,
-        x: 0.229063,
-        y: 0.315789,
-        width: 0.25,
-        height: 0.084211,
-    },
-    Hotspot {
-        button: RemoteButton::Home,
-        x: 0.229063,
-        y: 0.405474,
-        width: 0.25,
-        height: 0.084211,
-    },
-    Hotspot {
-        button: RemoteButton::Menu,
-        x: 0.229063,
-        y: 0.496526,
-        width: 0.25,
-        height: 0.084211,
-    },
-    Hotspot {
-        button: RemoteButton::VolumeUp,
-        x: 0.51875,
-        y: 0.315789,
-        width: 0.257813,
-        height: 0.087474,
-    },
-    Hotspot {
-        button: RemoteButton::VolumeDown,
-        x: 0.51875,
-        y: 0.402105,
-        width: 0.257813,
-        height: 0.088105,
-    },
-];
+struct RemoteLayout {
+    profile_id: &'static str,
+    svg: &'static [u8],
+    hotspots: &'static [Hotspot],
+}
 
-const HOTSPOT_CSS: [&str; 13] = [
-    "hotspot-power",
-    "hotspot-voice",
-    "hotspot-tv",
-    "hotspot-up",
-    "hotspot-down",
-    "hotspot-left",
-    "hotspot-right",
-    "hotspot-ok",
-    "hotspot-back",
-    "hotspot-home",
-    "hotspot-menu",
-    "hotspot-volume-up",
-    "hotspot-volume-down",
-];
+const RC003_SVG: &[u8] = include_bytes!("../resources/remote-miremote-rc003.svg");
+const CHROMECAST_SVG: &[u8] = include_bytes!("../resources/remote-google-chromecast.svg");
+
+const RC003_LAYOUT: RemoteLayout = RemoteLayout {
+    profile_id: "miremote-rc003",
+    svg: RC003_SVG,
+    hotspots: &[
+        Hotspot {
+            button: RemoteButton::Power,
+            x: 0.222813,
+            y: 0.036632,
+            width: 0.1875,
+            height: 0.063158,
+        },
+        Hotspot {
+            button: RemoteButton::Voice,
+            x: 0.589688,
+            y: 0.036632,
+            width: 0.1875,
+            height: 0.063158,
+        },
+        Hotspot {
+            button: RemoteButton::Tv,
+            x: 0.519375,
+            y: 0.497158,
+            width: 0.25,
+            height: 0.084211,
+        },
+        Hotspot {
+            button: RemoteButton::Up,
+            x: 0.353125,
+            y: 0.115789,
+            width: 0.29375,
+            height: 0.048421,
+        },
+        Hotspot {
+            button: RemoteButton::Down,
+            x: 0.353125,
+            y: 0.258947,
+            width: 0.29375,
+            height: 0.048421,
+        },
+        Hotspot {
+            button: RemoteButton::Left,
+            x: 0.20625,
+            y: 0.162105,
+            width: 0.146875,
+            height: 0.098947,
+        },
+        Hotspot {
+            button: RemoteButton::Right,
+            x: 0.646875,
+            y: 0.162105,
+            width: 0.146875,
+            height: 0.098947,
+        },
+        Hotspot {
+            button: RemoteButton::Ok,
+            x: 0.353125,
+            y: 0.162105,
+            width: 0.29375,
+            height: 0.098947,
+        },
+        Hotspot {
+            button: RemoteButton::Back,
+            x: 0.229063,
+            y: 0.315789,
+            width: 0.25,
+            height: 0.084211,
+        },
+        Hotspot {
+            button: RemoteButton::Home,
+            x: 0.229063,
+            y: 0.405474,
+            width: 0.25,
+            height: 0.084211,
+        },
+        Hotspot {
+            button: RemoteButton::Menu,
+            x: 0.229063,
+            y: 0.496526,
+            width: 0.25,
+            height: 0.084211,
+        },
+        Hotspot {
+            button: RemoteButton::VolumeUp,
+            x: 0.51875,
+            y: 0.315789,
+            width: 0.257813,
+            height: 0.087474,
+        },
+        Hotspot {
+            button: RemoteButton::VolumeDown,
+            x: 0.51875,
+            y: 0.402105,
+            width: 0.257813,
+            height: 0.088105,
+        },
+    ],
+};
+
+const CHROMECAST_LAYOUT: RemoteLayout = RemoteLayout {
+    profile_id: "google-chromecast",
+    svg: CHROMECAST_SVG,
+    hotspots: &[
+        Hotspot {
+            button: RemoteButton::Up,
+            x: 0.359375,
+            y: 0.047368,
+            width: 0.28125,
+            height: 0.063158,
+        },
+        Hotspot {
+            button: RemoteButton::Down,
+            x: 0.359375,
+            y: 0.189474,
+            width: 0.28125,
+            height: 0.063158,
+        },
+        Hotspot {
+            button: RemoteButton::Left,
+            x: 0.1875,
+            y: 0.110526,
+            width: 0.19375,
+            height: 0.078947,
+        },
+        Hotspot {
+            button: RemoteButton::Right,
+            x: 0.61875,
+            y: 0.110526,
+            width: 0.19375,
+            height: 0.078947,
+        },
+        Hotspot {
+            button: RemoteButton::Ok,
+            x: 0.38125,
+            y: 0.110526,
+            width: 0.2375,
+            height: 0.078947,
+        },
+        Hotspot {
+            button: RemoteButton::VolumeUp,
+            x: 0.825,
+            y: 0.073684,
+            width: 0.1125,
+            height: 0.115789,
+        },
+        Hotspot {
+            button: RemoteButton::VolumeDown,
+            x: 0.825,
+            y: 0.184211,
+            width: 0.1125,
+            height: 0.115789,
+        },
+        Hotspot {
+            button: RemoteButton::Back,
+            x: 0.184375,
+            y: 0.290526,
+            width: 0.25625,
+            height: 0.086316,
+        },
+        Hotspot {
+            button: RemoteButton::Home,
+            x: 0.184375,
+            y: 0.384211,
+            width: 0.25625,
+            height: 0.086316,
+        },
+        Hotspot {
+            button: RemoteButton::Voice,
+            x: 0.559375,
+            y: 0.290526,
+            width: 0.25625,
+            height: 0.086316,
+        },
+        Hotspot {
+            button: RemoteButton::Power,
+            x: 0.2375,
+            y: 0.595789,
+            width: 0.2125,
+            height: 0.071579,
+        },
+        Hotspot {
+            button: RemoteButton::Tv,
+            x: 0.55,
+            y: 0.595789,
+            width: 0.2125,
+            height: 0.071579,
+        },
+    ],
+};
+
+const DEFAULT_LAYOUT: &RemoteLayout = &RC003_LAYOUT;
+
+fn layout_for(profile_id: &str) -> &'static RemoteLayout {
+    match profile_id {
+        "google-chromecast" => &CHROMECAST_LAYOUT,
+        _ => DEFAULT_LAYOUT,
+    }
+}
+
+fn hotspot_css(button: RemoteButton) -> &'static str {
+    match button {
+        RemoteButton::Power => "hotspot-power",
+        RemoteButton::Voice => "hotspot-voice",
+        RemoteButton::Tv => "hotspot-tv",
+        RemoteButton::Up => "hotspot-up",
+        RemoteButton::Down => "hotspot-down",
+        RemoteButton::Left => "hotspot-left",
+        RemoteButton::Right => "hotspot-right",
+        RemoteButton::Ok => "hotspot-ok",
+        RemoteButton::Back => "hotspot-back",
+        RemoteButton::Home => "hotspot-home",
+        RemoteButton::Menu => "hotspot-menu",
+        RemoteButton::VolumeUp => "hotspot-volume-up",
+        RemoteButton::VolumeDown => "hotspot-volume-down",
+    }
+}
 
 /// Smallest width the diagram claims; the board around it sets the height, so
 /// the picture shrinks to fit a 1040x760 window instead of forcing the board
@@ -157,7 +275,11 @@ pub type SelectHandler = Box<dyn Fn(RemoteButton)>;
 pub struct RemoteDiagram {
     root: gtk::AspectFrame,
     fixed: gtk::Fixed,
+    base: gtk::Stack,
+    picture: gtk::Picture,
     buttons: BTreeMap<RemoteButton, gtk::Button>,
+    layout: Rc<Cell<&'static RemoteLayout>>,
+    profile: Cell<&'static str>,
 }
 
 impl RemoteDiagram {
@@ -180,71 +302,47 @@ impl RemoteDiagram {
         fixed.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
         root.set_child(Some(&fixed));
 
-        let base: gtk::Widget = match texture() {
-            Some(texture) => {
-                let picture = gtk::Picture::for_paintable(&texture);
-                picture.set_content_fit(gtk::ContentFit::Contain);
-                picture.set_can_shrink(true);
-                picture.set_can_target(false);
-                picture.upcast()
-            }
-            None => {
-                let label = gtk::Label::new(Some(tr("Remote diagram unavailable")));
-                label.add_css_class("dim-label");
-                label.set_can_target(false);
-                label.upcast()
-            }
-        };
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Contain);
+        picture.set_can_shrink(true);
+        picture.set_can_target(false);
+
+        let fallback = gtk::Label::new(Some(tr("Remote diagram unavailable")));
+        fallback.add_css_class("dim-label");
+        fallback.set_can_target(false);
+
+        let base = gtk::Stack::new();
+        base.set_can_target(false);
         base.set_size_request(DIAGRAM_WIDTH as i32, DIAGRAM_HEIGHT as i32);
+        base.add_named(&picture, Some("picture"));
+        base.add_named(&fallback, Some("fallback"));
+        base.set_visible_child_name("picture");
         fixed.put(&base, 0.0, 0.0);
 
-        let mut buttons = BTreeMap::new();
-        for (index, hotspot) in HOTSPOTS.iter().enumerate() {
-            let label = button_label(hotspot.button);
-            let tooltip = if hotspot.button == RemoteButton::Voice {
-                tr("Voice key: drives the ATVV microphone and is not remappable").to_string()
-            } else {
-                tr_args("{label}: click to edit", &[("label", label)])
-            };
-            let button = gtk::Button::builder()
-                .has_frame(false)
-                .focusable(true)
-                .tooltip_text(tooltip)
-                .build();
-            button.add_css_class("remote-hotspot");
-            button.add_css_class(HOTSPOT_CSS[index]);
-            button.set_widget_name(&format!("hotspot-{}", hotspot.button.name()));
-            button.update_property(&[gtk::accessible::Property::Label(&tr_args(
-                "{label} key{suffix}",
-                &[("label", label), ("suffix", "")],
-            ))]);
-            fixed.put(&button, 0.0, 0.0);
-            buttons.insert(hotspot.button, button);
+        let buttons = RemoteButton::ALL
+            .iter()
+            .map(|&button| (button, hotspot_button(button)))
+            .collect::<BTreeMap<_, _>>();
+        for button in buttons.values() {
+            fixed.put(button, 0.0, 0.0);
         }
 
-        for hotspot in HOTSPOTS {
-            let Some(button) = buttons.get(&hotspot.button) else {
-                continue;
-            };
-            let (x, y, w, h) = scaled(hotspot, DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
-            button.set_size_request(w, h);
-            fixed.move_(button, x, y);
-        }
-
-        let layout_base = base.clone();
-        let layout_buttons = buttons.clone();
-        let last = std::cell::Cell::new((0, 0));
+        let layout = Rc::new(Cell::new(DEFAULT_LAYOUT));
+        let tick_layout = Rc::clone(&layout);
+        let tick_base = base.clone();
+        let tick_buttons = buttons.clone();
+        let last = Cell::new((0, 0));
         fixed.add_tick_callback(move |fixed, _clock| {
             let width = fixed.width();
             let height = fixed.height();
             if width > 0 && height > 0 && (width, height) != last.get() {
                 last.set((width, height));
-                layout_base.set_size_request(width, height);
-                for hotspot in HOTSPOTS {
-                    let Some(button) = layout_buttons.get(&hotspot.button) else {
+                tick_base.set_size_request(width, height);
+                for hotspot in tick_layout.get().hotspots {
+                    let Some(button) = tick_buttons.get(&hotspot.button) else {
                         continue;
                     };
-                    let (x, y, w, h) = scaled(hotspot, f64::from(width), f64::from(height));
+                    let (x, y, w, h) = scaled(*hotspot, f64::from(width), f64::from(height));
                     button.set_size_request(w, h);
                     fixed.move_(button, x, y);
                 }
@@ -252,10 +350,71 @@ impl RemoteDiagram {
             glib::ControlFlow::Continue
         });
 
-        Self {
+        let diagram = Self {
             root,
             fixed,
+            base,
+            picture,
             buttons,
+            layout,
+            profile: Cell::new(DEFAULT_LAYOUT.profile_id),
+        };
+        diagram.apply(DEFAULT_LAYOUT);
+        diagram
+    }
+
+    /// Swap the illustration and hotspot table for the active profile.
+    pub fn set_profile(&self, profile_id: &str) {
+        let layout = layout_for(profile_id);
+        if self.profile.get() == layout.profile_id {
+            return;
+        }
+        self.profile.set(layout.profile_id);
+        self.apply(layout);
+    }
+
+    fn apply(&self, layout: &'static RemoteLayout) {
+        self.layout.set(layout);
+        match texture(layout.svg) {
+            Some(texture) => {
+                self.picture.set_paintable(Some(&texture));
+                self.base.set_visible_child_name("picture");
+            }
+            None => {
+                self.base.set_visible_child_name("fallback");
+            }
+        }
+
+        let width = if self.fixed.width() > 0 {
+            f64::from(self.fixed.width())
+        } else {
+            DIAGRAM_WIDTH
+        };
+        let height = if self.fixed.height() > 0 {
+            f64::from(self.fixed.height())
+        } else {
+            DIAGRAM_HEIGHT
+        };
+        self.base.set_size_request(width as i32, height as i32);
+        for button in RemoteButton::ALL {
+            let Some(hotspot) = layout
+                .hotspots
+                .iter()
+                .find(|hotspot| hotspot.button == button)
+                .copied()
+            else {
+                if let Some(widget) = self.buttons.get(&button) {
+                    widget.set_visible(false);
+                }
+                continue;
+            };
+            let Some(widget) = self.buttons.get(&button) else {
+                continue;
+            };
+            widget.set_visible(true);
+            let (x, y, w, h) = scaled(hotspot, width, height);
+            widget.set_size_request(w, h);
+            self.fixed.move_(widget, x, y);
         }
     }
 
@@ -276,7 +435,7 @@ impl RemoteDiagram {
 
     /// Connect every hotspot; the handler runs on the GTK main thread.
     pub fn connect_selected<F: Fn(RemoteButton) + 'static>(&self, handler: F) {
-        let handler = std::rc::Rc::new(handler);
+        let handler = Rc::new(handler);
         for (button, widget) in &self.buttons {
             let handler = handler.clone();
             let button = *button;
@@ -293,9 +452,7 @@ impl RemoteDiagram {
     ) {
         let conflicts = model.conflicts();
         for (button, widget) in &self.buttons {
-            for class in [
-                "selected", "bound", "unbound", "conflict", "pressed", "voice",
-            ] {
+            for class in ["selected", "conflict", "pressed", "voice"] {
                 widget.remove_css_class(class);
             }
             let editable = *button != RemoteButton::Voice;
@@ -305,10 +462,6 @@ impl RemoteDiagram {
                 }
                 if conflicts.contains(button) {
                     widget.add_css_class("conflict");
-                } else if model.is_bound(*button) {
-                    widget.add_css_class("bound");
-                } else {
-                    widget.add_css_class("unbound");
                 }
             } else {
                 widget.add_css_class("voice");
@@ -340,9 +493,31 @@ impl Default for RemoteDiagram {
     }
 }
 
-/// Decode the embedded SVG through GDK's texture loader.
-fn texture() -> Option<gdk::Texture> {
-    let bytes = glib::Bytes::from_static(include_bytes!("../resources/remote.svg"));
+fn hotspot_button(button: RemoteButton) -> gtk::Button {
+    let label = button_label(button);
+    let tooltip = if button == RemoteButton::Voice {
+        tr("Voice key: drives the ATVV microphone and is not remappable").to_string()
+    } else {
+        tr_args("{label}: click to edit", &[("label", label)])
+    };
+    let widget = gtk::Button::builder()
+        .has_frame(false)
+        .focusable(true)
+        .tooltip_text(tooltip)
+        .build();
+    widget.add_css_class("remote-hotspot");
+    widget.add_css_class(hotspot_css(button));
+    widget.set_widget_name(&format!("hotspot-{}", button.name()));
+    widget.update_property(&[gtk::accessible::Property::Label(&tr_args(
+        "{label} key{suffix}",
+        &[("label", label), ("suffix", "")],
+    ))]);
+    widget
+}
+
+/// Decode an embedded SVG through GDK's texture loader.
+fn texture(svg: &'static [u8]) -> Option<gdk::Texture> {
+    let bytes = glib::Bytes::from_static(svg);
     gdk::Texture::from_bytes(&bytes).ok()
 }
 
@@ -351,19 +526,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hotspots_cover_every_logical_button_inside_the_view_box() {
-        let mut seen = std::collections::BTreeSet::new();
-        for hotspot in HOTSPOTS {
-            assert!(seen.insert(hotspot.button), "duplicate {}", hotspot.button);
-            assert!((0.0..=1.0).contains(&hotspot.x));
-            assert!((0.0..=1.0).contains(&hotspot.y));
-            assert!(hotspot.x + hotspot.width <= 1.0 + f64::EPSILON);
-            assert!(hotspot.y + hotspot.height <= 1.0 + f64::EPSILON);
+    fn layouts_cover_expected_buttons_inside_the_view_box() {
+        for layout in [DEFAULT_LAYOUT, &CHROMECAST_LAYOUT] {
+            let mut seen = std::collections::BTreeSet::new();
+            for hotspot in layout.hotspots {
+                assert!(
+                    seen.insert(hotspot.button),
+                    "{} has a duplicate {} hotspot",
+                    layout.profile_id,
+                    hotspot.button
+                );
+                assert!((0.0..=1.0).contains(&hotspot.x));
+                assert!((0.0..=1.0).contains(&hotspot.y));
+                assert!(hotspot.x + hotspot.width <= 1.0 + f64::EPSILON);
+                assert!(hotspot.y + hotspot.height <= 1.0 + f64::EPSILON);
+            }
+            let google = layout.profile_id == "google-chromecast";
+            for button in RemoteButton::ALL {
+                let expected = !(google && button == RemoteButton::Menu);
+                assert_eq!(
+                    seen.contains(&button),
+                    expected,
+                    "{} hotspot state for {button}",
+                    layout.profile_id
+                );
+            }
+            assert!(layout.svg.len() > 1_000);
         }
-        for button in RemoteButton::LOGICAL {
-            assert!(seen.contains(&button), "{button} has no hotspot");
-        }
-        assert!(seen.contains(&RemoteButton::Voice));
-        assert_eq!(seen.len(), RemoteButton::LOGICAL.len() + 1);
+        assert_ne!(RC003_LAYOUT.svg, CHROMECAST_LAYOUT.svg);
+    }
+
+    #[test]
+    fn profile_selection_uses_the_matching_asset() {
+        assert_eq!(
+            layout_for("google-chromecast").profile_id,
+            CHROMECAST_LAYOUT.profile_id
+        );
+        assert_eq!(
+            layout_for("miremote-rc003").profile_id,
+            RC003_LAYOUT.profile_id
+        );
+        assert_eq!(layout_for("unknown").profile_id, DEFAULT_LAYOUT.profile_id);
     }
 }
