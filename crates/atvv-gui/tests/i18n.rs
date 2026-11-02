@@ -10,7 +10,7 @@
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
 use atvv_gui::client::{
-    AudioInfo, Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo,
+    AudioInfo, Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, InputInfo, VinputInfo,
 };
 use atvv_gui::i18n::{self, Language};
 use atvv_gui::model::{GuiModel, action_label, trigger_label};
@@ -58,11 +58,19 @@ fn chinese_window() {
             firmware_revision: Some("2671".to_string()),
             software_revision: Some("A.7.0.6".to_string()),
         },
-        audio: AudioInfo::default(),
+        audio: AudioInfo {
+            available: true,
+            ..AudioInfo::default()
+        },
+        input: InputInfo {
+            enabled: true,
+            keyboard: true,
+        },
         vinput: VinputInfo {
             mode: "trigger".to_string(),
         },
         contract: ContractInfo {
+            profile: "miremote-rc003".to_string(),
             source: "atvv-miremote-rc003".to_string(),
             sample_format: "s16le".to_string(),
             sample_rate: 16_000,
@@ -72,6 +80,8 @@ fn chinese_window() {
                 "VOICECOMMAND".to_string(),
                 "ASSISTANT".to_string(),
             ],
+            active_key: Some("DICTATE".to_string()),
+            recipe: "Select the source.".to_string(),
         },
     });
     window.window().present();

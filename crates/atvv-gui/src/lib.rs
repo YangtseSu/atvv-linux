@@ -11,6 +11,7 @@
 pub mod actions;
 pub mod app;
 pub mod board;
+pub mod checklist;
 pub mod client;
 pub mod diagram;
 pub mod editor;

@@ -16,6 +16,7 @@ else consumes one of two boundaries:
 | Coding agents | [coding-agents](coding-agents.md) | MCP tools + agent text delivery |
 | Browser AI chat | [browser-ai-chat](browser-ai-chat.md) | `getUserMedia` device selection |
 | IM applications | [im-applications](im-applications.md) | source selection in the app |
+| Recovery | [troubleshooting](../troubleshooting.md) | layer checklist, commands, logs |
 | CLI | [`atvvctl`](../../README.md) | `org.atvv.Daemon`, `contract`, `status`, `doctor` |
 
 The provider declares its contract on the source

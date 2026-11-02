@@ -127,7 +127,7 @@ installed: the daemon uses the session bus.
 | Symptom | Check |
 |---|---|
 | `cannot connect to the session D-Bus` | `systemctl --user status atvvd`; `systemctl --user enable --now atvvd` |
-| `The name is not activatable` | `atvvd` is not running; check `systemctl --user status atvvd`. `0.1.0-2` keeps the daemon up while the remote is disconnected and retries the link. |
+| `The name is not activatable` | `atvvd` is not running; check `systemctl --user status atvvd`. The daemon keeps running while the remote is disconnected and retries the link. |
 | `no device address` | `atvvctl pair <MAC>` writes `~/.config/atvv/daemon.toml` |
 | Source missing | `pw-cli info atvv-miremote-rc003` or `atvv-google-chromecast`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
@@ -136,6 +136,26 @@ installed: the daemon uses the session bus.
 | F5 reaches the focused application | The remote's node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
 | No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
 | Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |
+
+The full recovery path, with the exact commands, expected output, and log
+signatures for each symptom, is in [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
+## Known limitations
+
+- The RC003 microphone streams only while the physical voice key is held; a
+  host `MIC_OPEN` alone produces no frames
+  ([evidence](docs/research/rc003-hardware-evidence.md)).
+- Allow roughly 0.3 s after pressing before speaking. First-frame latency has
+  not been measured yet ([B03](docs/plans/B03-preopen-mic.md)).
+- fcitx5-vinput does not yet select the source or bind the declared keys
+  automatically; configure it manually
+  ([guide](docs/integrations/fcitx5-vinput.md)).
+- The Chromecast Remote A0 (`G9N9N`) firmware has not been run on Linux; the
+  A3 run is recorded in
+  [the evidence](docs/research/chromecast-hardware-evidence.md).
+- ATVV does not perform ASR. The consumer owns recognition and text commit.
+- Gain defaults to 0 dB and clipping is possible; adjust it in the GUI or with
+  `atvvctl config set --gain-db`.
 
 Device support and the real-device record are in
 [`docs/device-support.md`](docs/device-support.md),

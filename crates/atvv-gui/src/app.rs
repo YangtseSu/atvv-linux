@@ -23,6 +23,7 @@ use libadwaita as adw;
 use adw::prelude::*;
 
 use crate::board::{MappingBoard, scroll_into_view};
+use crate::checklist::{ChecklistDialog, evaluate};
 use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
 use crate::editor::{ActionEditor, MicrophoneDialog, VoiceEditor, voice_mode_hint};
 use crate::i18n::{self, tr, tr_args};
@@ -220,6 +221,35 @@ const CSS: &str = r#"
 .last-action {
   font-weight: 600;
   color: @accent_color;
+}
+.check-row {
+  padding: 10px 12px;
+  border: 1px solid @borders;
+  border-radius: 12px;
+  background: alpha(@card_bg_color, 0.70);
+}
+.check-title {
+  font-weight: 700;
+}
+.check-body {
+  font-size: 12px;
+  color: alpha(currentColor, 0.65);
+}
+.check-command {
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: alpha(currentColor, 0.08);
+}
+.check-dot.success {
+  color: @success_color;
+}
+.check-dot.warning {
+  color: @warning_color;
+}
+.check-link {
+  font-size: 12px;
 }
 label.error {
   color: @error_color;
@@ -736,6 +766,7 @@ pub struct AppWindow {
     editor: ActionEditor,
     voice_editor: VoiceEditor,
     microphone: MicrophoneDialog,
+    checklist: ChecklistDialog,
     device_dialog: DeviceDialog,
     stack: gtk::Stack,
     toast_overlay: adw::ToastOverlay,
@@ -745,6 +776,12 @@ pub struct AppWindow {
     status_in_flight: Cell<bool>,
     /// Set while the 200 ms microphone poll timer runs.
     microphone_polling: Cell<bool>,
+    /// Set while the 1 s getting-started poll timer runs.
+    checklist_polling: Cell<bool>,
+    /// Auto-open is offered once per process, on the first loaded document.
+    startup_checklist_done: Cell<bool>,
+    /// The last `GetStatus`/`GetConfig` call reached the daemon.
+    daemon_alive: Cell<bool>,
     voice_selected: Cell<bool>,
     pressed: Cell<Option<(RemoteButton, Trigger)>>,
     last_test: RefCell<Option<TestResult>>,
@@ -760,6 +797,7 @@ impl AppWindow {
         header.set_title_widget(Some(&title));
 
         let menu = gio::Menu::new();
+        menu.append(Some(tr("Getting started…")), Some("win.getting-started"));
         menu.append(Some(tr("Microphone…")), Some("win.microphone"));
         menu.append(Some(tr("Device information…")), Some("win.device-info"));
         menu.append(Some(tr("Revert changes")), Some("win.revert"));
@@ -1222,6 +1260,7 @@ impl AppWindow {
             editor: ActionEditor::new(),
             voice_editor: VoiceEditor::new(),
             microphone: MicrophoneDialog::new(),
+            checklist: ChecklistDialog::new(),
             device_dialog: DeviceDialog::new(),
             stack,
             toast_overlay,
@@ -1229,6 +1268,9 @@ impl AppWindow {
             suppress_test_toggle: Cell::new(false),
             status_in_flight: Cell::new(false),
             microphone_polling: Cell::new(false),
+            checklist_polling: Cell::new(false),
+            startup_checklist_done: Cell::new(false),
+            daemon_alive: Cell::new(false),
             voice_selected: Cell::new(false),
             pressed: Cell::new(None),
             last_test: RefCell::new(None),
@@ -1479,6 +1521,11 @@ impl AppWindow {
         ui.window.add_action(&microphone);
 
         let this = Rc::clone(ui);
+        let getting_started = gio::SimpleAction::new("getting-started", None);
+        getting_started.connect_activate(move |_, _| this.open_checklist());
+        ui.window.add_action(&getting_started);
+
+        let this = Rc::clone(ui);
         let about = gio::SimpleAction::new("about", None);
         about.connect_activate(move |_, _| {
             let dialog = this.about_dialog();
@@ -1556,6 +1603,44 @@ impl AppWindow {
         start_microphone_poll(self);
     }
 
+    /// Open the getting-started checklist and start its 1 s status poll.
+    #[doc(hidden)]
+    pub fn open_checklist(&self) {
+        self.refresh_checklist();
+        if !self.checklist.is_open() {
+            self.checklist.present(&self.window);
+        }
+        if let Some(ui) = self.this.borrow().upgrade() {
+            start_checklist_poll(&ui);
+        }
+    }
+
+    /// Auto-open once, and only when the loaded document has no device.
+    fn maybe_auto_open_checklist(&self) {
+        if self.startup_checklist_done.get() {
+            return;
+        }
+        self.startup_checklist_done.set(true);
+        let no_device = self
+            .model
+            .borrow()
+            .as_ref()
+            .is_some_and(|model| model.document.active_device.is_none());
+        if no_device {
+            self.open_checklist();
+        }
+    }
+
+    /// Recompute the checklist from the current document and status.
+    fn refresh_checklist(&self) {
+        let model = self.model.borrow();
+        let document = model.as_ref().map(|model| &model.document);
+        let alive = self.daemon_alive.get();
+        let status = self.status.borrow();
+        let checklist = evaluate(document, alive.then_some(status.as_ref()).flatten());
+        self.checklist.refresh(&checklist);
+    }
+
     /// Apply a gain value from the microphone dialog to the editable document.
     fn set_gain(&self, gain_db: i8) {
         let result = self
@@ -1590,14 +1675,18 @@ impl AppWindow {
                 Ok(model) => {
                     *self.model.borrow_mut() = Some(model);
                     *self.status.borrow_mut() = Some(status);
+                    self.daemon_alive.set(true);
                     self.stack.set_visible_child_name("config");
                     self.error_banner.set_revealed(false);
                     self.refresh_all();
                     self.reload_editor();
+                    self.maybe_auto_open_checklist();
                 }
                 Err(error) => self.show_error(&error),
             },
             Event::LoadFailed(error) => {
+                self.daemon_alive.set(false);
+                self.refresh_checklist();
                 if self.model.borrow().is_some() {
                     self.show_error(&tr_args(
                         "Cannot read the configuration: {error}",
@@ -1610,15 +1699,19 @@ impl AppWindow {
             }
             Event::Status(Ok(status)) => {
                 self.status_in_flight.set(false);
+                self.daemon_alive.set(true);
                 *self.status.borrow_mut() = Some(status);
                 self.refresh_title();
                 self.refresh_device_chip();
                 self.refresh_device_dialog();
                 self.refresh_voice_controls();
                 self.refresh_microphone();
+                self.refresh_checklist();
             }
             Event::Status(Err(error)) => {
                 self.status_in_flight.set(false);
+                self.daemon_alive.set(false);
+                self.refresh_checklist();
                 if self.model.borrow().is_some() {
                     self.show_error(&tr_args(
                         "atvvd is not reachable: {error}",
@@ -2580,6 +2673,7 @@ impl AppWindow {
         self.refresh_device_dialog();
         self.refresh_voice_controls();
         self.refresh_microphone();
+        self.refresh_checklist();
         let model = self.model.borrow();
         let Some(model) = model.as_ref() else {
             self.apply_button.set_sensitive(false);
@@ -3043,12 +3137,14 @@ impl AppWindow {
 
     #[doc(hidden)]
     pub fn set_status(&self, status: DaemonStatus) {
+        self.daemon_alive.set(true);
         *self.status.borrow_mut() = Some(status);
         self.refresh_title();
         self.refresh_device_chip();
         self.refresh_device_dialog();
         self.refresh_voice_controls();
         self.refresh_microphone();
+        self.refresh_checklist();
     }
 
     #[doc(hidden)]
@@ -3115,6 +3211,18 @@ impl AppWindow {
     #[must_use]
     pub fn microphone(&self) -> &MicrophoneDialog {
         &self.microphone
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn checklist(&self) -> &ChecklistDialog {
+        &self.checklist
+    }
+
+    /// Drive the loaded path, including the one-time auto-open decision.
+    #[doc(hidden)]
+    pub fn loaded_for_test(&self, document: ConfigDocument, status: DaemonStatus) {
+        self.handle_event(Event::Loaded { document, status });
     }
 
     #[doc(hidden)]
@@ -3285,6 +3393,33 @@ fn start_microphone_poll(ui: &Rc<AppWindow>) {
             ui.microphone_polling.set(false);
             return glib::ControlFlow::Break;
         }
+        if !ui.status_in_flight.get() {
+            ui.status_in_flight.set(true);
+            ui.backend.refresh_status();
+        }
+        glib::ControlFlow::Continue
+    });
+}
+
+/// Poll the checklist at 1 s while the dialog is open.
+///
+/// The timer stops when the dialog closes; it uses the same in-flight guard as
+/// the other status polls, so a closed dialog leaves no background timer.
+fn start_checklist_poll(ui: &Rc<AppWindow>) {
+    if ui.checklist_polling.get() {
+        return;
+    }
+    ui.checklist_polling.set(true);
+    let weak = Rc::downgrade(ui);
+    glib::timeout_add_local(Duration::from_secs(1), move || {
+        let Some(ui) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        if !ui.checklist.is_open() {
+            ui.checklist_polling.set(false);
+            return glib::ControlFlow::Break;
+        }
+        ui.refresh_checklist();
         if !ui.status_in_flight.get() {
             ui.status_in_flight.set(true);
             ui.backend.refresh_status();

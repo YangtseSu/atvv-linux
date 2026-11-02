@@ -16,6 +16,7 @@
 | 编码 agent | [coding-agents](coding-agents.zh-CN.md) | MCP 工具 + agent 文本传递 |
 | 浏览器 AI 聊天 | [browser-ai-chat](browser-ai-chat.zh-CN.md) | `getUserMedia` 设备选择 |
 | IM 应用 | [im-applications](im-applications.zh-CN.md) | 应用内选择源 |
+| 恢复 | [故障排查](../troubleshooting.zh-CN.md) | 分层检查、命令、日志 |
 | CLI | [`atvvctl`](../../README.zh-CN.md) | `org.atvv.Daemon`、`contract`、`status`、`doctor` |
 
 提供方在源上声明契约（`atvv.contract_version`、`atvv.profile`、

@@ -1,6 +1,6 @@
 # Step 24 — First-run checklist and recovery docs
 
-Status: ⬜ not-started
+Status: ✅ done
 Depends on: 12, 14, 19, 23
 Touches: `crates/atvv-gui/`, `README.md`, `README.zh-CN.md`, `docs/`
 
@@ -108,20 +108,20 @@ and `contract` data. It does not start services, open Bluetooth, write
 
 ## Deliverables
 
-- ⬜ Startup checklist data function with four checks plus the consumer
+- ✅ Startup checklist data function with four checks plus the consumer
   informational row; unit tests for every combination.
-- ⬜ **Getting started…** menu item and dialog with a 1 s refresh only while
+- ✅ **Getting started…** menu item and dialog with a 1 s refresh only while
   visible; auto-open only when `active_device` is absent.
-- ⬜ Copyable commands for daemon, pair, source, and input/trigger failures;
+- ✅ Copyable commands for daemon, pair, source, and input/trigger failures;
   no service, Bluetooth, or config side effects.
-- ⬜ English and Simplified Chinese UI strings for the dialog.
-- ⬜ `docs/troubleshooting.md` and `.zh-CN.md` with the symptom/command/log
+- ✅ English and Simplified Chinese UI strings for the dialog.
+- ✅ `docs/troubleshooting.md` and `.zh-CN.md` with the symptom/command/log
   sections above; bilingual links.
-- ⬜ README and `.zh-CN.md` **Known limitations** sections with evidence
+- ✅ README and `.zh-CN.md` **Known limitations** sections with evidence
   links.
-- ⬜ `docs/integrations/README.md` and `.zh-CN.md` link to the troubleshooting
+- ✅ `docs/integrations/README.md` and `.zh-CN.md` link to the troubleshooting
   page.
-- ⬜ `docs/research/sayall-linux-comparison.md` §6 links this step.
+- ✅ `docs/research/sayall-linux-comparison.md` §6 links this step.
 
 ## Verification
 
@@ -156,21 +156,62 @@ that was not performed.
 Check relative links with a one-off script (the same check used for the
 research docs); do not commit the script.
 
+### Recorded results (2026-11-02)
+
+- `cargo fmt --all -- --check` — clean.
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean.
+- `xvfb-run -a cargo test --workspace` — 256 passed, 0 failed, 9 ignored.
+- `xvfb-run -a cargo test -p atvv-gui --test ui` — 1 passed (checklist states,
+  visible commands, copy, one-time auto-open, configured-device no-auto-open).
+- `reuse lint` — compliant, 173/173 files with license information.
+- One-off relative-link check over 76 Markdown files — all links resolve.
+- Mock-daemon smoke under `xvfb-run` + `dbus-run-session` with a temporary
+  `XDG_CONFIG_HOME`: the configured mock device did not auto-open the dialog;
+  **Menu → Getting started…** opened it; the rows showed daemon/device/source
+  ready and **Input and trigger** missing with `atvvctl status` and
+  `ls -l /dev/uinput`; the copy button placed exactly `atvvctl status` on the
+  X clipboard (`xclip -selection clipboard -o`); killing the mock daemon made
+  the daemon row fail and the dependent rows show `正在等待 atvvd。` within the
+  1 s refresh.
+- The empty-document auto-open is covered by `tests/ui.rs` through the same
+  `Event::Loaded` path (`loaded_for_test`). A running `atvvd` always adopts an
+  active device (`adopt_device`), so a daemon-backed empty-document state does
+  not exist to smoke separately.
+- Installed daemon (`atvvd 0.2.0`, RC003 `C0:5D:39:F8:2D:4C`) read-only
+  checks: `atvvctl doctor` printed every check `ok`; `atvvctl status` showed
+  `"available": true`, `"grabbed": ["/dev/input/event26"]`, `"level": 0`,
+  `"gain_db": 0`; `pw-cli info atvv-miremote-rc003` showed
+  `media.class = "Audio/Source"`, `audio.rate = "16000"`, and the three
+  `atvv.*` properties; `systemctl --user status atvvd` reported
+  `Active: active (running)` and the startup line
+  `atvvd: bluez transport for C0:5D:39:F8:2D:4C ... vinput=trigger trigger=DICTATE`;
+  `getfacl /dev/uinput` listed the `user:yangtse:rw-` ACL; `bluetoothctl info`
+  reported `Paired: yes`, `Trusted: yes`, `Connected: yes`.
+- `atvvctl status` with no daemon on a private bus printed
+  `org.freedesktop.DBus.Error.ServiceUnknown: The name org.atvv.Daemon was not
+  provided by any .service files`; `atvvctl doctor` reported `daemon fail` and
+  skipped the source checks. The observed outputs are reflected in
+  `docs/troubleshooting.md`.
+- Pairing, service restart, and gain-change commands in the page were not rerun:
+  the live device is already paired and the session healthy, and changing gain
+  would alter the operator's configuration. Their expected output is documented
+  from the code path and current state; no hardware claim depends on them.
+
 ## Exit criteria
 
-- ⬜ The checklist has four independently computed checks and one consumer
+- ✅ The checklist has four independently computed checks and one consumer
   informational row; no per-application detection.
-- ⬜ Auto-open happens only when no device is configured; the dialog is always
+- ✅ Auto-open happens only when no device is configured; the dialog is always
   reachable from the menu.
-- ⬜ The checklist is read-only: no `systemctl`, Bluetooth, or config writes.
-- ⬜ The GUI strings exist in English and Simplified Chinese.
-- ⬜ `docs/troubleshooting.md` and its Chinese sibling exist, link to each
+- ✅ The checklist is read-only: no `systemctl`, Bluetooth, or config writes.
+- ✅ The GUI strings exist in English and Simplified Chinese.
+- ✅ `docs/troubleshooting.md` and its Chinese sibling exist, link to each
   other, and are linked from the README and the integrations index.
-- ⬜ The README Known limitations sections are present in both languages and
+- ✅ The README Known limitations sections are present in both languages and
   point at the evidence.
-- ⬜ The troubleshooting commands were run and their observed output is
+- ✅ The troubleshooting commands were run and their observed output is
   recorded in the step or a linked evidence file.
-- ⬜ `reuse lint` and the relative-link check pass.
+- ✅ `reuse lint` and the relative-link check pass.
 
 ## Risks
 
@@ -191,9 +232,10 @@ research docs); do not commit the script.
 
 - 2026-11-02 — plan created from
   `docs/research/sayall-linux-comparison.md` §3.4, §3.5, and §6.
-
-## Next action
-
-Implement the pure checklist state function and its unit tests, then the
-**Getting started…** dialog with the 1 s refresh and the auto-open condition.
-The bilingual troubleshooting page and README sections follow.
+- 2026-11-02 — implemented `checklist.rs` (pure evaluation for daemon, device,
+  source, and input/trigger plus the informational consumer row), the
+  **Getting started…** dialog with copy buttons and a visible-only 1 s status
+  poll, the one-time auto-open on a loaded document without `active_device`,
+  and en/zh-Hans strings. Added `docs/troubleshooting.md` and `.zh-CN.md`,
+  linked them from the READMEs and integrations indexes, and added the README
+  Known limitations sections. Verification recorded above.

@@ -72,8 +72,8 @@ Assistant button on the Chromecast) is not an action slot. Clicking it, or the
 
 ## Header
 
-- **Menu**: *Microphone…*, *Device information…*, *Revert changes*, *About
-  ATVV*, and *Quit*.
+- **Menu**: *Getting started…*, *Microphone…*, *Device information…*, *Revert
+  changes*, *About ATVV*, and *Quit*.
 - **Device chip**: the name BlueZ reports for the active remote (the
   user-editable alias, for example the remote's own name) and the battery
   level. Without a BlueZ name it falls back to the profile display name and
@@ -97,6 +97,37 @@ per-device layout, and updates the source name when the profile changes
 (`atvv-miremote-rc003` versus `atvv-google-chromecast`). Known devices are
 listed from `GetConfig`; the GUI never talks to BlueZ, and pairing stays in
 `atvvctl pair`.
+
+## Getting started
+
+**Menu → Getting started…** opens a read-only checklist for the four layers
+between the remote and a consumer:
+
+1. **Daemon** — `GetStatus` answered on the session bus.
+2. **Device** — the document has an active device, its address matches the
+   status, and the link is connected.
+3. **Source** — the resident `Audio/Source` is available and named by the
+   contract.
+4. **Input and trigger** — the input runtime is enabled, the uinput keyboard is
+   ready, and the contract has an active key.
+
+Each row has a state dot, a one-line explanation, and the recovery commands
+(`systemctl --user status atvvd`, `atvvctl pair <MAC>`, `atvvctl status`,
+`pw-cli info atvv-<profile>`, `ls -l /dev/uinput`) with a copy button. The
+**Consumer** row below the checks shows the daemon's one-line recipe and links
+to `docs/integrations/` on GitHub; it is informational because the provider
+cannot know whether a consumer is configured.
+
+The dialog opens once at startup only when the loaded document has no
+`active_device`. A configured but disconnected remote does not open it. The
+menu item always reaches it, and it refreshes every second while visible. It
+never starts a service, opens Bluetooth, or writes configuration; the commands
+are copied for the user to run.
+
+The checklist is derived from `GetStatus` and `GetConfig`, exactly like the
+rows shown by `atvvctl doctor`. See
+[`troubleshooting.md`](troubleshooting.md) for the full symptom-based recovery
+path.
 
 ## Layouts
 

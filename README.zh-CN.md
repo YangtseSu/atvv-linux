@@ -118,7 +118,7 @@ atvvctl doctor
 | 症状 | 检查 |
 |---|---|
 | `cannot connect to the session D-Bus` | `systemctl --user status atvvd`；`systemctl --user enable --now atvvd` |
-| `The name is not activatable` | `atvvd` 未运行；检查 `systemctl --user status atvvd`。`0.1.0-2` 在遥控器断开时保持守护进程运行并重试链接。 |
+| `The name is not activatable` | `atvvd` 未运行；检查 `systemctl --user status atvvd`。守护进程在遥控器断开时保持运行并重试链接。 |
 | `no device address` | `atvvctl pair <MAC>` 会写入 `~/.config/atvv/daemon.toml` |
 | 音频源缺失 | `pw-cli info atvv-miremote-rc003` 或 `atvv-google-chromecast`；`atvvctl doctor` |
 | `uinput` 不可写或按键未被独占 | `/dev/uinput` 存在且可写；`uinput` 模块已加载；安装 udev 规则后重新登录 |
@@ -127,6 +127,23 @@ atvvctl doctor
 | F5 传到了当前应用 | 遥控器节点未被独占；检查 `atvvctl status` 中的 `input.grabbed`，并关闭其他独占程序 |
 | PipeWire 重启后没有音频源 | `PartOf=pipewire.service` 会重启 `atvvd`；检查 `atvvctl status` 和 `pw-cli info` |
 | 音频源存在但 fcitx 未列出 | 音频源出现后重启 `vinput-daemon` |
+
+每种症状的完整恢复路径（含精确命令、预期输出和日志特征）见
+[`docs/troubleshooting.zh-CN.md`](docs/troubleshooting.zh-CN.md)。
+
+## 已知限制
+
+- RC003 的麦克风只在按住实体语音键时传输数据；仅由主机发出 `MIC_OPEN`
+  不会产生音频帧（[证据](docs/research/rc003-hardware-evidence.md)）。
+- 按下后请等待约 0.3 秒再说话。首帧延迟尚未测量
+  （[B03](docs/plans/B03-preopen-mic.md)）。
+- fcitx5-vinput 尚未自动选择音频源或绑定声明的按键；请手动配置
+  （[指南](docs/integrations/fcitx5-vinput.zh-CN.md)）。
+- Chromecast 遥控器 A0（`G9N9N`）固件尚未在 Linux 上运行；A3 的运行记录见
+  [证据](docs/research/chromecast-hardware-evidence.md)。
+- ATVV 不执行 ASR。识别和文本提交由消费者负责。
+- 增益默认为 0 dB，可能削波；请在 GUI 中或使用
+  `atvvctl config set --gain-db` 调整。
 
 设备支持和真实设备记录见
 [`docs/device-support.zh-CN.md`](docs/device-support.zh-CN.md)、

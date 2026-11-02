@@ -234,6 +234,42 @@ fn zh(text: &str) -> Option<&'static str> {
             "vinput 集成已关闭；不会发出输出按键。"
         }
 
+        // Getting started checklist.
+        "Getting started…" => "入门检查…",
+        "Getting started" => "入门检查",
+        "Daemon, remote, source, and trigger" => "守护进程、遥控器、音频源与触发键",
+        "Check each layer from the daemon down to the trigger. Copy a command when a check is missing." => {
+            "从守护进程到触发键逐层检查。检查未通过时可复制命令。"
+        }
+        "Daemon" => "守护进程",
+        "Device" => "设备",
+        "Input and trigger" => "输入与触发键",
+        "Consumer" => "消费者",
+        "Integration guides" => "集成指南",
+        "Select the ATVV source in your consumer and bind a declared recording key." => {
+            "在消费者中选择 ATVV 音频源，并绑定一个声明的录音键。"
+        }
+        "Copy command" => "复制命令",
+        "atvvd answered on the session bus." => "atvvd 已在会话总线上响应。",
+        "atvvd is not running or the session bus is not reachable." => {
+            "atvvd 未运行，或会话总线不可达。"
+        }
+        "The configured remote is connected." => "已配置的遥控器已连接。",
+        "The configured remote is not connected." => "已配置的遥控器未连接。",
+        "No remote is configured yet. Pair one with atvvctl." => {
+            "尚未配置遥控器。请使用 atvvctl 配对。"
+        }
+        "Waiting for atvvd." => "正在等待 atvvd。",
+        "The configuration is not loaded yet." => "配置尚未加载。",
+        "The source {source} is available." => "音频源 {source} 可用。",
+        "The source {source} is missing from PipeWire." => "PipeWire 中缺少音频源 {source}。",
+        "The grab is active and the trigger key can be emitted." => {
+            "输入独占已生效，可以发出触发键。"
+        }
+        "The input runtime is not ready or the trigger key is not emitted." => {
+            "输入运行时未就绪，或未发出触发键。"
+        }
+
         // Microphone dialog.
         "Microphone" => "麦克风",
         "Input level" => "输入电平",

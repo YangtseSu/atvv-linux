@@ -12,9 +12,10 @@ use std::time::{Duration, Instant};
 
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
+use atvv_gui::checklist::{CheckState, Layer};
 use atvv_gui::client::{
     AudioInfo, Backend, ButtonSignal, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo,
-    VinputInfo,
+    InputInfo, VinputInfo,
 };
 use atvv_gui::model::GuiModel;
 use atvv_input::Trigger;
@@ -78,11 +79,17 @@ fn status(connected: bool, percent: u8) -> DaemonStatus {
         audio: AudioInfo {
             level: 0,
             gain_db: 0,
+            available: true,
+        },
+        input: InputInfo {
+            enabled: true,
+            keyboard: true,
         },
         vinput: VinputInfo {
             mode: "trigger".to_string(),
         },
         contract: ContractInfo {
+            profile: "miremote-rc003".to_string(),
             source: "atvv-miremote-rc003".to_string(),
             sample_format: "s16le".to_string(),
             sample_rate: 16_000,
@@ -92,6 +99,8 @@ fn status(connected: bool, percent: u8) -> DaemonStatus {
                 "VOICECOMMAND".to_string(),
                 "ASSISTANT".to_string(),
             ],
+            active_key: Some("DICTATE".to_string()),
+            recipe: "Select the source and bind DICTATE.".to_string(),
         },
     }
 }
@@ -163,6 +172,77 @@ fn window_smoke() {
     window.microphone().close();
     pump(20);
     assert!(!window.microphone().is_open());
+
+    // Getting started checklist: four independently computed layers, copyable
+    // commands, and the informational consumer row. This document has no
+    // active device.
+    window.open_checklist();
+    pump(20);
+    assert!(window.checklist().is_open());
+    assert_eq!(window.checklist().state(Layer::Daemon), CheckState::Ready);
+    assert_eq!(window.checklist().state(Layer::Device), CheckState::Missing);
+    assert_eq!(window.checklist().state(Layer::Source), CheckState::Ready);
+    assert_eq!(window.checklist().state(Layer::Input), CheckState::Ready);
+    assert_eq!(
+        window.checklist().body_text(Layer::Device),
+        "No remote is configured yet. Pair one with atvvctl."
+    );
+    assert!(
+        window.checklist().commands(Layer::Daemon).is_empty(),
+        "a ready layer hides its recovery commands"
+    );
+    assert_eq!(
+        window.checklist().commands(Layer::Device),
+        ["atvvctl pair <MAC>"]
+    );
+    assert!(window.checklist().copy(Layer::Device, 0));
+    assert_eq!(
+        window.checklist().last_copied().as_deref(),
+        Some("atvvctl pair <MAC>")
+    );
+    assert_eq!(
+        window.checklist().consumer_text(),
+        "Select the source and bind DICTATE."
+    );
+    assert_eq!(
+        window.checklist().link_url(),
+        atvv_gui::checklist::INTEGRATIONS_URL
+    );
+    window.checklist().close();
+    pump(20);
+    assert!(!window.checklist().is_open());
+
+    // Auto-open happens once, and only when the loaded document has no
+    // device. A configured remote leaves the dialog closed.
+    let auto = window_for(&RC003);
+    auto.loaded_for_test(
+        ConfigDocument::from_config(&Config::defaults(&RC003)),
+        status(false, 0),
+    );
+    pump(20);
+    assert!(auto.checklist().is_open());
+    auto.checklist().close();
+    pump(20);
+    auto.loaded_for_test(
+        ConfigDocument::from_config(&Config::defaults(&RC003)),
+        status(false, 0),
+    );
+    assert!(
+        !auto.checklist().is_open(),
+        "auto-open must run once per process"
+    );
+    auto.window().close();
+
+    let mut configured = ConfigDocument::from_config(&Config::defaults(&RC003));
+    configured.active_device = Some("C0:5D:39:F8:2D:4C".to_string());
+    let configured_window = window_for(&RC003);
+    configured_window.loaded_for_test(configured, status(true, 62));
+    pump(20);
+    assert!(
+        !configured_window.checklist().is_open(),
+        "a configured device must not auto-open the checklist"
+    );
+    configured_window.window().close();
 
     window.set_status(status(false, 61));
     assert_eq!(window.battery_text(), "61 % · last known");

@@ -32,6 +32,7 @@ pub struct DaemonStatus {
     pub device: DeviceInfo,
     pub hardware: HardwareInfo,
     pub audio: AudioInfo,
+    pub input: InputInfo,
     pub vinput: VinputInfo,
     pub contract: ContractInfo,
 }
@@ -43,6 +44,16 @@ pub struct AudioInfo {
     /// Decaying peak in permille of full scale, `0..=1000`.
     pub level: u16,
     pub gain_db: i8,
+    /// The resident source exists in the PipeWire graph.
+    pub available: bool,
+}
+
+/// Input runtime state shown by the getting-started checklist.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct InputInfo {
+    pub enabled: bool,
+    pub keyboard: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -72,15 +83,21 @@ pub struct VinputInfo {
     pub mode: String,
 }
 
-/// Provider contract fields the recording-key page needs.
+/// Provider contract fields the recording-key page and checklist need.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct ContractInfo {
+    pub profile: String,
     pub source: String,
     pub sample_format: String,
     pub sample_rate: u32,
     pub channels: u32,
     pub recording_keys: Vec<String>,
+    /// Key the provider emits in trigger mode; `None` when the integration is
+    /// disabled or in D-Bus mode.
+    pub active_key: Option<String>,
+    /// One-line consumer instruction from the daemon.
+    pub recipe: String,
 }
 
 /// One logical button event forwarded by the daemon during capture.

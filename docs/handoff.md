@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 250 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 256 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -45,6 +45,24 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Step 24 first-run checklist and recovery docs (complete, 2026-11-02)**:
+  the GUI menu has **Getting started…**, a read-only dialog with four
+  independent checks (daemon, device, source, input/trigger) and an
+  informational consumer row. It computes state in pure
+  `atvv_gui::checklist::evaluate`, shows only the commands for failing or
+  waiting layers, copies them to the clipboard, refreshes at 1 s only while
+  visible, and auto-opens once only when the loaded document has no
+  `active_device`. The status view now carries `input`, `audio.available`, and
+  the contract's `profile`, `active_key`, and `recipe`; a failed `GetStatus`
+  clears the checklist's view of status so the daemon row fails on the next
+  refresh. Added `docs/troubleshooting.md` and `.zh-CN.md` with
+  symptom/command/expected-output sections, linked them from the READMEs and
+  integration indexes, and added bilingual **Known limitations** sections to
+  the READMEs. Verification: 256 workspace tests passed, 9 ignored; clippy and
+  fmt clean; `reuse lint` clean; 76 Markdown files link-checked; a mock-daemon
+  Xvfb run confirmed no auto-open with a configured device, the menu dialog,
+  clipboard content, and the daemon-loss refresh. See
+  `docs/plans/24-first-run-and-troubleshooting.md`.
 - **Step 23 audio feedback (complete, 2026-11-02)**: `StatusView.audio.level`
   is the decaying post-gain peak in permille (`0..=1000`); the GUI's
   **Menu → Microphone…** dialog shows it with a 200 ms dialog-only poll, sets
