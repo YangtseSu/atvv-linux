@@ -53,7 +53,7 @@ long = "combo:ctrl+alt+v"
 | `adapter` | BlueZ default | Adapter name such as `hci0`. |
 | `gain_db` | profile value | Clamped to ±24 dB; no AGC. |
 | `input` | `true` | Disables discovery, grab, and uinput when false. |
-| `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. Use `dbus` when the compositor does not forward synthetic keyboards to the IME (observed on GNOME Wayland). |
+| `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. `dbus` is the explicit fallback when the trigger key conflicts with an application binding. Editing vinput's `[TriggerKey]` requires a full fcitx5 restart, not `fcitx5-remote -r`. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
 | `allow_exec` | `false` | Required for any `exec:` action. |
 | `[layouts.<id>]` | none | User layouts: `name`, optional `description`, `[gesture]`, and `[buttons.<button>]`. |

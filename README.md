@@ -132,7 +132,7 @@ installed: the daemon uses the session bus.
 | Source missing | `pw-cli info atvv-miremote-rc003` or `atvv-google-chromecast`; `atvvctl doctor` |
 | `uinput` not writable or keys are not grabbed | `/dev/uinput` exists and is writable; `uinput` module loaded; re-login after installing the udev rule |
 | Remote not connected or CAPS missing | `bluetoothctl info <MAC>`; `atvvctl doctor`; `atvvctl monitor` |
-| Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "DICTATE"`. Keep the user's `[TriggerKey]` entries and add `1=Dictate`; stop fcitx5 before editing and restart it after. A commented `[TriggerKey]` section disables the trigger. On GNOME Wayland, synthetic uinput keys may not reach fcitx; use `vinput = "dbus"` in `daemon.toml`. `F24` is the fallback key. |
+| Voice key does not trigger fcitx | The daemon defaults to `trigger_key = "DICTATE"`. Keep the user's `[TriggerKey]` entries and add `1=Dictate`; stop fcitx5 before editing and restart it fully afterwards. `fcitx5-remote -r` is not enough: the old trigger list can stay loaded. A commented `[TriggerKey]` section disables the trigger. `F24` is the fallback key. |
 | F5 reaches the focused application | The remote's node is not grabbed; check `input.grabbed` in `atvvctl status` and close other grabbers |
 | No source after a PipeWire restart | `PartOf=pipewire.service` restarts `atvvd`; check `atvvctl status` and `pw-cli info` |
 | Source exists but fcitx does not list it | restart `vinput-daemon` after the source appears |

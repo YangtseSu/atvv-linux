@@ -88,16 +88,13 @@ in the same session, while the daemon's virtual keyboard was; use the real
 press or an evdevil-based emitter when checking these consumer keys.
 
 GNOME Wayland evidence (2026-11-02, Chromecast Remote, fcitx5 5.1.23,
-fcitx5-vinput 2.4.2): physical keys reached fcitx and the
-`Control+Control_R` trigger started recording. Synthetic `KEY_DICTATE` and
-`KEY_F24` from the ATVV uinput keyboard reached a focused GTK4 Wayland entry
-(the entry displayed `ab` for synthetic `KEY_A`/`KEY_B`) but did not reach
-fcitx's trigger handling. The `[TriggerKey] 1=Dictate` entry was rewritten to
-`1=` after an fcitx restart, and even `1=F24` with a synthetic `F24` did not
-trigger. The ATVV D-Bus fallback (`vinput = "dbus"`) worked on the same host:
-`StartRecording` opened `target.object=atvv-google-chromecast` at 16 kHz.
-Use the D-Bus fallback on this compositor/IME combination; the synthetic-key
-path remains correct for the original RC003 setup and X11.
+fcitx5-vinput 2.4.2): after a **full fcitx5 restart** with
+`[TriggerKey] 1=Dictate`, synthetic `KEY_DICTATE` from the ATVV uinput
+keyboard started vinput, which recorded from `atvv-google-chromecast` at
+16 kHz. Earlier failures were stale addon state: `fcitx5-remote -r` did not
+reload the trigger list, and an exit rewrote the file from the old in-memory
+configuration. Editing `[TriggerKey]` requires stopping fcitx5, editing the
+file, and starting fcitx5 again.
 
 ### Context-dependent mapping is TBD
 

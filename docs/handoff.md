@@ -428,21 +428,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
 - **21 multi-device switching (in progress)**: schema v3 registry, explicit
   `SelectDevice`, per-device layouts, `GetDevices`/`DeviceChanged`, CLI/MCP/GUI
   switching, and a `google-chromecast` profile are implemented. Remaining: the
-  real RC003+Chromecast switch on one host, the Chromecast HID press map, and
-  the `-git` package rebuild. Simultaneous devices stay out of scope. See
-  `docs/plans/21-multi-device.md`.
-- **GNOME Wayland trigger delivery (2026-11-02)**: on this host, physical
-  keys reached fcitx and the `Control+Control_R` trigger worked, but synthetic
-  `KEY_DICTATE`/`KEY_F24` from the ATVV uinput keyboard reached a focused GTK4
-  Wayland entry and did not reach fcitx's trigger handling; fcitx also rewrote
-  `[TriggerKey] 1=Dictate` to `1=` on restart. The live
-  `~/.config/atvv/daemon.toml` therefore uses `vinput = "dbus"`, which was
-  verified with the Chromecast voice key (`StartRecording`,
-  `target.object=atvv-google-chromecast`, 16 kHz). The default remains
-  `vinput = "trigger"`; the D-Bus fallback is documented in
-  `docs/integrations/fcitx5-vinput.md`. The configured Doubao streaming ASR
-  provider returns `concurrency quota exceeded`, so recognition produces no
-  text independently of the trigger.
+  real RC003+Chromecast switch on one host. Simultaneous devices stay out of
+  scope. See `docs/plans/21-multi-device.md`.
+- **Chromecast trigger (2026-11-02)**: the obstacle was fcitx5-vinput's
+  trigger list being loaded only when the addon starts. Editing
+  `[TriggerKey] 1=Dictate` and running `fcitx5-remote -r` is not enough;
+  stop fcitx5, edit the file, and start fcitx5 again. After a full restart,
+  the synthetic `KEY_DICTATE` from `atvvd` started vinput and it recorded from
+  `atvv-google-chromecast` at 16 kHz. The live config uses the default
+  `vinput = "trigger"`. The Doubao provider's earlier
+  `concurrency quota exceeded` was caused by an active proxy; switching the
+  proxy node fixed recognition. The D-Bus fallback remains documented for
+  trigger-key conflicts, not as a workaround for this machine.
 - **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
   UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
   UID trigger and only test a rewrite after a verified dump and restore. NFC

@@ -52,7 +52,7 @@ long = "combo:ctrl+alt+v"
 | `adapter` | BlueZ 默认 | 适配器名称，例如 `hci0`。 |
 | `gain_db` | 设备配置文件值 | 限制在 ±24 dB；没有 AGC。 |
 | `input` | `true` | 为 false 时禁用发现、独占和 uinput。 |
-| `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。合成器不把合成键盘转发给输入法时（在 GNOME Wayland 观察到）使用 `dbus`。 |
+| `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。触发键与应用快捷键冲突时，`dbus` 是显式回退。修改 vinput 的 `[TriggerKey]` 后必须完全重启 fcitx5，`fcitx5-remote -r` 不够。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
 | `allow_exec` | `false` | 任何 `exec:` 操作都需要它。 |
 | `[layouts.<id>]` | 无 | 用户布局：`name`、可选的 `description`、`[gesture]` 和 `[buttons.<button>]`。 |
