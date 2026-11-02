@@ -21,8 +21,7 @@ there is illustrative, not verified hardware.
 ## Next action
 
 Connect the RC003 and Chromecast to this host and record the two-device switch
-(and back) with a real audio stream; then rebuild the `-git` package with the
-final Chromecast key map and session-trigger change.
+(and back) with a real audio stream.
 
 ## Current gap
 
@@ -179,8 +178,8 @@ released` around two real presses. See
   the Chromecast node was grabbed alone and its key map recorded, but the real
   two-remote HID run is still pending.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
-- ⬜ The `-git` package contains the GUI; GTK stays out of the base package.
-  The package is rebuilt after the final code pass.
+- ✅ The `-git` package contains the GUI; GTK stays out of the base package.
+  `atvv-git`/`atvv-gui-git 0.2.0.r12.g7ab7652-1` are built.
 
 ## Risks
 
@@ -205,5 +204,5 @@ released` around two real presses. See
   The Google Chromecast profile was added and its ATVV audio, keepalive,
   reconnect, physical HID map, and direct-Assistant `AUDIO_START` run are
   recorded; the daemon now synthesizes the session trigger for that profile.
-  Mock two-device D-Bus smoke passed. Pending: the real RC003+Chromecast
-  switch and the final package rebuild.
+  Mock two-device D-Bus smoke passed; the package was rebuilt as
+  `0.2.0.r12.g7ab7652-1`. Pending: the real RC003+Chromecast switch.

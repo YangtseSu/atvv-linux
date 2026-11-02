@@ -239,6 +239,12 @@ impl InputRuntime {
         let resolver = KeyResolver;
         let mut registration: BTreeSet<Key> = keymap.codes().collect();
         registration.extend(resolver.codes_for(&map)?);
+        // A uinput device that only carries a handful of action keys is
+        // classified as `ID_INPUT_KEY` by udev, not `ID_INPUT_KEYBOARD`.
+        // Keep the standard key range (excluding BTN_*) registered so the
+        // virtual keyboard is a real keyboard to udev and can emit any
+        // `key:` action, not only the keys present in the current map.
+        registration.extend((1u16..=0xf8).map(Key::from_raw));
         if let Some(program) = &voice_trigger {
             registration.extend(program.press.iter().copied());
         }

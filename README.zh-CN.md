@@ -123,7 +123,7 @@ atvvctl doctor
 | 音频源缺失 | `pw-cli info atvv-miremote-rc003` 或 `atvv-google-chromecast`；`atvvctl doctor` |
 | `uinput` 不可写或按键未被独占 | `/dev/uinput` 存在且可写；`uinput` 模块已加载；安装 udev 规则后重新登录 |
 | 遥控器未连接或缺少 CAPS | `bluetoothctl info <MAC>`；`atvvctl doctor`；`atvvctl monitor` |
-| 语音键没有触发 fcitx | 守护进程默认 `trigger_key = "DICTATE"`。保留用户的 `[TriggerKey]` 条目并添加 `1=Dictate`；编辑前停止 fcitx5，编辑后重启。整段注释掉的 `[TriggerKey]` 会禁用触发。`F24` 是回退键。 |
+| 语音键没有触发 fcitx | 守护进程默认 `trigger_key = "DICTATE"`。保留用户的 `[TriggerKey]` 条目并添加 `1=Dictate`；编辑前停止 fcitx5，编辑后重启。整段注释掉的 `[TriggerKey]` 会禁用触发。GNOME Wayland 下合成键可能到不了 fcitx，请在 `daemon.toml` 使用 `vinput = "dbus"`。`F24` 是回退键。 |
 | F5 传到了当前应用 | 遥控器节点未被独占；检查 `atvvctl status` 中的 `input.grabbed`，并关闭其他独占程序 |
 | PipeWire 重启后没有音频源 | `PartOf=pipewire.service` 会重启 `atvvd`；检查 `atvvctl status` 和 `pw-cli info` |
 | 音频源存在但 fcitx 未列出 | 音频源出现后重启 `vinput-daemon` |

@@ -115,8 +115,19 @@ fcitx 原则上接受裸修饰键，但 2026-10-30 从 ATVV 虚拟键盘发出�
 ### 触发键模式（默认）
 
 语音键被独占，因此 F5 无法到达当前应用。按住会发出 `DICTATE` 按下；释放会发出
-`DICTATE` 抬起。vinput 插件看到与物理键盘相同的按键路径，并在活动输入上下文中
-启动/停止录音。
+`DICTATE` 抬起。在 X11 以及会把 uinput 键盘转发给输入法的合成器上，vinput 插件
+看到与物理键盘相同的按键路径，并在活动输入上下文中启动/停止录音。
+
+> **GNOME Wayland 观察（2026-11-02，fcitx5 5.1.23）。** 在测试机上，物理按键能
+> 到达 fcitx，`Control+Control_R` 触发可用，但 ATVV uinput 键盘发出的合成
+> `KEY_DICTATE` 和 `KEY_F24` 只能到达前台 GTK4 应用，不能到达 fcitx 的触发处理。
+> fcitx 重启后还把 `[TriggerKey] 1=Dictate` 重写成了 `1=`。该环境下可靠的方式是
+> `vinput = "dbus"`，见下方 D-Bus 模式。这是合成器/输入法的按键投递限制，不是
+> ATVV 音频问题；ATVV 合成键路径仍是默认值，并已在原 RC003 环境验证。该主机的
+> `fcitx5-diagnose` 还把全部输入上下文显示为 `frontend:ibus`，且
+> `~/.config/environment.d/envvars.conf` 设置了 `QT_IM_MODULE=ibus` 和
+> `XMODIFIERS=@im=ibus`。请对比正常机器上的上下文前端（`frontend:wayland`
+> 或 `frontend:fcitx`）和环境变量；D-Bus 模式不受这个差异影响。
 
 - 保留用户现有的 vinput 触发，并添加 ATVV 按键：
   ```ini

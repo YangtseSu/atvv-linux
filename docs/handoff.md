@@ -70,11 +70,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
   Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
   session trigger (`trigger_from_session`). Mock two-device switching and
-  persistence passed. The dev package `atvv-git 0.2.0.r4.gc186966-1`
-  (sha256 `e76374e8ffcce666b0b68b1c7aeeb519ba7d06758e62b552b564285448d4e583`)
-  and `atvv-gui-git 0.2.0.r4.gc186966-1` were built from commit `c186966`;
-  a rebuild after the session-trigger change is pending. Pending: the real
-  RC003+Chromecast switch and the final package rebuild.
+  persistence passed. The dev package `atvv-git 0.2.0.r12.g7ab7652-1`
+  (sha256 `94749c3e6258fa80e5a22dc726da74c442d46aa2a70acef1df27df52b816726a`)
+  and `atvv-gui-git 0.2.0.r12.g7ab7652-1` were built from commit `7ab7652`;
+  the r10 pair is installed and already supports the D-Bus trigger path.
+  Pending: the real RC003+Chromecast switch.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -431,6 +431,18 @@ per-session copies; `docs/plans/` remains the canonical plan.
   real RC003+Chromecast switch on one host, the Chromecast HID press map, and
   the `-git` package rebuild. Simultaneous devices stay out of scope. See
   `docs/plans/21-multi-device.md`.
+- **GNOME Wayland trigger delivery (2026-11-02)**: on this host, physical
+  keys reached fcitx and the `Control+Control_R` trigger worked, but synthetic
+  `KEY_DICTATE`/`KEY_F24` from the ATVV uinput keyboard reached a focused GTK4
+  Wayland entry and did not reach fcitx's trigger handling; fcitx also rewrote
+  `[TriggerKey] 1=Dictate` to `1=` on restart. The live
+  `~/.config/atvv/daemon.toml` therefore uses `vinput = "dbus"`, which was
+  verified with the Chromecast voice key (`StartRecording`,
+  `target.object=atvv-google-chromecast`, 16 kHz). The default remains
+  `vinput = "trigger"`; the D-Bus fallback is documented in
+  `docs/integrations/fcitx5-vinput.md`. The configured Doubao streaming ASR
+  provider returns `concurrency quota exceeded`, so recognition produces no
+  text independently of the trigger.
 - **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
   UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
   UID trigger and only test a rewrite after a verified dump and restore. NFC

@@ -130,9 +130,25 @@ trigger path changes. `atvvctl config get` shows the active values.
 ### Trigger-key mode (default)
 
 The voice key is grabbed so F5 cannot reach the focused application. Press and
-hold emits `DICTATE` down; release emits `DICTATE` up. The vinput addon sees
-the same key path as a physical keyboard and starts/stops recording in the
-active input context.
+hold emits `DICTATE` down; release emits `DICTATE` up. On X11 and compositors
+that forward uinput keyboards to the IME, the vinput addon sees the same key
+path as a physical keyboard and starts/stops recording in the active input
+context.
+
+> **GNOME Wayland observation (2026-11-02, fcitx5 5.1.23).** On the test
+> machine, physical keys reached fcitx and the `Control+Control_R` trigger
+> worked, but synthetic `KEY_DICTATE` and `KEY_F24` from the ATVV uinput
+> keyboard reached a focused GTK4 application and did **not** reach fcitx's
+> trigger handling. `[TriggerKey] 1=Dictate` was also rewritten to `1=` when
+> fcitx restarted. The reliable path there is `vinput = "dbus"`; see the D-Bus
+> mode below. This is a compositor/IME delivery limitation, not an ATVV audio
+> problem. The ATVV synthetic-key path remains the default and was verified on
+> the original RC003 setup. On this host `fcitx5-diagnose` also lists every
+> input context as `frontend:ibus`, and
+> `~/.config/environment.d/envvars.conf` sets `QT_IM_MODULE=ibus` and
+> `XMODIFIERS=@im=ibus`. Compare the working machine's context frontend
+> (`frontend:wayland` or `frontend:fcitx`) and environment variables; the
+> D-Bus mode works regardless of that difference.
 
 - Keep the user's existing vinput trigger and add the ATVV key:
   ```ini
