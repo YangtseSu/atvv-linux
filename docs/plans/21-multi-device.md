@@ -20,14 +20,12 @@ there is illustrative, not verified hardware.
 
 ## Next action
 
-Install the dev package so the `uaccess` rule covers the Chromecast HID node,
-capture the physical key map, then connect the RC003 and Chromecast to this
-host and record the two-device switch (and back) with a real audio stream.
+Connect the RC003 and Chromecast to this host and record the two-device switch
+(and back) with a real audio stream; then rebuild the `-git` package with the
+final Chromecast key map and session-trigger change.
 
 ## Current gap
 
-- The Chromecast HID key map is unrecorded; the profile uses the Linux
-  consumer-control mapping and must be corrected from real presses.
 - The two-device switch has synthetic coverage and a mock-D-Bus smoke run, but
   no recorded RC003 + Chromecast run on one host.
 - `GetDevices` does not track a last-seen timestamp; it reports the registry,
@@ -152,7 +150,13 @@ inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
 `atvv-google-chromecast` with `atvv.profile="google-chromecast"`, decoded
 240-byte frames (54 frames / 25,920 samples in two seconds), sent bare
 `MIC_EXTEND`, stopped cleanly, and reconnected after
-`bluetoothctl disconnect` (CAPS re-read, final `state ready`). See
+`bluetoothctl disconnect` (CAPS re-read, final `state ready`). A physical
+press log mapped Power `KEY_COFFEE`, Home `KEY_HOMEPAGE`, Back `KEY_BACK`, OK
+`KEY_SELECT`, Input `KEY_TV`, Mute `KEY_MUTE`, YouTube
+`KEY_CAMERA_ACCESS_DISABLE`, and Netflix `KEY_CAMERA_ACCESS_TOGGLE`. The
+Assistant key emitted no evdev event and sent `AUDIO_START 04 03 02 14`
+directly; the daemon logged `session trigger held` / `session trigger
+released` around two real presses. See
 `docs/research/chromecast-hardware-evidence.md`.
 
 ## Out of scope
@@ -172,7 +176,8 @@ inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
   blocked.
 - ⬜ Only the active device's HID node is grabbed; capture/test ends on switch.
   Address filtering and capture/test teardown are implemented and unit-tested;
-  a real two-remote HID run is pending the `uaccess` install.
+  the Chromecast node was grabbed alone and its key map recorded, but the real
+  two-remote HID run is still pending.
 - ✅ CLI, MCP, status, and doctor expose the active device; docs updated.
 - ⬜ The `-git` package contains the GUI; GTK stays out of the base package.
   The package is rebuilt after the final code pass.
@@ -197,7 +202,8 @@ inferred `google-chromecast` from PnP `18d1:9450`; the daemon advertised
   source (recreating it on a profile change); `GetDevices`/`DeviceChanged`,
   `atvvctl device list|use|rename`, MCP `devices`/`select_device`, the GUI
   device popover with a dirty block, and per-device layouts are implemented.
-  The Google Chromecast profile was added and its ATVV audio/keepalive run is
-  recorded. Mock two-device D-Bus smoke passed. Pending: the `uaccess` install
-  and Chromecast HID capture, the real RC003+Chromecast switch, and the final
-  package rebuild.
+  The Google Chromecast profile was added and its ATVV audio, keepalive,
+  reconnect, physical HID map, and direct-Assistant `AUDIO_START` run are
+  recorded; the daemon now synthesizes the session trigger for that profile.
+  Mock two-device D-Bus smoke passed. Pending: the real RC003+Chromecast
+  switch and the final package rebuild.

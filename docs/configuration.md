@@ -70,7 +70,9 @@ The twelve mappable buttons are `power`, `ok`, `back`, `up`, `down`, `left`,
 `right`, `home`, `menu`, `tv`, `volume_up`, and `volume_down`. The voice key is
 not mappable: it drives the ATVV microphone and the vinput trigger. The
 `google-chromecast` profile uses `KEY_SELECT` for OK, `KEY_HOMEPAGE` for Home,
-and `KEY_SEARCH` for the voice key; unmapped app and mute keys pass through.
+and `KEY_TV` for Input; unmapped app and mute keys pass through. The
+Assistant key sends ATVV `AUDIO_START` directly and the daemon synthesizes
+the configured trigger from the session.
 
 Slots are `single`, `double`, and `long`. A missing slot means "use the profile
 default", not "unmapped". The default map re-emits the original key for every

@@ -286,6 +286,8 @@ pub struct Daemon {
     input_degraded: Vec<String>,
     last_button: Option<String>,
     voice_key: Option<bool>,
+    /// Synthetic trigger currently held by the session path.
+    trigger_held: bool,
 
     verbose: bool,
     tick: Duration,
@@ -438,6 +440,7 @@ impl Daemon {
             input_degraded,
             last_button: None,
             voice_key: None,
+            trigger_held: false,
             verbose: config.verbose,
             tick: config.tick,
             keepalive_interval: config.keepalive_interval,
@@ -543,6 +546,7 @@ impl Daemon {
         self.next_keepalive = Some(now + self.keepalive_interval);
         self.signals.publish(DaemonEvent::VoiceStarted);
         self.trace("voice started");
+        self.on_session_voice(true);
     }
 
     fn on_voice_stopped(&mut self, now: Instant) {
@@ -553,6 +557,53 @@ impl Daemon {
             Some(now + Duration::from_millis(u64::from(self.profile.post_stop_discard_ms)));
         self.signals.publish(DaemonEvent::VoiceStopped);
         self.trace("voice stopped");
+        self.on_session_voice(false);
+    }
+
+    /// Emit the consumer trigger for a device whose voice key has no evdev
+    /// event. The session owns the start/stop edges; the input runtime only
+    /// provides the virtual keyboard.
+    fn on_session_voice(&mut self, started: bool) {
+        if !self.profile.trigger_from_session {
+            return;
+        }
+        match self.config.vinput {
+            VinputMode::Trigger => {
+                if started == self.trigger_held {
+                    return;
+                }
+                let result =
+                    match &self.input {
+                        Some(input) => input.hold_trigger(started),
+                        None => Err("session voice started but the input runtime is unavailable"
+                            .to_string()),
+                    };
+                match result {
+                    Ok(()) => {
+                        self.trigger_held = started;
+                        self.trace(if started {
+                            "session trigger held"
+                        } else {
+                            "session trigger released"
+                        });
+                    }
+                    Err(error) => self.note_input_degraded(error),
+                }
+            }
+            VinputMode::Dbus => {
+                if let Some(vinput) = &mut self.vinput {
+                    let result = if started {
+                        vinput.start()
+                    } else {
+                        vinput.stop()
+                    };
+                    if let Err(error) = result {
+                        self.trace(format!("{error}"));
+                    }
+                }
+            }
+            VinputMode::Off => {}
+        }
     }
 
     fn on_transport_event(&mut self, event: TransportEvent) {
@@ -1042,6 +1093,7 @@ impl Daemon {
         }
         capture::end(&self.capture);
         self.input = None;
+        self.trigger_held = false;
         self.connected = false;
         self.last_error = None;
         let _ = self.transport.disconnect();
@@ -1148,12 +1200,14 @@ impl Daemon {
         if restart {
             if !next.input {
                 self.input = None;
+                self.trigger_held = false;
                 self.input_degraded.clear();
                 self.input_retry_at = None;
             } else if had_input {
                 // Dropping the old runtime releases the evdev grab and the
                 // uinput device, so the new map can register its own keys.
                 self.input = None;
+                self.trigger_held = false;
                 self.input_degraded.clear();
                 let (input, degraded) = start_input(
                     self.profile,
@@ -1328,6 +1382,7 @@ impl Daemon {
                 // Drop the dead readers/keyboard, then re-grab the node when it
                 // reappears after a reconnect.
                 self.input = None;
+                self.trigger_held = false;
                 self.input_retry_at = self
                     .connected
                     .then(|| Instant::now() + Duration::from_secs(2));

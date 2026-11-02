@@ -15,6 +15,11 @@ SUBSYSTEM=="input", ATTRS{name}=="MI RC*", TAG+="uaccess"
 SUBSYSTEM=="input", ATTRS{id/vendor}=="18d1", ATTRS{id/product}=="9450", TAG+="uaccess"
 SUBSYSTEM=="input", ATTRS{name}=="Chromecast Remote", TAG+="uaccess"
 
+# The daemon creates its virtual keyboard, pointer, and the test fake remote
+# through /dev/uinput. Grant the active seat user access to those event nodes
+# for diagnostics and kernel-level tests.
+SUBSYSTEM=="input", ATTRS{name}=="atvv-*", TAG+="uaccess"
+
 # The daemon creates its virtual keyboard through /dev/uinput. Some
 # distributions already tag this node; the rule is idempotent.
 SUBSYSTEM=="misc", KERNEL=="uinput", TAG+="uaccess"

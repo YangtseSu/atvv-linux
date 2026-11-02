@@ -66,13 +66,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
   device popover with a dirty block, `StatusView.devices`, and a registry
   doctor check are implemented. The Google Chromecast Remote profile
   (`google-chromecast`, `18d1:9450`, 240-byte ADPCM frames, bare keepalive)
-  was added and its ATVV audio/pairing/reconnect run recorded. Mock two-device switching
-  and persistence passed. The dev package `atvv-git 0.2.0.r4.gc186966-1`
+  was added and its ATVV audio/pairing/reconnect run recorded. A physical
+  press log mapped Power/Home/Back/OK/Input/volume/Mute/YouTube/Netflix; the
+  Assistant key sends `AUDIO_START` directly, so the daemon synthesizes the
+  session trigger (`trigger_from_session`). Mock two-device switching and
+  persistence passed. The dev package `atvv-git 0.2.0.r4.gc186966-1`
   (sha256 `e76374e8ffcce666b0b68b1c7aeeb519ba7d06758e62b552b564285448d4e583`)
   and `atvv-gui-git 0.2.0.r4.gc186966-1` were built from commit `c186966`;
-  installation and the `uaccess` reload are the operator's next action.
-  Pending: the `uaccess` install and Chromecast HID capture, the real
-  RC003+Chromecast switch, and any package rebuild after those runs.
+  a rebuild after the session-trigger change is pending. Pending: the real
+  RC003+Chromecast switch and the final package rebuild.
 - **01 protocol core**: v1.0 CAPS, commands, control events, ADPCM, frame
   accumulator, device profile, GATT UUIDs.
 - **02 session state machine**: direct RC003 `AUDIO_START`, start-search flow,
@@ -787,11 +789,10 @@ refactor and said auto-selection and recording-key binding are in its
 follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
-Immediate action: install the rebuilt `-git` package so the `uaccess` rule
-covers the Chromecast HID node, capture the physical key map, then connect the
-RC003 and Chromecast to this host and record the two-device switch and back
-with a real audio stream. After that, rebuild the package with the GUI and
-close step 21. In parallel, watch upstream releases; when one ships its own
+Immediate action: connect the RC003 and Chromecast to this host and record the
+two-device switch and back with a real audio stream. Then rebuild the `-git`
+package with the final Chromecast key map and session-trigger change and close
+step 21. In parallel, watch upstream releases; when one ships its own
 auto-selection/declared-key binding, rebuild vinput and record the zero-config
 RC003 run. Do not reopen the PRs.
 

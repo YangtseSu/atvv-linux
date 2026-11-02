@@ -65,8 +65,9 @@ long = "combo:ctrl+alt+v"
 
 十二个可映射按键是 `power`、`ok`、`back`、`up`、`down`、`left`、`right`、
 `home`、`menu`、`tv`、`volume_up` 和 `volume_down`。语音键不可映射：它控制
-ATVV 麦克风和 vinput 触发。`google-chromecast` 配置文件的 OK 是 `KEY_SELECT`，
-主页是 `KEY_HOMEPAGE`，语音键是 `KEY_SEARCH`；未映射的应用键和静音键会透传。
+ATVV 麦克风和 vinput 触发。`google-chromecast` 配置文件的 OK 是 `KEY_SELECT`，主页是 `KEY_HOMEPAGE`，
+Input 是 `KEY_TV`；未映射的应用键和静音键会透传。助手键直接发送 ATVV
+`AUDIO_START`，守护进程从会话开始/停止合成配置的触发键。
 
 槽位是 `single`、`double` 和 `long`。缺失的槽位表示“使用设备配置文件默认值”，
 而不是“未映射”。默认映射会为每个逻辑按键重新发出原始按键，`power` 除外；

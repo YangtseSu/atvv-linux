@@ -10,7 +10,7 @@
 | 设备 | USB/HID ID | 设备配置文件 | ATVV | 音频 | 状态 | 证据 |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz，120 B 帧 | 2026-10-30 已验证 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
-| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz，240 B 帧 | 2026-11-02 部分验证：ATVV 音频、保活、配对和重连已通过；HID 按键映射和双设备切换待完成 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz，240 B 帧 | 2026-11-02 部分验证：ATVV 音频、保活、配对、重连和 HID 按键映射已通过；双设备切换待完成 | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | 小米 RC 系列，其他固件 | 厂商 `2717`，名称 `MI RC*` | 无 | 未知 | 未知 | 不支持；需要配置文件和运行记录 | — |
 | 没有配置文件的 ATVV v1.0 遥控器 | 未知 | 无 | v1.0 | 取决于配置文件 | 不支持；请添加 `DeviceProfile` | — |
 | ATVV v0.4 遥控器 | 未知 | 无 | v0.4 | — | 超出范围 | — |
@@ -37,8 +37,11 @@
   0 dB 增益。
 - `CAPS_RESP` 为 10 字节（`0b 01 00 02 03 00 f0 01 00 1a`），解析器忽略末尾的
   `01 00 1a`。
-- HID 使用者控制：OK 是 `KEY_SELECT`，主页是 `KEY_HOMEPAGE`，语音/助手键是
-  `KEY_SEARCH`，电源是 `KEY_COFFEE`，TV 是 `KEY_TV`。
+- HID 使用者控制：电源是 `KEY_COFFEE`，OK 是 `KEY_SELECT`，主页是
+  `KEY_HOMEPAGE`，返回是 `KEY_BACK`，Input 是 `KEY_TV`，静音是 `KEY_MUTE`。
+  YouTube 和 Netflix 是 `KEY_CAMERA_ACCESS_DISABLE` 与
+  `KEY_CAMERA_ACCESS_TOGGLE`，会透传。助手键不产生 evdev 事件，而是直接发送
+  ATVV `AUDIO_START`；守护进程从会话开始/停止合成消费者触发键。
 
 ## 添加设备
 

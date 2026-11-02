@@ -166,6 +166,12 @@ pub struct DeviceProfile {
     pub gain_db: i8,
     /// Physical key names per logical button; aliases repeat a button.
     pub button_keys: &'static [ButtonKey],
+    /// Synthesize the configured trigger when the ATVV session starts/stops.
+    ///
+    /// True for remotes whose voice key has no evdev event and opens the
+    /// microphone directly with `AUDIO_START`; the daemon must emit the
+    /// consumer trigger from the session instead of the input runtime.
+    pub trigger_from_session: bool,
     pub gesture_timing: GestureTiming,
 }
 
@@ -315,6 +321,7 @@ pub const RC003: DeviceProfile = DeviceProfile {
             key: "KEY_F5",
         },
     ],
+    trigger_from_session: false,
     gesture_timing: GestureTiming {
         double_click_ms: 300,
         long_press_ms: 550,
@@ -326,15 +333,16 @@ pub const RC003: DeviceProfile = DeviceProfile {
     },
 };
 
-/// Google Chromecast Remote (BLE HID, Google `18d1:9450`).
+/// Google Chromecast Voice Remote (BLE HID, Google `18d1:9450`).
 ///
 /// Observed on 2026-11-02 (`74:46:B3:22:2D:D5`, DIS model `A3`, firmware
 /// `26.0`): ATVV v1.0, ADPCM 16 kHz, hold-to-talk, 240-byte frames, short
 /// `MIC_OPEN`, bare `MIC_CLOSE`. The HID report descriptor is a consumer
-/// control array whose Linux key mapping provides `KEY_SELECT`, `KEY_BACK`,
-/// `KEY_HOMEPAGE`, `KEY_SEARCH`, `KEY_TV`, the arrow keys, and the volume
-/// keys; the remaining usages are app/extra keys and stay unmapped so they
-/// pass through to the compositor.
+/// control array whose Linux key mapping provides `KEY_COFFEE` (Power),
+/// `KEY_HOMEPAGE`, `KEY_BACK`, `KEY_SELECT`, `KEY_TV` (Input), the arrow keys,
+/// the volume keys, `KEY_MUTE`, and two app keys. The Assistant key emits no
+/// evdev event; it opens ATVV directly, so the daemon synthesizes the
+/// consumer trigger from the session start/stop.
 pub const CHROMECAST: DeviceProfile = DeviceProfile {
     id: "google-chromecast",
     display_name: "Google Chromecast Voice Remote (A3)",
@@ -387,10 +395,9 @@ pub const CHROMECAST: DeviceProfile = DeviceProfile {
             button: RemoteButton::Home,
             key: "KEY_HOMEPAGE",
         },
-        // The 2020/2024 remote has no menu key; the app/extra keys stay
+        // The 2020/2024 remote has no menu key; the app/input keys stay
         // unmapped and pass through. Keep the logical slot bound to a key the
-        // descriptor advertises so a user layout does not reference a key the
-        // device never emits.
+        // descriptor advertises but the device never emits.
         ButtonKey {
             button: RemoteButton::Menu,
             key: "KEY_PLAYPAUSE",
@@ -407,13 +414,10 @@ pub const CHROMECAST: DeviceProfile = DeviceProfile {
             button: RemoteButton::VolumeDown,
             key: "KEY_VOLUMEDOWN",
         },
-        // The Assistant key is an ordinary consumer Search usage on the HID
-        // side; holding it drives ATVV and the synthetic trigger.
-        ButtonKey {
-            button: RemoteButton::Voice,
-            key: "KEY_SEARCH",
-        },
     ],
+    // The Assistant key emits no evdev key; it opens ATVV directly. The
+    // daemon synthesizes the consumer trigger from the session start/stop.
+    trigger_from_session: true,
     gesture_timing: GestureTiming {
         double_click_ms: 300,
         long_press_ms: 550,
@@ -493,10 +497,9 @@ mod tests {
             CHROMECAST.primary_key(RemoteButton::Home),
             Some("KEY_HOMEPAGE")
         );
-        assert_eq!(
-            CHROMECAST.primary_key(RemoteButton::Voice),
-            Some("KEY_SEARCH")
-        );
+        assert_eq!(CHROMECAST.primary_key(RemoteButton::Voice), None);
+        const { assert!(CHROMECAST.trigger_from_session) };
+        const { assert!(!RC003.trigger_from_session) };
         assert_eq!(CHROMECAST.primary_key(RemoteButton::Tv), Some("KEY_TV"));
         assert_eq!(CHROMECAST.gesture_timing.stable_release_ms, 0);
     }

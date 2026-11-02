@@ -11,7 +11,7 @@ transports prove the code path, not the device.
 | Device | USB/HID ids | Profile | ATVV | Audio | State | Evidence |
 |---|---|---|---|---|---|---|
 | Xiaomi Bluetooth Remote 2 Pro / RC003 | `2717:32b8` | `miremote-rc003` | v1.0 | ADPCM 16 kHz, 120 B frames | Verified 2026-10-30 | [`rc003-hardware-evidence.md`](research/rc003-hardware-evidence.md) |
-| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Partial 2026-11-02: ATVV audio, keepalive, pairing, and reconnect verified; HID map and two-device switch pending | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
+| Google Chromecast Remote / A3 | `18d1:9450` | `google-chromecast` | v1.0 | ADPCM 16 kHz, 240 B frames | Partial 2026-11-02: ATVV audio, keepalive, pairing, reconnect, and HID map verified; two-device switch pending | [`chromecast-hardware-evidence.md`](research/chromecast-hardware-evidence.md) |
 | Xiaomi RC family, other firmware | vendor `2717`, name `MI RC*` | none | unknown | unknown | Not supported; needs a profile and a run | — |
 | ATVV v1.0 remotes without a profile | unknown | none | v1.0 | profile-dependent | Not supported; add a `DeviceProfile` | — |
 | ATVV v0.4 remotes | unknown | none | v0.4 | — | Out of scope | — |
@@ -40,9 +40,12 @@ Package acceptance: [`docs/acceptance/rc003-2026-10-30.md`](acceptance/rc003-202
   16 kHz, 0 dB gain.
 - `CAPS_RESP` is ten bytes (`0b 01 00 02 03 00 f0 01 00 1a`); the extra
   `01 00 1a` trailer is ignored.
-- HID consumer controls: `KEY_SELECT` is OK, `KEY_HOMEPAGE` is Home,
-  `KEY_SEARCH` is the Assistant/voice key, `KEY_COFFEE` is Power, and
-  `KEY_TV` is TV.
+- HID consumer controls: `KEY_COFFEE` is Power, `KEY_SELECT` is OK,
+  `KEY_HOMEPAGE` is Home, `KEY_BACK` is Back, `KEY_TV` is Input, and
+  `KEY_MUTE` is Mute. YouTube and Netflix are `KEY_CAMERA_ACCESS_DISABLE`
+  and `KEY_CAMERA_ACCESS_TOGGLE` and pass through. The Assistant key emits
+  no evdev key; it sends ATVV `AUDIO_START` directly and the daemon
+  synthesizes the consumer trigger from the session.
 
 ## Adding a device
 

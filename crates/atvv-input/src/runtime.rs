@@ -550,6 +550,29 @@ impl InputRuntime {
         self.events.try_recv()
     }
 
+    /// Hold or release the configured synthetic trigger.
+    ///
+    /// Remotes whose voice key has no evdev event open the microphone
+    /// directly with `AUDIO_START`; the daemon calls this on session
+    /// start/stop so fcitx receives the same trigger as a physical voice key.
+    pub fn hold_trigger(&self, pressed: bool) -> Result<(), String> {
+        let Some(program) = &self.voice_trigger else {
+            return Ok(());
+        };
+        if pressed && !self.actions_enabled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        match &self.vkbd {
+            Some(keyboard) => if pressed {
+                keyboard.hold(program)
+            } else {
+                keyboard.release(program)
+            }
+            .map_err(|error| error.to_string()),
+            None => Err("the virtual keyboard is unavailable".to_string()),
+        }
+    }
+
     /// Emit one mapped key, chord, or pointer action once; used by the
     /// test-mode `RunAction`.
     ///
@@ -832,6 +855,48 @@ mod kernel_tests {
             }
         }
         assert_eq!(edges, [true, false], "raw voice edges were lost");
+    }
+
+    #[test]
+    #[ignore = "needs /dev/uinput and evdev read access"]
+    fn session_trigger_holds_and_releases_dictate() {
+        let _fake = FakeRemote::open().expect("fake remote");
+        let runtime = InputRuntime::start_with_options(
+            FAKE_REMOTE,
+            ActionMap::defaults(),
+            InputOptions {
+                voice_trigger: Some("DICTATE".to_string()),
+                ..InputOptions::default()
+            },
+        )
+        .expect("input runtime");
+        let path = runtime
+            .keyboard_path()
+            .expect("virtual keyboard node")
+            .to_path_buf();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let device = loop {
+            match Evdev::open(&path) {
+                Ok(device) => break device,
+                Err(_) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("cannot open {}: {error}", path.display()),
+            }
+        };
+        device.set_nonblocking(true).unwrap();
+        let mut reader = device.into_reader().unwrap();
+
+        runtime.hold_trigger(true).expect("hold trigger");
+        assert!(
+            wait_for(&mut reader, Key::KEY_DICTATE, KeyState::PRESSED),
+            "session start did not hold DICTATE"
+        );
+        runtime.hold_trigger(false).expect("release trigger");
+        assert!(
+            wait_for(&mut reader, Key::KEY_DICTATE, KeyState::RELEASED),
+            "session stop did not release DICTATE"
+        );
     }
 
     fn wait_for_click(reader: &mut evdevil::EventReader, key: Key) -> (bool, bool) {

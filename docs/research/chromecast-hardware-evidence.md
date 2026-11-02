@@ -113,13 +113,42 @@ KEY_BACK, KEY_HOMEPAGE, KEY_SEARCH, KEY_VOLUMEUP, KEY_VOLUMEDOWN, KEY_MUTE,
 KEY_KBDILLUMUP, KEY_CAMERA_ACCESS_DISABLE, KEY_CAMERA_ACCESS_TOGGLE, KEY_TV
 ```
 
-The profile maps `Power` to `KEY_COFFEE`, `Ok` to `KEY_SELECT`, `Home` to
-`KEY_HOMEPAGE`, `Voice` to `KEY_SEARCH`, and the remaining logical buttons to
-their obvious keys; `Menu` is bound to `KEY_PLAYPAUSE` so every logical slot
-has a key. The physical mapping has **not** been recorded: the `input` access
-was unavailable on this machine until the udev `uaccess` rule was installed.
-This file must gain a recorded press log before the device is called fully
-verified. Unmapped app/mute keys pass through to the compositor.
+A physical press log with the `uaccess` rule active mapped the buttons
+(2026-11-02, `74:46:B3:22:2D:D5`):
+
+| Physical button | evdev key | Profile mapping |
+|---|---|---|
+| Power | `KEY_COFFEE` | `power` |
+| D-pad up/down/left/right | `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/`KEY_RIGHT` | arrows |
+| D-pad center | `KEY_SELECT` | `ok` |
+| Back | `KEY_BACK` | `back` |
+| Home | `KEY_HOMEPAGE` | `home` |
+| Volume +/− | `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN` | volume |
+| Mute | `KEY_MUTE` | unmapped (passes through) |
+| Input (bottom right) | `KEY_TV` | `tv` |
+| YouTube | `KEY_CAMERA_ACCESS_DISABLE` | unmapped (passes through) |
+| Netflix | `KEY_CAMERA_ACCESS_TOGGLE` | unmapped (passes through) |
+| Assistant/Mic | **no evdev event** | ATVV directly |
+
+The remote has no Menu button and no key labelled TV; the bottom-right Input
+button is the `KEY_TV` source. `KEY_PLAYPAUSE` and `KEY_KBDILLUMUP` are
+advertised by the descriptor but no physical button produced them. `Menu` is
+therefore bound to `KEY_PLAYPAUSE` only to keep every logical slot populated.
+
+The Assistant/Mic key does not emit a HID key. Holding it sends `AUDIO_START`
+(`04 03 02 14` with a stream id) directly on the ATVV control characteristic;
+releasing sends `AUDIO_STOP 00 02`. Because there is no evdev edge, the daemon
+now synthesizes the configured consumer trigger from the session start/stop
+when the profile sets `trigger_from_session`. A real press logged:
+
+```text
+atvvd: voice started
+atvvd: session trigger held
+atvvd: state: streaming
+atvvd: first frame 240 B raw [...]
+atvvd: voice stopped
+atvvd: session trigger released
+```
 
 ## Reconnect
 
@@ -138,7 +167,6 @@ The final status was `state ready`, `connected true`.
 
 ## Pending
 
-- Physical button capture with the `uaccess` rule installed.
 - A real speech capture and ASR check.
 - Two-device switching with the RC003 on the same host (scheduled for the
   evening of 2026-11-02).
