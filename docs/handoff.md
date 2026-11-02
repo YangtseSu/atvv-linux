@@ -16,11 +16,11 @@ Updated: 2026-11-03
   is not installed; the GTK window smoke test passed on the live GNOME session.
   The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at least as
   large as the window; it skips the pointer section otherwise.
-- Live state (2026-11-03): the installed `atvv 0.3.0-1` predates the audio-sync
-  length fix. `atvvd.service` is stopped and the fixed
+- Live state (2026-11-03): the installed `atvv 0.3.0-1` predates the
+  audio-sync length fix. `atvvd.service` is stopped and the fixed
   `target/debug/atvvd --verbose` runs from this checkout (log
-  `/tmp/atvv-fixed.log`). Rebuild and reinstall the package, then start the
-  unit.
+  `/tmp/atvv-fixed.log`). The 0.3.1-1 packages are built in `~/aur/atvv`;
+  install them and start the unit.
 
 ## Read first
 
@@ -51,13 +51,26 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
-- **v0.3.1 release (tagged)**: workspace version 0.3.1. Fixes the
-  audio-characteristic classification that could drop a raw ADPCM frame,
-  reset the decoder, record a bogus sequence gap, and close the stream as an
-  unsupported 8 kHz codec. The annotated tag runs the release workflow for
-  x86_64/aarch64 binaries, the source archive, checksums, and generated
-  notes. AUR/VCS recipes are external; the stable AUR `atvv` needs its
-  `pkgver` and checksum updated after the tag assets exist.
+- **v0.3.1 release (published 2026-11-03)**: workspace version 0.3.1; the
+  annotated tag `v0.3.1` (`8320855`) published
+  [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.3.1)
+  with x86_64 (9,341,741 B; sha256
+  `9c88b8f0e7631d750bbbb1bb50fa21bbf3a991a509961bf9796387bd7b16afe2`) and
+  aarch64 (8,819,661 B; sha256
+  `77e8c1c0e708e9cb54926043845d5e7e541c58c1be4d53b6aede4cc93e7c9d1a`)
+  binaries, the 2,611,200 B source archive (sha256
+  `938ac765b2da74f278542106b297cdcab8f4f2be1817d7a7ed62033a31661bea`),
+  checksums, and generated notes. Release workflow run 41495210552 succeeded.
+  The fix decodes a raw ADPCM frame that starts with `0x0A` instead of
+  treating it as `AUDIO_SYNC`, which could drop the frame, reset the decoder,
+  record a bogus sequence gap, and close the stream as an unsupported 8 kHz
+  codec. The stable AUR update `0.3.1-1` was pushed as AUR commit `a6f4619`;
+  `atvv` is 7,045,187 B (sha256
+  `8e089a68c8fecd98dd16e7c0713197e4d415fcf503d2bbfa17286023aca5b638`) and
+  `atvv-gui` is 1,589,069 B (sha256
+  `cb3899690d65fe52572f1739fa0d5aa003ca6d2ad72eda0c4fee02befb1817e4`).
+  `makepkg --printsrcinfo` matches `.SRCINFO`; `namcap` only reports the
+  expected implicit glibc/libgcc/libpipewire and runtime-service notes.
 - **Audio-sync frame misclassification (fixed 2026-11-03)**: a raw 120-byte
   ADPCM frame beginning with `0x0A` was parsed as `AUDIO_SYNC` on the audio
   characteristic. The frame was dropped, the decoder reset from its bytes, a
@@ -926,12 +939,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**v0.3.1 is tagged; finish the release.** The tag push runs the release
-workflow. After the source archive exists, update the external AUR `atvv`
-recipe to `0.3.1-1` with its checksum, build and install it, and start
-`atvvd.service`. Until then the unit stays stopped and the fixed
-`target/debug/atvvd --verbose` runs from the checkout. Pushing needs
-explicit approval.
+**v0.3.1 is published; install it.** The release workflow and the AUR
+`0.3.1-1` update are complete. Install
+`~/aur/atvv/atvv-0.3.1-1-x86_64.pkg.tar.zst` and
+`~/aur/atvv/atvv-gui-0.3.1-1-x86_64.pkg.tar.zst`, start `atvvd.service`, and
+stop the temporary fixed debug daemon. The audio-sync fix needs no further
+code change.
 
 **v0.3.0 is published.** The annotated tag `v0.3.0` (`ad39a49`) published the
 release with x86_64/aarch64 binaries, the source archive, checksums, and
