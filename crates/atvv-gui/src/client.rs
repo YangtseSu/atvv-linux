@@ -31,8 +31,18 @@ pub struct DaemonStatus {
     pub last_error: Option<String>,
     pub device: DeviceInfo,
     pub hardware: HardwareInfo,
+    pub audio: AudioInfo,
     pub vinput: VinputInfo,
     pub contract: ContractInfo,
+}
+
+/// Live microphone state shown by the microphone dialog.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct AudioInfo {
+    /// Decaying peak in permille of full scale, `0..=1000`.
+    pub level: u16,
+    pub gain_db: i8,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -66,6 +76,10 @@ pub struct VinputInfo {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct ContractInfo {
+    pub source: String,
+    pub sample_format: String,
+    pub sample_rate: u32,
+    pub channels: u32,
     pub recording_keys: Vec<String>,
 }
 

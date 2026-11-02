@@ -9,7 +9,9 @@
 
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
-use atvv_gui::client::{Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo};
+use atvv_gui::client::{
+    AudioInfo, Backend, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo,
+};
 use atvv_gui::i18n::{self, Language};
 use atvv_gui::model::{GuiModel, action_label, trigger_label};
 use atvv_input::Trigger;
@@ -56,10 +58,15 @@ fn chinese_window() {
             firmware_revision: Some("2671".to_string()),
             software_revision: Some("A.7.0.6".to_string()),
         },
+        audio: AudioInfo::default(),
         vinput: VinputInfo {
             mode: "trigger".to_string(),
         },
         contract: ContractInfo {
+            source: "atvv-miremote-rc003".to_string(),
+            sample_format: "s16le".to_string(),
+            sample_rate: 16_000,
+            channels: 1,
             recording_keys: vec![
                 "DICTATE".to_string(),
                 "VOICECOMMAND".to_string(),
@@ -186,6 +193,15 @@ fn chinese_window() {
     );
     assert!(window.voice_hint_text().contains("消费者必须绑定"));
     window.voice_editor().close();
+
+    window.open_microphone();
+    assert!(window.microphone().is_open());
+    assert_eq!(
+        window.microphone().hint_text(),
+        "在主窗口中点击“应用”后保存；默认布局中暂存的槽位编辑会另存为新布局。"
+    );
+    assert_eq!(window.microphone().gain_text(), "0 dB");
+    window.microphone().close();
 
     window.set_status(DaemonStatus {
         state: "disconnected".to_string(),

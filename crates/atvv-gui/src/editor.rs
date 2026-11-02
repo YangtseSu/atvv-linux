@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Modal editors: one action slot and the recording-key output.
+//! Modal editors: one action slot, the recording-key output, and the live
+//! microphone level/gain dialog.
 //!
-//! Both dialogs are views: they read a [`GuiModel`] when opened, compose a
+//! The dialogs are views: they read a [`GuiModel`] when opened, compose a
 //! draft, and hand commands back to the window. Validation and persistence
 //! stay in `GuiModel`/`SetConfig`, so the dialogs cannot bypass the atomic
 //! apply path.
@@ -844,6 +845,265 @@ impl VoiceEditor {
 }
 
 impl Default for VoiceEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Live input level and post-decode gain.
+///
+/// The dialog is a view: the gain change goes through [`GuiModel`] and the
+/// window's existing Apply path, never straight to `daemon.toml`.
+pub struct MicrophoneDialog {
+    dialog: adw::Dialog,
+    level_bar: gtk::LevelBar,
+    level_label: gtk::Label,
+    gain_scale: gtk::Scale,
+    gain_label: gtk::Label,
+    source_row: adw::ActionRow,
+    format_row: adw::ActionRow,
+    hint: gtk::Label,
+    open: Rc<Cell<bool>>,
+    syncing: Rc<Cell<bool>>,
+}
+
+impl MicrophoneDialog {
+    #[must_use]
+    pub fn new() -> Self {
+        let level_row = adw::ActionRow::builder().title(tr("Input level")).build();
+        level_row.set_activatable(false);
+        let level_bar = gtk::LevelBar::builder()
+            .min_value(0.0)
+            .max_value(1.0)
+            .value(0.0)
+            .build();
+        level_bar.set_hexpand(true);
+        level_bar.set_valign(gtk::Align::Center);
+        level_bar.set_size_request(180, -1);
+        let level_label = gtk::Label::new(Some("0 %"));
+        level_label.add_css_class("numeric");
+        level_label.set_width_chars(5);
+        level_label.set_xalign(1.0);
+        let level_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        level_box.append(&level_bar);
+        level_box.append(&level_label);
+        level_row.add_suffix(&level_box);
+
+        let gain_row = adw::ActionRow::builder()
+            .title(tr("Gain"))
+            .subtitle(tr("Applied after decoding, before the source."))
+            .build();
+        gain_row.set_activatable(false);
+        let gain_scale = gtk::Scale::with_range(
+            gtk::Orientation::Horizontal,
+            f64::from(-atvv_config::MAX_GAIN_DB),
+            f64::from(atvv_config::MAX_GAIN_DB),
+            1.0,
+        );
+        gain_scale.set_hexpand(true);
+        gain_scale.set_size_request(220, -1);
+        gain_scale.set_draw_value(false);
+        gain_scale.set_valign(gtk::Align::Center);
+        gain_scale.add_mark(0.0, gtk::PositionType::Bottom, Some("0 dB"));
+        let gain_label = gtk::Label::new(Some("0 dB"));
+        gain_label.add_css_class("numeric");
+        gain_label.set_width_chars(6);
+        gain_label.set_xalign(1.0);
+        let gain_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        gain_box.append(&gain_scale);
+        gain_box.append(&gain_label);
+        gain_row.add_suffix(&gain_box);
+
+        let source_row = adw::ActionRow::builder().title(tr("Source")).build();
+        source_row.set_activatable(false);
+        let format_row = adw::ActionRow::builder().title(tr("Format")).build();
+        format_row.set_activatable(false);
+        let group = adw::PreferencesGroup::new();
+        group.add(&level_row);
+        group.add(&gain_row);
+        group.add(&source_row);
+        group.add(&format_row);
+
+        let hint = dim_label(tr(
+            "Saved with Apply in the main window; staged slot edits on Default are saved as a new layout.",
+        ));
+        hint.set_halign(gtk::Align::Start);
+        hint.set_wrap(true);
+
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        content.set_margin_top(12);
+        content.set_margin_bottom(12);
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+        content.append(&group);
+        content.append(&hint);
+
+        let footer = footer_bar();
+        let close = gtk::Button::with_label(tr("Close"));
+        close.add_css_class("flat");
+        footer.append(&spacer());
+        footer.append(&close);
+
+        let header = adw::HeaderBar::new();
+        header.set_title_widget(Some(&adw::WindowTitle::new(tr("Microphone"), "")));
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_top_bar(&header);
+        toolbar.set_content(Some(&content));
+        toolbar.add_bottom_bar(&footer);
+        let dialog = adw::Dialog::builder()
+            .title(tr("Microphone"))
+            .content_width(460)
+            .child(&toolbar)
+            .build();
+
+        let microphone = Self {
+            dialog,
+            level_bar,
+            level_label,
+            gain_scale,
+            gain_label,
+            source_row,
+            format_row,
+            hint,
+            open: Rc::new(Cell::new(false)),
+            syncing: Rc::new(Cell::new(false)),
+        };
+        let open = Rc::clone(&microphone.open);
+        microphone.dialog.connect_closed(move |_| open.set(false));
+        let close_dialog = microphone.dialog.clone();
+        close.connect_clicked(move |_| {
+            close_dialog.close();
+        });
+        microphone
+    }
+
+    #[must_use]
+    pub fn dialog(&self) -> &adw::Dialog {
+        &self.dialog
+    }
+
+    #[must_use]
+    pub fn is_open(&self) -> bool {
+        self.open.get()
+    }
+
+    pub fn present(&self, parent: &impl IsA<gtk::Widget>) {
+        self.open.set(true);
+        self.dialog.present(Some(parent));
+    }
+
+    pub fn close(&self) {
+        self.open.set(false);
+        self.dialog.close();
+    }
+
+    /// Update the gain scale without emitting a change.
+    ///
+    /// The scale value is only reassigned when the model differs by a whole
+    /// step; a status poll during a drag must not snap the thumb.
+    pub fn load(&self, model: &GuiModel) {
+        let gain_db = model.document.gain_db;
+        self.set_gain_label(gain_db);
+        if self.gain_db() != gain_db {
+            self.syncing.set(true);
+            self.gain_scale.set_value(f64::from(gain_db));
+            self.syncing.set(false);
+        }
+    }
+
+    fn set_gain_label(&self, gain_db: i8) {
+        let text = if gain_db == 0 {
+            "0 dB".to_string()
+        } else {
+            format!("{gain_db:+} dB")
+        };
+        if self.gain_label.text() != text {
+            self.gain_label.set_text(&text);
+        }
+    }
+
+    /// Update the decaying level bar from `StatusView.audio.level`.
+    pub fn set_level(&self, level: u16) {
+        let level = level.min(1000);
+        let value = f64::from(level) / 1000.0;
+        if (self.level_bar.value() - value).abs() > f64::EPSILON {
+            self.level_bar.set_value(value);
+        }
+        let percent = (u32::from(level) + 5) / 10;
+        let text = format!("{percent} %");
+        if self.level_label.text() != text {
+            self.level_label.set_text(&text);
+        }
+    }
+
+    /// Show the provider source and its stream format.
+    pub fn set_source(&self, source: &str, format: &str, rate: u32, channels: u32) {
+        let source_text = if source.is_empty() { "—" } else { source };
+        if self.source_row.subtitle().as_deref() != Some(source_text) {
+            self.source_row.set_subtitle(source_text);
+        }
+        let format_text = if format.is_empty() {
+            "—".to_string()
+        } else {
+            format!("{format} · {rate} Hz · {channels} ch")
+        };
+        if self.format_row.subtitle().as_deref() != Some(format_text.as_str()) {
+            self.format_row.set_subtitle(&format_text);
+        }
+    }
+
+    pub fn connect_gain_changed<F: Fn(i8) + 'static>(&self, handler: F) {
+        let syncing = Rc::clone(&self.syncing);
+        self.gain_scale.connect_value_changed(move |scale| {
+            if syncing.get() {
+                return;
+            }
+            handler(scale.value().round() as i8);
+        });
+    }
+
+    #[must_use]
+    pub fn gain_db(&self) -> i8 {
+        self.gain_scale.value().round() as i8
+    }
+
+    #[must_use]
+    pub fn level_bar(&self) -> &gtk::LevelBar {
+        &self.level_bar
+    }
+
+    #[must_use]
+    pub fn gain_scale(&self) -> &gtk::Scale {
+        &self.gain_scale
+    }
+
+    #[must_use]
+    pub fn level_text(&self) -> String {
+        self.level_label.text().to_string()
+    }
+
+    #[must_use]
+    pub fn gain_text(&self) -> String {
+        self.gain_label.text().to_string()
+    }
+
+    #[must_use]
+    pub fn source_text(&self) -> String {
+        self.source_row.subtitle().unwrap_or_default().to_string()
+    }
+
+    #[must_use]
+    pub fn format_text(&self) -> String {
+        self.format_row.subtitle().unwrap_or_default().to_string()
+    }
+
+    #[must_use]
+    pub fn hint_text(&self) -> String {
+        self.hint.text().to_string()
+    }
+}
+
+impl Default for MicrophoneDialog {
     fn default() -> Self {
         Self::new()
     }

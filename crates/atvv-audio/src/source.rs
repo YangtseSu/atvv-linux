@@ -119,6 +119,14 @@ impl PcmQueue {
         self.inner.pop()
     }
 
+    /// Drop every queued sample.
+    ///
+    /// A new utterance starts from an empty queue so a consumer never reads
+    /// the tail of the previous session.
+    pub fn clear(&self) {
+        while self.inner.pop().is_some() {}
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.inner.len()
@@ -182,6 +190,11 @@ impl AudioSource {
 
     pub fn push(&self, samples: &[i16]) {
         self.queue.push(samples);
+    }
+
+    /// Drop queued samples at a session boundary.
+    pub fn clear(&self) {
+        self.queue.clear();
     }
 
     #[must_use]
@@ -437,6 +450,17 @@ mod tests {
         let queue = PcmQueue::new(2);
         queue.push(&[1, 2, 3]);
         assert_eq!(queue.len(), 2);
+    }
+
+    #[test]
+    fn queue_clear_drains_every_sample() {
+        let queue = PcmQueue::new(4);
+        queue.push(&[1, 2, 3]);
+        queue.clear();
+        assert!(queue.is_empty());
+        assert_eq!(queue.pop(), None);
+        queue.push(&[7]);
+        assert_eq!(queue.pop(), Some(7));
     }
 
     #[test]

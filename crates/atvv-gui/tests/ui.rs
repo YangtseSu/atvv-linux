@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 use atvv_config::{Config, ConfigDocument};
 use atvv_gui::app::{AppWindow, HardwareField};
 use atvv_gui::client::{
-    Backend, ButtonSignal, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo, VinputInfo,
+    AudioInfo, Backend, ButtonSignal, ContractInfo, DaemonStatus, DeviceInfo, HardwareInfo,
+    VinputInfo,
 };
 use atvv_gui::model::GuiModel;
 use atvv_input::Trigger;
@@ -74,10 +75,18 @@ fn status(connected: bool, percent: u8) -> DaemonStatus {
             firmware_revision: Some("2671".to_string()),
             software_revision: Some("A.7.0.6".to_string()),
         },
+        audio: AudioInfo {
+            level: 0,
+            gain_db: 0,
+        },
         vinput: VinputInfo {
             mode: "trigger".to_string(),
         },
         contract: ContractInfo {
+            source: "atvv-miremote-rc003".to_string(),
+            sample_format: "s16le".to_string(),
+            sample_rate: 16_000,
+            channels: 1,
             recording_keys: vec![
                 "DICTATE".to_string(),
                 "VOICECOMMAND".to_string(),
@@ -117,6 +126,43 @@ fn window_smoke() {
         window.device_name_text(),
         "Xiaomi Bluetooth Remote 2 Pro (RC003)"
     );
+
+    // Microphone dialog: live level, source summary, and gain through the
+    // document's Apply path.
+    let mut live = status(true, 62);
+    live.audio.level = 640;
+    window.set_status(live);
+    window.open_microphone();
+    pump(20);
+    assert!(window.microphone().is_open());
+    assert_eq!(window.microphone().level_text(), "64 %");
+    assert!((window.microphone().level_bar().value() - 0.64).abs() < 1e-6);
+    assert_eq!(window.microphone().source_text(), "atvv-miremote-rc003");
+    assert_eq!(window.microphone().format_text(), "s16le · 16000 Hz · 1 ch");
+    assert_eq!(window.microphone().gain_text(), "0 dB");
+    assert_eq!(
+        window.microphone().hint_text(),
+        "Saved with Apply in the main window; staged slot edits on Default are saved as a new layout."
+    );
+
+    window.microphone().gain_scale().set_value(6.0);
+    pump(20);
+    assert_eq!(window.microphone().gain_text(), "+6 dB");
+    assert_eq!(window.document().expect("document").gain_db, 6);
+    assert_eq!(window.dirty_banner_text(), "Unsaved changes");
+
+    let mut live = status(true, 62);
+    live.audio.level = 250;
+    window.set_status(live);
+    assert_eq!(window.microphone().level_text(), "25 %");
+
+    window.microphone().gain_scale().set_value(0.0);
+    pump(20);
+    assert_eq!(window.document().expect("document").gain_db, 0);
+    window.mark_saved_for_test();
+    window.microphone().close();
+    pump(20);
+    assert!(!window.microphone().is_open());
 
     window.set_status(status(false, 61));
     assert_eq!(window.battery_text(), "61 % · last known");

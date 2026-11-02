@@ -50,7 +50,7 @@ long = "combo:ctrl+alt+v"
 | `active_device` | 无 | 活动设备的蓝牙地址；`atvvctl pair` 会写入并设为活动设备。 |
 | `[devices.<address>]` | 无 | 已知设备：可选 `label`、必填 `profile` 和 `layout`。地址会规范为大写。 |
 | `adapter` | BlueZ 默认 | 适配器名称，例如 `hci0`。 |
-| `gain_db` | 设备配置文件值 | 限制在 ±24 dB；没有 AGC。 |
+| `gain_db` | 设备配置文件值 | 限制在 ±24 dB；没有 AGC。`atvv-config` 的**菜单 → 麦克风…**显示实时电平和增益。 |
 | `input` | `true` | 为 false 时禁用发现、独占和 uinput。 |
 | `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。触发键与应用快捷键冲突时，`dbus` 是显式回退。修改 vinput 的 `[TriggerKey]` 后必须完全重启 fcitx5，`fcitx5-remote -r` 不够。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
@@ -250,6 +250,10 @@ atvvctl capture --timeout 30    # 一次按下；打印逻辑按键和槽位
 `atvvctl map test` 默认解析活动布局，也可用 `--layout <id>` 或单个操作字符串。
 它从不执行 `exec:`；只校验并打印按键程序。指针操作报告 `kind: pointer`，没有按键程序。`atvvctl status`
 在 `input.pointer` 中报告指针设备是否活动；纯键盘映射为 false。
+
+`atvvctl status` 打印完整的 `StatusView` JSON。`audio.level` 是增益后信号的
+衰减峰值，单位为千分比（`0..=1000`）；空闲时为零，随状态发布更新，并与 GUI
+电平条一致。`audio.gain_db` 是当前应用的增益。
 
 `atvvctl capture` 启动捕获模式，等待一次逻辑按键按下，然后结束。捕获会报告输入
 运行时识别出的逻辑按键和手势槽位。它本身不独占 evdev，也不暴露原始按键码。

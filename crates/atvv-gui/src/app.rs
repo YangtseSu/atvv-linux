@@ -24,7 +24,7 @@ use adw::prelude::*;
 
 use crate::board::{MappingBoard, scroll_into_view};
 use crate::client::{Backend, ButtonSignal, DaemonStatus, Event, HardwareInfo};
-use crate::editor::{ActionEditor, VoiceEditor, voice_mode_hint};
+use crate::editor::{ActionEditor, MicrophoneDialog, VoiceEditor, voice_mode_hint};
 use crate::i18n::{self, tr, tr_args};
 use crate::keylearn;
 use crate::model::{
@@ -735,11 +735,16 @@ pub struct AppWindow {
     capture_banner: adw::Banner,
     editor: ActionEditor,
     voice_editor: VoiceEditor,
+    microphone: MicrophoneDialog,
     device_dialog: DeviceDialog,
     stack: gtk::Stack,
     toast_overlay: adw::ToastOverlay,
     capture_mode: Cell<CaptureMode>,
     suppress_test_toggle: Cell<bool>,
+    /// One daemon status request at a time; the fast poll checks this.
+    status_in_flight: Cell<bool>,
+    /// Set while the 200 ms microphone poll timer runs.
+    microphone_polling: Cell<bool>,
     voice_selected: Cell<bool>,
     pressed: Cell<Option<(RemoteButton, Trigger)>>,
     last_test: RefCell<Option<TestResult>>,
@@ -755,6 +760,7 @@ impl AppWindow {
         header.set_title_widget(Some(&title));
 
         let menu = gio::Menu::new();
+        menu.append(Some(tr("Microphone…")), Some("win.microphone"));
         menu.append(Some(tr("Device information…")), Some("win.device-info"));
         menu.append(Some(tr("Revert changes")), Some("win.revert"));
         menu.append(Some(tr("About ATVV")), Some("win.about"));
@@ -1215,11 +1221,14 @@ impl AppWindow {
             capture_banner,
             editor: ActionEditor::new(),
             voice_editor: VoiceEditor::new(),
+            microphone: MicrophoneDialog::new(),
             device_dialog: DeviceDialog::new(),
             stack,
             toast_overlay,
             capture_mode: Cell::new(CaptureMode::Off),
             suppress_test_toggle: Cell::new(false),
+            status_in_flight: Cell::new(false),
+            microphone_polling: Cell::new(false),
             voice_selected: Cell::new(false),
             pressed: Cell::new(None),
             last_test: RefCell::new(None),
@@ -1431,6 +1440,10 @@ impl AppWindow {
             .connect_learn_key(move || this.learn_key_for(true));
 
         let this = Rc::clone(ui);
+        ui.microphone
+            .connect_gain_changed(move |gain| this.set_gain(gain));
+
+        let this = Rc::clone(ui);
         ui.run_once_button.connect_clicked(move |_| this.run_once());
 
         let this = Rc::clone(ui);
@@ -1459,6 +1472,11 @@ impl AppWindow {
             this.device_dialog.present(&this.window);
         });
         ui.window.add_action(&device_info);
+
+        let this = Rc::clone(ui);
+        let microphone = gio::SimpleAction::new("microphone", None);
+        microphone.connect_activate(move |_, _| this.open_microphone());
+        ui.window.add_action(&microphone);
 
         let this = Rc::clone(ui);
         let about = gio::SimpleAction::new("about", None);
@@ -1523,6 +1541,35 @@ impl AppWindow {
         self.voice_editor.present(&self.window);
     }
 
+    /// Open the level/gain dialog and start its 200 ms status poll.
+    #[doc(hidden)]
+    pub fn open_microphone(self: &Rc<Self>) {
+        {
+            let model = self.model.borrow();
+            let Some(model) = model.as_ref() else {
+                return;
+            };
+            self.microphone.load(model);
+        }
+        self.microphone.present(&self.window);
+        self.refresh_microphone();
+        start_microphone_poll(self);
+    }
+
+    /// Apply a gain value from the microphone dialog to the editable document.
+    fn set_gain(&self, gain_db: i8) {
+        let result = self
+            .model
+            .borrow_mut()
+            .as_mut()
+            .map(|model| model.set_gain_db(gain_db));
+        match result {
+            Some(Ok(true)) => self.refresh_all(),
+            Some(Err(error)) => self.toast(&error),
+            Some(Ok(false)) | None => {}
+        }
+    }
+
     fn scroll_to_selection(&self) {
         if self.voice_selected.get() {
             scroll_into_view(&self.board_scroll, self.board.voice_card());
@@ -1562,13 +1609,16 @@ impl AppWindow {
                 }
             }
             Event::Status(Ok(status)) => {
+                self.status_in_flight.set(false);
                 *self.status.borrow_mut() = Some(status);
                 self.refresh_title();
                 self.refresh_device_chip();
                 self.refresh_device_dialog();
                 self.refresh_voice_controls();
+                self.refresh_microphone();
             }
             Event::Status(Err(error)) => {
+                self.status_in_flight.set(false);
                 if self.model.borrow().is_some() {
                     self.show_error(&tr_args(
                         "atvvd is not reachable: {error}",
@@ -2529,6 +2579,7 @@ impl AppWindow {
         self.refresh_device_chip();
         self.refresh_device_dialog();
         self.refresh_voice_controls();
+        self.refresh_microphone();
         let model = self.model.borrow();
         let Some(model) = model.as_ref() else {
             self.apply_button.set_sensitive(false);
@@ -2781,6 +2832,24 @@ impl AppWindow {
         self.voice_editor.set_mode(mode);
     }
 
+    fn refresh_microphone(&self) {
+        {
+            let status = self.status.borrow();
+            if let Some(status) = status.as_ref() {
+                self.microphone.set_level(status.audio.level);
+                self.microphone.set_source(
+                    &status.contract.source,
+                    &status.contract.sample_format,
+                    status.contract.sample_rate,
+                    status.contract.channels,
+                );
+            }
+        }
+        if let Some(model) = self.model.borrow().as_ref() {
+            self.microphone.load(model);
+        }
+    }
+
     fn show_error(&self, message: &str) {
         self.error_banner.set_title(message);
         self.error_banner.set_revealed(true);
@@ -2979,6 +3048,7 @@ impl AppWindow {
         self.refresh_device_chip();
         self.refresh_device_dialog();
         self.refresh_voice_controls();
+        self.refresh_microphone();
     }
 
     #[doc(hidden)]
@@ -3039,6 +3109,12 @@ impl AppWindow {
     #[must_use]
     pub fn voice_editor(&self) -> &VoiceEditor {
         &self.voice_editor
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn microphone(&self) -> &MicrophoneDialog {
+        &self.microphone
     }
 
     #[doc(hidden)]
@@ -3183,7 +3259,34 @@ fn connect_timers(ui: &Rc<AppWindow>) {
         let Some(ui) = weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
-        if ui.model.borrow().is_some() {
+        if ui.model.borrow().is_some() && !ui.status_in_flight.get() {
+            ui.status_in_flight.set(true);
+            ui.backend.refresh_status();
+        }
+        glib::ControlFlow::Continue
+    });
+}
+
+/// Poll the level at 200 ms while the microphone dialog is open.
+///
+/// The timer stops when the dialog closes; at most one status request is in
+/// flight, so the global 2 s poll and this one never queue up.
+fn start_microphone_poll(ui: &Rc<AppWindow>) {
+    if ui.microphone_polling.get() {
+        return;
+    }
+    ui.microphone_polling.set(true);
+    let weak = Rc::downgrade(ui);
+    glib::timeout_add_local(Duration::from_millis(200), move || {
+        let Some(ui) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        if !ui.microphone.is_open() {
+            ui.microphone_polling.set(false);
+            return glib::ControlFlow::Break;
+        }
+        if !ui.status_in_flight.get() {
+            ui.status_in_flight.set(true);
             ui.backend.refresh_status();
         }
         glib::ControlFlow::Continue

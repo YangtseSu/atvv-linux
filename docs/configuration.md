@@ -51,7 +51,7 @@ long = "combo:ctrl+alt+v"
 | `active_device` | none | Bluetooth address of the active device; `atvvctl pair` writes it and makes the device active. |
 | `[devices.<address>]` | none | Known devices: optional `label`, required `profile`, and `layout`. Addresses are normalized to uppercase. |
 | `adapter` | BlueZ default | Adapter name such as `hci0`. |
-| `gain_db` | profile value | Clamped to ±24 dB; no AGC. |
+| `gain_db` | profile value | Clamped to ±24 dB; no AGC. `atvv-config` shows the live level and gain under **Menu → Microphone…**. |
 | `input` | `true` | Disables discovery, grab, and uinput when false. |
 | `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. `dbus` is the explicit fallback when the trigger key conflicts with an application binding. Editing vinput's `[TriggerKey]` requires a full fcitx5 restart, not `fcitx5-remote -r`. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
@@ -285,6 +285,11 @@ prints the key program. A
 pointer action reports `kind: pointer` and no key program. `atvvctl status`
 reports whether the pointer device is active in `input.pointer`; it is false
 for keyboard-only maps.
+
+`atvvctl status` prints the full `StatusView` JSON. `audio.level` is the
+decaying peak of the post-gain signal in permille (`0..=1000`); it is zero
+when idle, updates with the status publish, and matches the GUI level bar.
+`audio.gain_db` is the applied gain.
 
 `atvvctl capture` starts capture mode, waits for one logical button press, and
 ends it. Capture reports the logical button and gesture slot recognized by the

@@ -72,7 +72,8 @@ Assistant button on the Chromecast) is not an action slot. Clicking it, or the
 
 ## Header
 
-- **Menu**: *Device information…*, *Revert changes*, *About ATVV*, and *Quit*.
+- **Menu**: *Microphone…*, *Device information…*, *Revert changes*, *About
+  ATVV*, and *Quit*.
 - **Device chip**: the name BlueZ reports for the active remote (the
   user-editable alias, for example the remote's own name) and the battery
   level. Without a BlueZ name it falls back to the profile display name and
@@ -142,6 +143,29 @@ belong to a layout. The diagram asset and hotspot geometry follow the active
 device profile; they do not change per layout. The selected layout is
 persisted as `active_layout`; the Default template is never stored in
 `daemon.toml`.
+
+## Microphone
+
+**Menu → Microphone…** opens the live input dialog:
+
+- **Input level** shows the decaying peak of the post-gain signal in percent
+  of full scale. It reads `StatusView.audio.level` (permille, `0..=1000`),
+  which `atvvctl status` also reports. While the dialog is open the GUI polls
+  `GetStatus` every 200 ms and stops when the dialog closes; the normal
+  background poll stays at 2 s.
+- **Gain** is the global `gain_db` field: -24 to +24 dB in 1 dB steps. It is
+  applied after ADPCM decoding and before the source, with no AGC. Turn it
+  down when loud speech reaches 100 %.
+- **Source** and **Format** show the resident source name plus the stream
+  format from the provider contract (`atvv-<profile>`, `s16le`, rate, and
+  channel count).
+- Gain changes stay in the editable document and are saved by the main
+  window's **Apply**; **Revert** restores the saved value. The dialog never
+  writes `daemon.toml`. When Default has staged slot edits, Apply still opens
+  **Save as layout** as it does for other edits.
+
+A device whose `CAPS_RESP` rate differs from the graph rate is resampled by
+the daemon; the level is measured before that resampling.
 
 ## Edit a mapping
 

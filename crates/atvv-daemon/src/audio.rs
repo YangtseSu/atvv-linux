@@ -11,6 +11,10 @@ use atvv_audio::{AudioSource, AudioSourceConfig};
 /// One destination for decoded PCM.
 pub trait PcmSink: Send {
     fn push(&mut self, samples: &[i16]);
+    /// Drop queued samples at a session boundary.
+    ///
+    /// A sink without a queue ignores this.
+    fn clear(&mut self);
     fn name(&self) -> &str;
     fn is_available(&self) -> bool;
     fn queued_samples(&self) -> usize;
@@ -46,6 +50,12 @@ impl PcmSink for PipeWireSink {
     fn push(&mut self, samples: &[i16]) {
         if let Some(source) = &self.source {
             source.push(samples);
+        }
+    }
+
+    fn clear(&mut self) {
+        if let Some(source) = &self.source {
+            source.clear();
         }
     }
 

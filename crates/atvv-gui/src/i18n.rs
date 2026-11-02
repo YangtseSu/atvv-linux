@@ -124,6 +124,7 @@ fn zh(text: &str) -> Option<&'static str> {
         "Revert changes" => "还原更改",
         "Quit" => "退出",
         "Main menu" => "主菜单",
+        "Microphone…" => "麦克风…",
         "Test" => "测试",
         "Highlight remote presses and show the mapped action" => "高亮遥控器按键并显示映射的操作",
         "Revert" => "还原",
@@ -232,6 +233,18 @@ fn zh(text: &str) -> Option<&'static str> {
         "vinput integration is off; the output key is not emitted." => {
             "vinput 集成已关闭；不会发出输出按键。"
         }
+
+        // Microphone dialog.
+        "Microphone" => "麦克风",
+        "Input level" => "输入电平",
+        "Gain" => "增益",
+        "Applied after decoding, before the source." => "在解码后、送入音频源前应用。",
+        "Source" => "音频源",
+        "Format" => "格式",
+        "Saved with Apply in the main window; staged slot edits on Default are saved as a new layout." => {
+            "在主窗口中点击“应用”后保存；默认布局中暂存的槽位编辑会另存为新布局。"
+        }
+        "Gain must be between -{max} and {max} dB." => "增益必须介于 -{max} 与 {max} dB 之间。",
 
         // Test bar and advanced policy.
         "Test mode off" => "测试模式已关闭",

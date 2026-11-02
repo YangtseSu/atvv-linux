@@ -66,6 +66,8 @@ struct CountingSink;
 impl PcmSink for CountingSink {
     fn push(&mut self, _samples: &[i16]) {}
 
+    fn clear(&mut self) {}
+
     fn name(&self) -> &str {
         "counting"
     }

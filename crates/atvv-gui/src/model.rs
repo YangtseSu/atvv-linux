@@ -16,7 +16,7 @@ use atvv_input::{Action, ActionMap, Trigger, parse_action};
 use atvv_protocol::profile::{DeviceProfile, RemoteButton};
 
 use crate::actions::pointer_action_label;
-use crate::i18n::tr;
+use crate::i18n::{tr, tr_args};
 
 /// Human label for a hotspot and the selected-key row.
 #[must_use]
@@ -709,6 +709,26 @@ impl GuiModel {
         }
     }
 
+    /// Set the post-decode gain in dB.
+    ///
+    /// The existing Apply path persists the whole document; this never touches
+    /// the active layout.
+    pub fn set_gain_db(&mut self, gain_db: i8) -> Result<bool, String> {
+        if !(-atvv_config::MAX_GAIN_DB..=atvv_config::MAX_GAIN_DB).contains(&gain_db) {
+            let max = atvv_config::MAX_GAIN_DB.to_string();
+            return Err(tr_args(
+                "Gain must be between -{max} and {max} dB.",
+                &[("max", &max)],
+            ));
+        }
+        if self.document.gain_db == gain_db {
+            return Ok(false);
+        }
+        self.document.gain_db = gain_db;
+        self.dirty = true;
+        Ok(true)
+    }
+
     /// Validate the complete document before `SetConfig`.
     pub fn validate(&self) -> Result<(), String> {
         self.document
@@ -884,6 +904,27 @@ mod tests {
             None,
             "the change lands in the selected slot only"
         );
+    }
+
+    #[test]
+    fn gain_is_validated_and_marks_the_document_dirty() {
+        let mut model = model();
+        assert_eq!(model.document.gain_db, 0);
+        assert!(model.set_gain_db(6).unwrap());
+        assert_eq!(model.document.gain_db, 6);
+        assert!(model.dirty);
+        assert!(!model.set_gain_db(6).unwrap());
+        assert!(model.validate().is_ok());
+
+        let error = model.set_gain_db(25).unwrap_err();
+        assert!(error.contains("24"), "{error}");
+        assert_eq!(model.document.gain_db, 6);
+        let error = model.set_gain_db(-25).unwrap_err();
+        assert!(error.contains("24"), "{error}");
+        assert_eq!(model.document.gain_db, 6);
+
+        assert!(model.set_gain_db(-24).unwrap());
+        assert!(model.validate().is_ok());
     }
 
     #[test]

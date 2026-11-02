@@ -7,7 +7,7 @@ Updated: 2026-11-02
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 245 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 250 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -45,6 +45,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Step 23 audio feedback (complete, 2026-11-02)**: `StatusView.audio.level`
+  is the decaying post-gain peak in permille (`0..=1000`); the GUI's
+  **Menu → Microphone…** dialog shows it with a 200 ms dialog-only poll, sets
+  the existing `gain_db` in the editable document, and saves through the
+  normal **Apply** path. `PcmQueue::clear`/`AudioSource::clear`/
+  `PcmSink::clear` flush the resident queue on `VoiceStarted`; a stop keeps
+  the tail for the consumer. The workspace suite reported 250 passed and 9
+  ignored; a throwaway real-window/mock-daemon run persisted `gain_db = 6` to
+  `GetConfig` and `daemon.toml`. See `docs/plans/23-audio-feedback.md`.
 - **sayall-linux comparison (research, 2026-11-02)**:
   `docs/research/sayall-linux-comparison.md` compares
   `ZXC011/sayall-linux@d2b914a` (GPL-3.0-only, behavior only) with this stack.
@@ -879,9 +888,12 @@ refactor and said auto-selection and recording-key binding are in its
 follow-up design. `vinput = "trigger"` stays the default; `vinput = "dbus"`
 is an explicit fallback.
 
-**Steps 23–25 are planned, not started.** Step 23
-(`docs/plans/23-audio-feedback.md`) adds the live level, GUI gain, and the
-session-boundary PCM flush. Step 24
+**Step 23 is complete and verified.** The live level/gain dialog and the
+session-boundary PCM flush are in `docs/plans/23-audio-feedback.md`. The next
+step is 24 (first-run checklist and troubleshooting), then 25 (ATVV v1.0
+conformance). Step 10 stays blocked on upstream.
+
+**Steps 24–25 are planned, not started.** Step 24
 (`docs/plans/24-first-run-and-troubleshooting.md`) adds the generic
 **Getting started** checklist, the bilingual troubleshooting page, and the
 README known-limitations sections. Step 25
@@ -889,13 +901,12 @@ README known-limitations sections. Step 25
 rebuilds the resampler on a valid mid-session `AUDIO_SYNC` codec change, and
 adds sequence-gap diagnostics. B03
 (`docs/plans/B03-preopen-mic.md`) is the hardware-gated keep-open experiment
-and stays in the backlog. Step 21 is complete; the next step is 23 (audio
-feedback), then 24 and 25. Step 10 stays blocked on upstream.
+and stays in the backlog.
 
-Immediate action: start step 23 (`docs/plans/23-audio-feedback.md`). In
-parallel, watch upstream releases; when one ships its own
-auto-selection/declared-key binding, rebuild vinput and record the zero-config
-RC003 run. Do not reopen the PRs.
+Immediate action: start step 24
+(`docs/plans/24-first-run-and-troubleshooting.md`). In parallel, watch upstream
+releases; when one ships its own auto-selection/declared-key binding, rebuild
+vinput and record the zero-config RC003 run. Do not reopen the PRs.
 
 ## Commands
 

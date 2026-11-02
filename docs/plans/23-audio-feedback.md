@@ -1,6 +1,6 @@
 # Step 23 — Audio feedback and session boundary
 
-Status: ⬜ not-started
+Status: ✅ done
 Depends on: 04, 06, 14, 19
 Touches: `crates/atvv-audio/`, `crates/atvv-daemon/`, `crates/atvv-gui/`,
 `docs/`
@@ -96,21 +96,21 @@ queue flush is an internal correctness fix.
 
 ## Deliverables
 
-- ⬜ `AudioView.level` with permille semantics, integer peak/decay, and a
+- ✅ `AudioView.level` with permille semantics, integer peak/decay, and a
   reset on start/stop/disconnect.
-- ⬜ `AudioInfo` in the GUI client and a 200 ms status poll while the
+- ✅ `AudioInfo` in the GUI client and a 200 ms status poll while the
   microphone dialog is open.
-- ⬜ Microphone dialog with level bar, gain scale, source summary, and the
+- ✅ Microphone dialog with level bar, gain scale, source summary, and the
   Apply hint.
-- ⬜ `GuiModel::set_gain_db` with range validation and dirty tracking.
-- ⬜ `PcmQueue::clear`, `AudioSource::clear`, and `PcmSink::clear`; flush on
+- ✅ `GuiModel::set_gain_db` with range validation and dirty tracking.
+- ✅ `PcmQueue::clear`, `AudioSource::clear`, and `PcmSink::clear`; flush on
   `VoiceStarted`.
-- ⬜ Tests: queue clear; daemon flush count on start/stop/start; level rise,
+- ✅ Tests: queue clear; daemon flush count on start/stop/start; level rise,
   decay, and zero on stop; gain model validation; GUI level/gain interaction.
-- ⬜ Docs: `docs/gui.md` and `docs/gui.zh-CN.md` describe the level and gain
+- ✅ Docs: `docs/gui.md` and `docs/gui.zh-CN.md` describe the level and gain
   control; `docs/configuration.md` points at it; the status field is mentioned
   in the GUI/CLI docs.
-- ⬜ `docs/research/sayall-linux-comparison.md` §6 links this step.
+- ✅ `docs/research/sayall-linux-comparison.md` §6 links this step.
 
 ## Verification
 
@@ -121,6 +121,10 @@ cargo test --workspace
 xvfb-run -a cargo test -p atvv-gui --test ui
 ```
 
+Results on 2026-11-02: `fmt` and `clippy -D warnings` clean; the workspace
+suite passed 250 tests with 9 ignored; `ui` passed under Xvfb, and the
+Chinese `i18n` window test passed.
+
 Synthetic checks (no hardware required):
 
 ```text
@@ -130,7 +134,12 @@ cargo test -p atvv-daemon clear
 cargo test -p atvv-gui --lib gain
 ```
 
-Live GUI smoke with the mock daemon:
+Results on 2026-11-02: all four filters passed (`queue_clear_drains_every_sample`,
+`level_rises_during_a_session_and_clears_on_stop`,
+`a_new_session_clears_the_pcm_sink`, and
+`gain_is_validated_and_marks_the_document_dirty`).
+
+Live GUI smoke with a mock daemon:
 
 ```text
 dbus-run-session -- bash -c '
@@ -140,23 +149,25 @@ dbus-run-session -- bash -c '
 '
 ```
 
-Open **Microphone…**, observe the level bar with a mock audio frame, change
-gain, click **Apply**, reopen the daemon config with `atvvctl config get`, and
-confirm the saved `gain_db`.
+Result on 2026-11-02: a throwaway headless test drove the real window against
+a private-bus mock daemon, set the gain from 0 to +6 dB in the microphone
+dialog, and clicked **Apply**. `GetConfig` and the saved `daemon.toml` both
+reported `gain_db = 6`; the throwaway test was removed after the run. The level
+bar and source summary are covered by the committed `ui` test.
 
 ## Exit criteria
 
-- ⬜ `StatusView.audio.level` is present, bounded to `0..=1000`, zero when
+- ✅ `StatusView.audio.level` is present, bounded to `0..=1000`, zero when
   idle, and updates from decoded frames.
-- ⬜ The GUI shows a live level and can change `gain_db`; the value is saved
+- ✅ The GUI shows a live level and can change `gain_db`; the value is saved
   through the existing Apply path and survives reopen.
-- ⬜ A new session starts with an empty PCM queue; a stop does not discard
+- ✅ A new session starts with an empty PCM queue; a stop does not discard
   frames the consumer has not read.
-- ⬜ The level/gain UI is bilingual and follows the existing catalog.
-- ⬜ No new D-Bus method, protocol field, or config schema field is added.
-- ⬜ Tests cover the field, the flush boundary, the model setter, and the
+- ✅ The level/gain UI is bilingual and follows the existing catalog.
+- ✅ No new D-Bus method, protocol field, or config schema field is added.
+- ✅ Tests cover the field, the flush boundary, the model setter, and the
   dialog interaction.
-- ⬜ The docs describe the control and the queue behavior.
+- ✅ The docs describe the control and the queue behavior.
 
 ## Risks
 
@@ -181,8 +192,13 @@ confirm the saved `gain_db`.
 
 - 2026-11-02 — plan created from
   `docs/research/sayall-linux-comparison.md` §3.1, §3.2, and §6.
-
-## Next action
-
-Implement `AudioView.level` and the `PcmSink::clear` path with tests first,
-then the GUI client field, the microphone dialog, and the gain setter.
+- 2026-11-02 — implemented `AudioView.level` (post-gain permille peak with a
+  40 % per-frame decay), the microphone dialog, `GuiModel::set_gain_db`, the
+  200 ms dialog-only status poll, and the `PcmSink::clear` session flush.
+  Added the queue, level, flush, gain, `ui`, and `i18n` tests plus the English
+  and Chinese GUI/configuration docs. Verified with a real window against a
+  private-bus mock daemon: Apply persisted `gain_db = 6` to `GetConfig` and
+  `daemon.toml`.
+- 2026-11-02 — the flush test waits out the mock `AUDIO_STOP` echo before the
+  second start; starting within the echo window lets the previous echo stop
+  the new stream. This is a mock timing detail, not a daemon behavior.

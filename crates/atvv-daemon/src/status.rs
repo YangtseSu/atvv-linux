@@ -118,6 +118,9 @@ pub struct AudioView {
     pub streaming: bool,
     pub queued_samples: usize,
     pub gain_db: i8,
+    /// Decaying peak of the post-gain signal, in permille of full scale.
+    #[serde(default)]
+    pub level: u16,
     pub frames: u64,
     pub samples: u64,
     pub dropped_frames: u64,

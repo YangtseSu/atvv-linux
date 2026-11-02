@@ -278,6 +278,8 @@ pub struct Daemon {
     frames: u64,
     samples: u64,
     dropped_frames: u64,
+    /// Decaying post-gain peak in permille of full scale.
+    level: u16,
     traced_audio: bool,
     /// Truncated `AUDIO_SYNC` notifications, rate limited.
     malformed_sync: Anomaly,
@@ -361,6 +363,7 @@ impl Daemon {
                 streaming: false,
                 queued_samples: audio.queued_samples(),
                 gain_db: config.config.gain_db,
+                level: 0,
                 frames: 0,
                 samples: 0,
                 dropped_frames: 0,
@@ -434,6 +437,7 @@ impl Daemon {
             frames: 0,
             samples: 0,
             dropped_frames: 0,
+            level: 0,
             traced_audio: false,
             malformed_sync: Anomaly::default(),
             unknown_control: Anomaly::default(),
@@ -540,8 +544,11 @@ impl Daemon {
         self.frames = 0;
         self.samples = 0;
         self.dropped_frames = 0;
+        self.level = 0;
         self.traced_audio = false;
         self.discard_until = None;
+        // A new utterance never inherits the previous session's tail.
+        self.audio.clear();
         self.last_audio = Some(now);
         self.next_keepalive = Some(now + self.keepalive_interval);
         self.signals.publish(DaemonEvent::VoiceStarted);
@@ -553,6 +560,7 @@ impl Daemon {
         self.accumulator = None;
         self.last_audio = None;
         self.next_keepalive = None;
+        self.level = 0;
         self.discard_until =
             Some(now + Duration::from_millis(u64::from(self.profile.post_stop_discard_ms)));
         self.signals.publish(DaemonEvent::VoiceStopped);
@@ -659,6 +667,7 @@ impl Daemon {
         self.connected = false;
         self.last_error = Some(format!("disconnected: {reason}"));
         self.accumulator = None;
+        self.level = 0;
         self.caps_deadline = None;
         self.last_audio = None;
         self.next_keepalive = None;
@@ -831,6 +840,17 @@ impl Daemon {
                 *sample = scaled.clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
             }
         }
+        // The level tracks the post-gain signal handed to the sink; for a
+        // device at another rate it is measured before resampling. `i16::MIN`
+        // is a legitimate clipped sample, so widen before taking the
+        // magnitude.
+        let peak = self.pcm[..written]
+            .iter()
+            .map(|sample| i32::from(*sample).unsigned_abs())
+            .max()
+            .unwrap_or(0);
+        let peak_permille = (peak * 1000 / 32_768).min(1000) as u16;
+        self.level = envelope_level(self.level, peak_permille);
         // The graph runs at one rate for the daemon lifetime; a device that
         // negotiated another rate is converted here (ADR 0009).
         if self.resampler.is_identity() {
@@ -1659,6 +1679,7 @@ impl Daemon {
                 streaming: self.session.state() == SessionState::Streaming,
                 queued_samples: self.audio.queued_samples(),
                 gain_db: self.config.gain_db,
+                level: self.level,
                 frames: self.frames,
                 samples: self.samples,
                 dropped_frames: self.dropped_frames,
@@ -1779,6 +1800,13 @@ fn gain_factor(db: i8) -> f32 {
     }
 }
 
+/// Decay the previous peak by 40 % and raise it to the current frame peak.
+///
+/// Integer math keeps the per-frame path allocation-free and cheap.
+fn envelope_level(previous: u16, peak_permille: u16) -> u16 {
+    (previous * 6 / 10).max(peak_permille).min(1000)
+}
+
 fn codec_name(codec: Codec) -> String {
     match codec {
         Codec::Adpcm8k => "adpcm-8k",
@@ -1800,6 +1828,7 @@ fn interaction_name(interaction: InteractionModel) -> String {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use atvv_protocol::profile::{CHROMECAST, RC003, RemoteButton};
 
@@ -1832,6 +1861,10 @@ mod tests {
             self.samples += samples.len();
         }
 
+        fn clear(&mut self) {
+            self.samples = 0;
+        }
+
         fn name(&self) -> &str {
             "counting"
         }
@@ -1853,6 +1886,8 @@ mod tests {
 
     impl PcmSink for DegradedSink {
         fn push(&mut self, _samples: &[i16]) {}
+
+        fn clear(&mut self) {}
 
         fn name(&self) -> &str {
             "pipewire"
@@ -2571,6 +2606,7 @@ mod tests {
     #[derive(Clone, Default)]
     struct CaptureSink {
         inner: Arc<std::sync::Mutex<Vec<i16>>>,
+        clears: Arc<AtomicUsize>,
     }
 
     impl CaptureSink {
@@ -2580,6 +2616,10 @@ mod tests {
                 .unwrap_or_else(|error| error.into_inner())
                 .len()
         }
+
+        fn clears(&self) -> usize {
+            self.clears.load(Ordering::Relaxed)
+        }
     }
 
     impl PcmSink for CaptureSink {
@@ -2588,6 +2628,14 @@ mod tests {
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
                 .extend_from_slice(samples);
+        }
+
+        fn clear(&mut self) {
+            self.inner
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clear();
+            self.clears.fetch_add(1, Ordering::Relaxed);
         }
 
         fn name(&self) -> &str {
@@ -2633,6 +2681,62 @@ mod tests {
         );
         std::thread::spawn(move || daemon.run());
         (handle, mock, sink, signals)
+    }
+
+    #[test]
+    fn envelope_decays_toward_the_frame_peak() {
+        assert_eq!(envelope_level(0, 0), 0);
+        assert_eq!(envelope_level(1000, 0), 600);
+        assert_eq!(envelope_level(600, 0), 360);
+        assert_eq!(envelope_level(10, 300), 300);
+        assert_eq!(envelope_level(1000, 1000), 1000);
+    }
+
+    #[test]
+    fn level_rises_during_a_session_and_clears_on_stop() {
+        let (handle, mock, _sink, _signals) = start_with(DEFAULT_CAPS.to_vec(), 120);
+        wait_for(&handle, |status| status.state == "ready");
+        assert_eq!(crate::status::lock(&handle.status()).audio.level, 0);
+
+        mock.start_audio();
+        let status = wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.level > 0
+        });
+        assert!(status.audio.level <= 1000, "{status:?}");
+
+        mock.stop_audio(0x00);
+        let status = wait_for(&handle, |status| status.state == "ready");
+        assert_eq!(status.audio.level, 0, "a stopped session leaves no level");
+        handle.send(Command::Shutdown).unwrap();
+    }
+
+    #[test]
+    fn a_new_session_clears_the_pcm_sink() {
+        let (handle, mock, sink, _signals) = start_with(DEFAULT_CAPS.to_vec(), 120);
+        wait_for(&handle, |status| status.state == "ready");
+        assert_eq!(sink.clears(), 0);
+
+        mock.start_audio();
+        wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames > 2
+        });
+        assert_eq!(sink.clears(), 1, "start flushes the previous tail");
+        assert!(sink.len() > 0, "decoded frames reached the sink");
+
+        mock.stop_audio(0x00);
+        wait_for(&handle, |status| status.state == "ready");
+        assert_eq!(sink.clears(), 1, "a stop must not discard the tail");
+        assert!(sink.len() > 0, "the consumer can still read the tail");
+        // The mock echoes AUDIO_STOP 20 ms after MIC_CLOSE. Let the echo
+        // arrive while the session is idle so it cannot stop the next stream.
+        std::thread::sleep(Duration::from_millis(50));
+
+        mock.start_audio();
+        wait_for(&handle, |status| {
+            status.state == "streaming" && status.audio.frames > 0
+        });
+        assert_eq!(sink.clears(), 2, "the next start flushes the tail");
+        handle.send(Command::Shutdown).unwrap();
     }
 
     #[test]
