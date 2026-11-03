@@ -18,9 +18,9 @@ Updated: 2026-11-03
   desktop. The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at
   least as large as the window; the Wayland suite skips the pointer section.
 - Live state (2026-11-03): `atvv`/`atvv-gui` 0.3.1-1 are installed; no `-git`
-  packages are installed. The AUR checkout `~/aur/atvv` is at 0.4.0-1 (commit
-  `7728278`) with both packages built, but the commit is not pushed and the
-  packages are not installed. `v0.4.0` is published on GitHub.
+  packages are installed. AUR `atvv` 0.4.0-1 is pushed (commit `89fcb12`) and
+  both packages are built in `~/aur/atvv`; installing them is the remaining
+  step. `v0.4.0` is published on GitHub.
 
 ## Read first
 
@@ -1051,15 +1051,22 @@ writable and not password-protected. No write was made. The UID-gated
 RC003-specific helper was shipped: a dedicated blank NTAG215 is the better
 trigger. Evidence: [`research/nfc-rc003.md`](research/nfc-rc003.md).
 
-**Publish the AUR 0.4.0 update and install it.** `~/aur/atvv` carries
-`upgpkg: 0.4.0-1` (`7728278`) with the source checksum above;
-`atvv-0.4.0-1-x86_64.pkg.tar.zst` (7,072,612 B, sha256
-`e3d7459ed6e9223053993303cabf96014d6c09f62cd45183ccd8f11fd2ceca35`) and
-`atvv-gui-0.4.0-1-x86_64.pkg.tar.zst` (1,603,854 B, sha256
-`dfc1d052fc2b391e9db7122fb4666a2a38529549600b864744abbc6549f09c45`) are
-built. Push the AUR commit, then install both packages (operator password) and
-run `systemctl --user daemon-reload; systemctl --user restart atvvd`. The
-installed 0.3.1-1 pair stays active until then.
+**Install the published AUR 0.4.0 packages.** `~/aur/atvv` is pushed as
+`upgpkg: 0.4.0-1` (`89fcb12`);
+`atvv-0.4.0-1-x86_64.pkg.tar.zst` (7,620,600 B, sha256
+`80d5f3258e452deca7c25d3b0daf328c86a039431a193a6a6497ac2a613ed73b`) and
+`atvv-gui-0.4.0-1-x86_64.pkg.tar.zst` (1,586,846 B, sha256
+`6521070686d20edbedd6562a0eaa820a8cf341a9754d25e5f56e909952df1182`) are
+built with the whole docs tree. One transaction:
+
+```sh
+sudo pacman -U ~/aur/atvv/atvv-0.4.0-1-x86_64.pkg.tar.zst \
+               ~/aur/atvv/atvv-gui-0.4.0-1-x86_64.pkg.tar.zst
+systemctl --user daemon-reload
+systemctl --user restart atvvd
+```
+
+The installed 0.3.1-1 pair stays active until then.
 
 **Detached-backend flake fix is in this release.** `426d451` makes
 `Backend::detached` emit no events, so `tests/ui.rs` no longer races the 2 s
