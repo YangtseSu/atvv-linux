@@ -52,6 +52,39 @@ A write was not attempted. The tag is writable — static and dynamic lock bits
 are clear, AUTH0 is `0xFF`, and PWD/PACK are unset — but rewriting a blank cast
 tag would change state without any need for a read-only UID trigger.
 
+## Cast path
+
+The remote's NFC is a **passive tag**: it has no battery connection and no NFC
+reader, so NFC traffic only runs between the phone's reader and the tag. The
+phone cannot send an NFC command into the remote, and the remote cannot relay
+the phone's screen over its Bluetooth link. The tag is never the cast
+transport.
+
+The cast itself is a Wi-Fi stream. Xiaomi's casting requirements list
+Bluetooth and WLAN enabled, the phone and TV on the same Wi-Fi, and the TV's
+wireless-display feature enabled
+([HyperConnect](https://hyperos.mi.com/continuity/abilities/ab0011),
+[Xiaomi cast help](https://a.video.xiaomi.com/mvideo/screen_help.html)). The
+remote's BLE link to the TV is a separate HID channel for key events.
+
+Because this tag's NDEF message is empty, the phone gets only the UID (and the
+fact that an NTAG215 was tapped). Two phone-side mappings fit that:
+
+1. the UID is registered to the Xiaomi account/TV and the phone resolves the
+   target in the cloud before casting;
+2. the tap starts the phone's cast discovery and selects the TV on the LAN;
+   the UID only identifies the accessory.
+
+Both end with the phone sending the stream to the TV over Wi-Fi; neither sends
+the stream through the remote. The exact phone-side step cannot be proven from
+the tag alone. It can be distinguished on a Xiaomi phone:
+
+- Wi-Fi off, Bluetooth on, tap: no cast if the network is required;
+- Bluetooth off, Wi-Fi on, tap: no cast if BLE discovery/authorization is
+  required;
+- `adb logcat` during the tap shows the NFC intent and the service that
+  handles it.
+
 ## Read-only trigger
 
 The UID is stable across reads and can gate a local D-Bus action. With the RC003
