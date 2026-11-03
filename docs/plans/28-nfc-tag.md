@@ -1,6 +1,6 @@
 # 28 — NFC tag investigation and optional trigger
 
-Status: 🚧 in-progress
+Status: ✅ done
 Depends on: none for the research; an NFC reader was attached on 2026-11-03
 Touches: `docs/research/` (investigation), possibly a separate helper; not the
 daemon core
@@ -21,12 +21,11 @@ outcomes are acceptable:
 If the tag is read-only or locked, the step closes with the documented dump
 and no integration.
 
-## Next action
-
-Decide whether to ship the read-only UID trigger helper. If yes, implement it
-as a separate helper or consumer-side script using libnfc and the existing
-D-Bus API, and verify one action per tag presentation. If not, close the step
-with the documented read-only result.
+**Decision:** no RC003-specific helper. A dedicated blank NTAG215 is the
+better local trigger: it never touches the cast tag, can be mounted where it
+is convenient, and a helper can take a configurable UID. The RC003 tag is a
+UID-only blank NTAG215, so there is no payload to reuse and no reason to write
+it.
 
 ## Evidence
 
@@ -65,13 +64,13 @@ Closed unknowns:
    is no URI, MIME, or Xiaomi payload.
 4. ✅ **Lock state.** Static lock0/lock1, dynamic lock bytes, AUTH0, PWD, and
    PACK are recorded; the tag is writable. No write was performed.
-5. ⬜ **Choose the mode.** Read-only is the correct mode: the UID is stable
-   and the tag is blank, so a rewrite has no benefit. Decide whether to ship
-   the optional UID helper or close without one.
-6. ⬜ **Integration boundary.** Keep NFC out of `atvv-daemon` and
-   `atvv-protocol`. If delivered, the helper is a separate optional process or
-   a consumer-side script using libnfc and the existing D-Bus API. No root
-   daemon, kernel module, or BlueZ patch.
+5. ✅ **Choose the mode.** Read-only is the correct mode, and no helper is
+   shipped: the UID is stable, the tag is blank, and a dedicated blank NTAG215
+   is the better trigger target. A rewrite has no benefit.
+6. ✅ **Integration boundary.** No NFC code was added. A future helper, if
+   wanted, is a separate consumer-side script with a configurable UID using
+   libnfc and the existing D-Bus API. No root daemon, kernel module, or BlueZ
+   patch.
 7. ✅ **Record.** The tag identity, dump hash, NDEF payload, lock state,
    commands, and the UID-gated D-Bus check are in
    [`nfc-rc003.md`](../research/nfc-rc003.md).
@@ -113,9 +112,9 @@ was needed.
 - ✅ Lock state is known: the tag is writable and not password-protected.
 - ✅ No write was tested; the original dump is retained and the tag is
   unchanged.
-- ⬜ [hardware] Read-only trigger either demonstrated once per presentation or
-  explicitly closed as not useful. The UID-gated D-Bus action is verified; the
-  one-per-presentation helper is not.
+- ✅ [hardware] Read-only trigger explicitly closed as not useful for the RC003
+  tag: the UID-gated D-Bus action works, but a dedicated blank NTAG215 is the
+  preferred trigger and no helper is shipped.
 - ✅ No NFC dependency or NFC code enters the daemon core; no code was added.
 
 ## Risks
@@ -144,3 +143,7 @@ was needed.
   on the connected RC003. Evidence is in
   [`nfc-rc003.md`](../research/nfc-rc003.md). The one-per-presentation helper
   decision remains.
+- 2026-11-03 — closed with no helper. A dedicated blank NTAG215 is the better
+  local trigger: it does not touch the cast tag, can be placed anywhere, and
+  a future helper can take a configurable UID. The RC003 tag read stands as
+  the negative result: empty NDEF, no payload to reuse, no write needed.

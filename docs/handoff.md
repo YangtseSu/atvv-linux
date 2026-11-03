@@ -62,6 +62,13 @@ per-session copies; `docs/plans/` remains the canonical plan.
   neither action. Verification: 217 passed / 7 ignored outside the GUI, 59
   passed / 2 ignored in the headless GUI suite, fmt and clippy clean. Synthetic
   only; no hardware claim. See `docs/plans/27-recording-key-press-release-actions.md`.
+- **Step 28 NFC tag (complete, 2026-11-03)**: the ACR122U read the RC003 tag
+  as an NTAG215 (`1D A4 2A 0B B8 00 00`) with an empty NDEF message, clear
+  lock bytes, and no password. No write was made; the UID-gated
+  `atvvctl mic` check passed. The step closed without an RC003-specific
+  helper: a dedicated blank NTAG215 is the better local trigger, and a future
+  helper should take a configurable UID. See
+  `docs/plans/28-nfc-tag.md` and `docs/research/nfc-rc003.md`.
 - **Headless GUI tests (2026-11-03)**: `scripts/gui-tests.sh` starts a private
   `mutter --headless` Wayland display (1280x1024 virtual monitor) and points
   GTK at it, so the GUI suite no longer opens windows on the desktop session.
@@ -714,10 +721,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `concurrency quota exceeded` was caused by an active proxy; switching the
   proxy node fixed recognition. The D-Bus fallback remains documented for
   trigger-key conflicts, not as a workaround for this machine.
-- **NFC tag (step 28, in progress)**: the RC003 tag is an NTAG215 with UID
+- **NFC tag (step 28, complete)**: the RC003 tag is an NTAG215 with UID
   `1D A4 2A 0B B8 00 00`, an empty NDEF message, and clear lock bytes. No
-  write was made; the read-only UID trigger decision is open. NFC stays out
-  of the daemon core. See `docs/plans/28-nfc-tag.md` and
+  write was made. The step closed without a helper: a dedicated blank NTAG215
+  is the better trigger, and a future helper should take a configurable UID.
+  NFC stays out of the daemon core. See `docs/plans/28-nfc-tag.md` and
   `docs/research/nfc-rc003.md`.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
@@ -1024,12 +1032,12 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**NFC (step 28) is in progress.** The attached ACR122U read the RC003 tag:
-NTAG215, UID `1D A4 2A 0B B8 00 00`, empty NDEF (`03 00 FE`), clear lock
-bytes, writable and not password-protected. No write was made. The UID-gated
-`atvvctl mic start/stop` check passed on the connected RC003; the
-one-action-per-presentation helper decision is open. Evidence:
-[`research/nfc-rc003.md`](research/nfc-rc003.md).
+**NFC (step 28) is closed.** The attached ACR122U read the RC003 tag: NTAG215,
+UID `1D A4 2A 0B B8 00 00`, empty NDEF (`03 00 FE`), clear lock bytes,
+writable and not password-protected. No write was made. The UID-gated
+`atvvctl mic start/stop` check passed on the connected RC003, but no
+RC003-specific helper was shipped: a dedicated blank NTAG215 is the better
+trigger. Evidence: [`research/nfc-rc003.md`](research/nfc-rc003.md).
 
 **Install the stable packages.** Everything for the release is published:
 `v0.3.2` on GitHub, AUR `atvv`/`atvv-gui` `0.3.2-2`, and the built package
@@ -1125,8 +1133,7 @@ The plan is in `docs/plans/26-preopen-mic.md` and the evidence in
 `docs/research/rc003-hardware-evidence.md`.
 
 **All numbered steps are complete except step 10, which is blocked on
-upstream, and step 28, which is in progress after the NFC tag read.** Step 26
-executed the keep-open experiment on the RC003 and set the
+upstream.** Step 26 executed the keep-open experiment on the RC003 and set the
 opt-in `preopen_mic` default to `false`. The immediate action is to watch
 upstream vinput releases; when one ships its own auto-selection/declared-key
 binding, rebuild vinput and record the zero-config RC003 run. Do not reopen the

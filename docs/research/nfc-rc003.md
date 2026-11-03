@@ -107,9 +107,11 @@ $ atvvctl status | jq '{state, streaming: .audio.streaming}'
 }
 ```
 
-The gating logic was not shipped as a helper. A one-action-per-presentation
-helper can read the UID with `nfc-poll` (it reports the target and waits for
-removal) and call the existing D-Bus API; that is step 28's remaining decision.
+The gating logic was not shipped. Step 28 closed without an RC003-specific
+helper: a dedicated blank NTAG215 is the better trigger because it never
+touches the cast tag and can be mounted where it is convenient; a future
+helper should take a configurable UID. This tag is a UID-only blank NTAG215,
+so there is no payload to reuse.
 
 ## Commands used
 

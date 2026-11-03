@@ -82,7 +82,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | N — ATVV v1.0 conformance | 25 | **done**: 25 closed the `MIC_OPEN_ERROR`/`AUDIO_SYNC` gaps, rebuilt the resampler on a valid mid-session codec change, and added sequence-gap diagnostics |
 | O — Microphone latency | 26 | **done**: opt-in `preopen_mic` with an armed session and a recorded RC003 A/B |
 | P — Recording-key edges | 27 | **done**: optional press and release actions on the recording key, local to the provider |
-| Q — NFC | 28 | **in progress**: the RC003 tag is read (NTAG215, empty NDEF); the read-only trigger decision is open |
+| Q — NFC | 28 | **done**: the tag is read; no RC003-specific helper; a blank NTAG215 is the better trigger |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
@@ -96,8 +96,9 @@ known-limitations sections; step 25 is complete with the three ATVV v1.0
 conformance fixes; step 26 is complete with the RC003 keep-open A/B and the
 opt-in `preopen_mic` setting; step 27 is complete with the optional
 recording-key press and release actions and their synthetic-only verification;
-step 28 is in progress: the RC003 tag is an NTAG215 with an empty NDEF message,
-and the read-only trigger decision is open.
+step 28 is complete: the RC003 tag is an NTAG215 with an empty NDEF message,
+and the step closed without a helper because a blank NTAG215 is the better
+trigger.
 
 ## Step files
 
@@ -109,7 +110,6 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
-| 28 | Q | [nfc-tag](28-nfc-tag.md) | 🚧 in-progress | — (reader attached) | the RC003 tag is read and the read-only trigger is either demonstrated once per presentation or closed |
 
 ### Completed steps
 
@@ -141,6 +141,7 @@ verified; they are not reopened. Live work is listed first.
 | 25 | N | [atvv-spec-conformance](25-atvv-spec-conformance.md) | ✅ done | 01, 02, 04, 06 | errors do not end a stream, a valid sync changes the decode rate, and sequence gaps are counted |
 | 26 | O | [preopen-mic](26-preopen-mic.md) | ✅ done | 02, 04, 06, 07 | the RC003 A/B clears the 100 ms gate and the opt-in armed path is live |
 | 27 | P | [recording-key-press-release-actions](27-recording-key-press-release-actions.md) | ✅ done | 14 | one press and one release action run per edge while the mic, trigger key, and provider contract stay unchanged |
+| 28 | Q | [nfc-tag](28-nfc-tag.md) | ✅ done | — | the RC003 tag is read; no RC003-specific helper, because a blank NTAG215 is the better trigger |
 
 ## Architecture contract
 
