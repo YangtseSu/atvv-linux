@@ -7,7 +7,7 @@ Updated: 2026-11-03
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 271 passed, 9 ignored tests (five
+- Tests: `cargo test --workspace` → 272 passed, 9 ignored tests (five
   kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
   the real-device GUI test, and a locale-detection test; the kernel tests pass
   with `/dev/uinput` access, the pointer test also needs the RC003 and physical
@@ -15,12 +15,13 @@ Updated: 2026-11-03
   suite and workspace clippy ran on this machine without `xvfb-run` because it
   is not installed; the GTK window smoke test passed on the live GNOME session.
   The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at least as
-  large as the window; it skips the pointer section otherwise.
-- Live state (2026-11-03): the installed `atvv 0.3.0-1` predates the
-  audio-sync length fix. `atvvd.service` is stopped and the fixed
-  `target/debug/atvvd --verbose` runs from this checkout (log
-  `/tmp/atvv-fixed.log`). The 0.3.1-1 packages are built in `~/aur/atvv`;
-  install them and start the unit.
+  large as the window; it skips the pointer section otherwise. Run on
+  2026-11-03 against the live `wayland-0` session: 272 passed, 9 ignored.
+- Live state (2026-11-03): the AUR `-git` packages are installed
+  (`atvv-git`/`atvv-gui-git` `0.3.1.r2.g72835d4-2`) and `atvvd.service` runs
+  from them. That build predates the window-height fix, so the installed
+  `atvv-config` still opens at the fixed 760 px height; rebuild the AUR
+  packages to ship it.
 
 ## Read first
 
@@ -51,6 +52,25 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Window height follows the board (fixed 2026-11-03)**: the window opened at a
+  fixed 1040×760 and clipped the board on the profiles and locales that need
+  more room. Measured board natural heights: RC003/English 572 px,
+  Chromecast/English 663 px, RC003/Chinese 650 px, Chromecast/Chinese 747 px;
+  the scroll viewport was 653–659 px, so Chromecast/Chinese hid 94 px and the
+  installed configuration (Chromecast, `LANG=zh_CN.UTF-8`) was the worst case.
+  The window now grows to its measured height once a document loads:
+  `ScrolledWindow::propagate_natural_height` forwards the board's natural
+  height, `AppWindow::fit_height_to_content` measures at the window's width and
+  applies `set_default_size`, and `schedule_fit` defers the measurement to the
+  next frame because `MappingBoard` refits the diagram from its own tick
+  callback. Growth is limited to a window whose height still equals the value
+  this module set, so a manual resize, a tiling layout, and a maximized window
+  are never overridden and the window never shrinks. A compositor still clamps
+  the request to the workarea (verified: 1040×1500 became 1040×1048). With the
+  live daemon and `wayland-0` the window opens 1040×854 with zero vertical
+  overflow; `tests/window_fit.rs` fails on the previous code (4 px hidden on
+  Chromecast/English) and covers both profiles in both languages.
+  Workspace: fmt and clippy clean.
 - **Board proportions (fixed 2026-11-03)**: the remote diagram claimed the
   SVG's intrinsic 320x950 size through `GtkPicture`, so the center column's
   natural height was 950 px against 540 px card columns; the picture then grew
@@ -954,12 +974,15 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**v0.3.1 is published; install it.** The release workflow and the AUR
-`0.3.1-1` update are complete. Install
-`~/aur/atvv/atvv-0.3.1-1-x86_64.pkg.tar.zst` and
-`~/aur/atvv/atvv-gui-0.3.1-1-x86_64.pkg.tar.zst`, start `atvvd.service`, and
-stop the temporary fixed debug daemon. The audio-sync fix needs no further
-code change.
+**Rebuild the AUR `-git` packages.** The window-height fix and its regression
+test (`crates/atvv-gui/tests/window_fit.rs`) are committed; `docs/gui.md` and
+`docs/gui.zh-CN.md` describe the new sizing. `atvv-git`/`atvv-gui-git` are
+installed from commit `72835d4`, which predates the fix, so the installed
+`atvv-config` still opens at 760 px and scrolls on Chromecast/Chinese until the
+packages are rebuilt.
+
+**v0.3.1 is published.** The release workflow and the AUR `0.3.1-1` update are
+complete; the audio-sync fix needs no further code change.
 
 **v0.3.0 is published.** The annotated tag `v0.3.0` (`ad39a49`) published the
 release with x86_64/aarch64 binaries, the source archive, checksums, and

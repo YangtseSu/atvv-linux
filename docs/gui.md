@@ -71,6 +71,14 @@ card and edit its **Single** slot; the diagram and the card always show the
 same selection. The board scrolls horizontally when the window is narrower
 than the board; the header and the test bar stay visible.
 
+The window grows to the height the board needs once a document loads, because
+that height depends on the profile (the Chromecast has seven cards per column)
+and on the locale (a Chinese card title can wrap where English fits one line).
+The opening 1040×760 size is a floor: it never shrinks on its own, and a size
+you set — dragged, tiled, or maximized — is left alone, so a window that does
+fit scrolls instead of growing back. A board taller than the monitor keeps
+scrolling, because the compositor clamps the window to the workarea.
+
 The voice key on the diagram (the microphone on the RC003, the black Google
 Assistant button on the Chromecast) is not an action slot. Clicking it, or the
 **Voice key** card under the diagram, opens the recording-key dialog.

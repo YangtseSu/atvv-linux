@@ -34,6 +34,19 @@ use crate::model::{
 
 pub const APP_ID: &str = "org.atvv.Config";
 
+/// Width that fits the three board columns without horizontal scrolling.
+const DEFAULT_WIDTH: i32 = 1040;
+/// Height the window opens at before a document is loaded.
+///
+/// The board can need more (the Chromecast has seven cards per column and two
+/// lines of Chinese labels are taller than one English line), so the first
+/// loaded document grows the window to its natural height. The value is a
+/// floor, never a cap: a smaller board leaves the window as it is.
+const DEFAULT_HEIGHT: i32 = 760;
+/// Smallest usable window; the board scrolls below this.
+const MIN_WIDTH: i32 = 360;
+const MIN_HEIGHT: i32 = 420;
+
 const CSS: &str = r#"
 .remote-canvas {
   background: alpha(@card_bg_color, 0.55);
@@ -785,6 +798,11 @@ pub struct AppWindow {
     voice_selected: Cell<bool>,
     pressed: Cell<Option<(RemoteButton, Trigger)>>,
     last_test: RefCell<Option<TestResult>>,
+    /// Height this window last set; the fit only grows a window still at this
+    /// value, so a size the user or the compositor chose is left alone.
+    fitted_height: Cell<i32>,
+    /// A fit is queued for the next frame.
+    fit_scheduled: Cell<bool>,
 }
 
 impl AppWindow {
@@ -930,6 +948,9 @@ impl AppWindow {
             .vscrollbar_policy(gtk::PolicyType::Automatic)
             .hexpand(true)
             .vexpand(true)
+            // The board's natural height reaches the window, so the window can
+            // open at the height the cards need instead of a fixed guess.
+            .propagate_natural_height(true)
             .child(board.root())
             .build();
 
@@ -1178,10 +1199,10 @@ impl AppWindow {
 
         let mut builder = adw::ApplicationWindow::builder()
             .title(tr("ATVV Remote"))
-            .default_width(1040)
-            .default_height(760)
-            .width_request(360)
-            .height_request(420);
+            .default_width(DEFAULT_WIDTH)
+            .default_height(DEFAULT_HEIGHT)
+            .width_request(MIN_WIDTH)
+            .height_request(MIN_HEIGHT);
         if let Some(application) = application {
             builder = builder.application(application);
         }
@@ -1274,10 +1295,13 @@ impl AppWindow {
             voice_selected: Cell::new(false),
             pressed: Cell::new(None),
             last_test: RefCell::new(None),
+            fitted_height: Cell::new(DEFAULT_HEIGHT),
+            fit_scheduled: Cell::new(false),
         });
         *ui.this.borrow_mut() = Rc::downgrade(&ui);
         Self::connect_events(&ui);
         connect_timers(&ui);
+        ui.connect_fit_on_map();
         ui.refresh_all();
         ui
     }
@@ -1285,6 +1309,75 @@ impl AppWindow {
     /// Load the current document and start polling the daemon.
     pub fn begin(&self) {
         self.backend.load();
+    }
+
+    /// Grow the window to the height the board needs.
+    ///
+    /// The board's natural height depends on the profile (the Chromecast has
+    /// seven cards per column) and on the locale (a Chinese card title can wrap
+    /// where English fits one line), so a constant window height opens with a
+    /// scrollbar on some combinations. The window is measured after a document
+    /// loads and grows when the content needs more.
+    ///
+    /// Only a window whose height is still the one this window set — the
+    /// opening [`DEFAULT_HEIGHT`] or a height it grew to — is grown: a size the
+    /// user dragged, a tiling layout, and a maximized window all differ from it
+    /// and are left alone. The window never shrinks on its own, and a
+    /// compositor still clamps the request to the monitor workarea.
+    fn fit_height_to_content(&self) {
+        if self.model.borrow().is_none() {
+            return;
+        }
+        let width = self.window.width();
+        let height = self.window.height();
+        if width <= 0 || height <= 0 {
+            // The window is mapped but has no allocation yet, which is what a
+            // fit scheduled from the `map` signal sees; try the next frame.
+            self.schedule_fit();
+            return;
+        }
+        if height != self.fitted_height.get() {
+            return;
+        }
+        let wanted = self.window.measure(gtk::Orientation::Vertical, width).1;
+        if wanted <= height {
+            return;
+        }
+        self.fitted_height.set(wanted);
+        self.window.set_default_size(width, wanted);
+    }
+
+    /// Fit on the frame after the board changed.
+    ///
+    /// The board refits the diagram from its own tick callback, so measuring in
+    /// the same turn of the main loop reads the previous frame's size request.
+    /// The next tick runs after that layout, when the measured height is final.
+    fn schedule_fit(&self) {
+        if self.fit_scheduled.replace(true) {
+            return;
+        }
+        let weak = self.this.borrow().clone();
+        self.window.add_tick_callback(move |_, _| {
+            let Some(ui) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            ui.fit_scheduled.set(false);
+            ui.fit_height_to_content();
+            glib::ControlFlow::Break
+        });
+    }
+
+    /// Fit a document that loaded before the window was mapped.
+    fn connect_fit_on_map(&self) {
+        let weak = self.this.borrow().clone();
+        self.window.connect_map(move |_| {
+            if let Some(ui) = weak.upgrade() {
+                // A fit queued before the map never ran: the frame clock of an
+                // unmapped window does not tick.
+                ui.fit_scheduled.set(false);
+                ui.schedule_fit();
+            }
+        });
     }
 
     /// Drain worker results; the main-loop timer calls this.
@@ -1681,6 +1774,10 @@ impl AppWindow {
                     self.refresh_all();
                     self.reload_editor();
                     self.maybe_auto_open_checklist();
+                    // The first document decides the window height: a profile
+                    // or locale that needs more than the default would
+                    // otherwise open with a scrollbar.
+                    self.schedule_fit();
                 }
                 Err(error) => self.show_error(&error),
             },
@@ -3230,6 +3327,7 @@ impl AppWindow {
         *self.model.borrow_mut() = Some(model);
         self.stack.set_visible_child_name("config");
         self.refresh_all();
+        self.schedule_fit();
     }
 
     #[doc(hidden)]
