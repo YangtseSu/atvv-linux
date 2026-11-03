@@ -53,6 +53,12 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **v0.4.0 (prepared 2026-11-03)**: workspace version 0.4.0 over v0.3.2. The
+  release carries the optional recording-key press and release actions
+  (step 27), the headless `mutter` GUI test runner, the NFC tag research
+  record (step 28), and the detached-backend flake fix (`426d451`) that
+  v0.3.2 missed. The annotated tag runs the release workflow for
+  x86_64/aarch64 binaries, the source archive, and checksums.
 - **Step 27 recording-key edges (complete, 2026-11-03)**: the optional
   `[recording] press` and `release` actions are validated in `atvv-config`
   (button grammar, `dictation:*` rejected, `exec` needs `allow_exec`), exposed
@@ -1039,27 +1045,15 @@ writable and not password-protected. No write was made. The UID-gated
 RC003-specific helper was shipped: a dedicated blank NTAG215 is the better
 trigger. Evidence: [`research/nfc-rc003.md`](research/nfc-rc003.md).
 
-**Install the stable packages.** Everything for the release is published:
-`v0.3.2` on GitHub, AUR `atvv`/`atvv-gui` `0.3.2-2`, and the built package
-files in `~/aur/atvv`. Step 27 postdates the `v0.3.2` tag, so these packages
-do not contain the recording-key edge actions; they ship with the next
-release.
+**Tag and publish v0.4.0, then update the stable AUR `atvv`.** The workspace
+carries 0.4.0 with the recording-key edge actions, the headless GUI test
+runner, the NFC research record, and the detached-backend flake fix that
+v0.3.2 missed. Push the tag `v0.4.0`, wait for the release workflow, then set
+the AUR `atvv` `pkgver` to 0.4.0 with the new source-archive checksum.
 
-```sh
-sudo pacman -U ~/aur/atvv/atvv-0.3.2-2-x86_64.pkg.tar.zst \
-               ~/aur/atvv/atvv-gui-0.3.2-2-x86_64.pkg.tar.zst
-systemctl --user daemon-reload
-systemctl --user restart atvvd
-```
-
-They conflict with the installed `atvv-git`/`atvv-gui-git`, so removing that
-pair is part of the transaction. Then open `atvv-config` on the Chromecast
-profile under `zh_CN` and confirm the window opens 1040×854 with no vertical
-scrollbar — that is the fix this release exists for.
-
-**Detached-backend flake fix is on `main` after the tag.** `426d451` makes
+**Detached-backend flake fix is in this release.** `426d451` makes
 `Backend::detached` emit no events, so `tests/ui.rs` no longer races the 2 s
-status poll. `v0.3.2` predates it; the next release carries it.
+status poll. `v0.3.2` predates it; v0.4.0 carries it.
 
 **v0.3.1 is published.** The release workflow and the AUR `0.3.1-1` update are
 complete; the audio-sync fix needs no further code change.
