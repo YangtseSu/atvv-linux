@@ -64,8 +64,15 @@ per-session copies; `docs/plans/` remains the canonical plan.
   columns' height, the window grows to the board's height), README badges and
   the board screenshot, and corrected AUR install instructions: `atvv` and
   `atvv-gui` are one split pkgbase, so the documented `atvv-gui.git` clone
-  never existed. AUR `atvv` `0.3.2-1` is committed as `f4018f9` with
-  `atvv` 6,244,997 B and `atvv-gui` 1,476,717 B built in `~/aur/atvv`.
+  never existed. AUR `atvv` is published as `0.3.2-2` (commit `5271def`):
+  `0.3.2-1` shipped only four hand-picked doc files, so the installed
+  `README.md` carried a dangling `docs/gui.png` and `docs/gui.md` had never
+  found its screenshots; `pkgrel 2` installs the whole docs tree from `atvv`
+  and drops `atvv-gui`'s duplicate `gui.md`. Built in `~/aur/atvv`:
+  `atvv-0.3.2-2-x86_64.pkg.tar.zst` (6,761,254 B, sha256
+  `fd2b2007b960b8380eaee595ccc1dab7bad0154a15ea2dff4b6813b6094d7592`) and
+  `atvv-gui-0.3.2-2-x86_64.pkg.tar.zst` (1,461,552 B, sha256
+  `ab011aaa43ad639f0f58f3b609cf45c78f52cd0e28c7fc6f53bbe09d42a19c2d`).
 - **Detached test backend (fixed 2026-11-03)**: `Backend::detached` started a
   worker against an unreachable bus that answered every request with
   `LoadFailed` or `Status(Err)`. The window's 2 s status poll then cleared the
@@ -1002,13 +1009,21 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Push the AUR `atvv` `0.3.2-1` update.** The recipe in `~/aur/atvv` carries
-`pkgver=0.3.2`, the published source-archive checksum, and a fresh `.SRCINFO`;
-`makepkg -f` built `atvv-0.3.2-1-x86_64.pkg.tar.zst` (6,244,997 B) and
-`atvv-gui-0.3.2-1-x86_64.pkg.tar.zst` (1,476,717 B) from the release archive.
-Install them with `pacman -U` (they replace the installed `-git` packages),
-start `atvvd.service`, and confirm the window opens at 1040×854 on the
-Chromecast profile under `zh_CN`.
+**Install the stable packages.** Everything for the release is published:
+`v0.3.2` on GitHub, AUR `atvv`/`atvv-gui` `0.3.2-2`, and the built package
+files in `~/aur/atvv`:
+
+```sh
+sudo pacman -U ~/aur/atvv/atvv-0.3.2-2-x86_64.pkg.tar.zst \
+               ~/aur/atvv/atvv-gui-0.3.2-2-x86_64.pkg.tar.zst
+systemctl --user daemon-reload
+systemctl --user restart atvvd
+```
+
+They conflict with the installed `atvv-git`/`atvv-gui-git`, so removing that
+pair is part of the transaction. Then open `atvv-config` on the Chromecast
+profile under `zh_CN` and confirm the window opens 1040×854 with no vertical
+scrollbar — that is the fix this release exists for.
 
 **Detached-backend flake fix is on `main` after the tag.** `426d451` makes
 `Backend::detached` emit no events, so `tests/ui.rs` no longer races the 2 s
