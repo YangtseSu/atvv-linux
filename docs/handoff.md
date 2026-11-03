@@ -52,6 +52,14 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **v0.3.2 (prepared 2026-11-03)**: workspace version 0.3.2 over v0.3.1. The
+  release carries the two GUI sizing fixes (the diagram takes the card
+  columns' height, the window grows to the board's height), the README badges
+  and the board screenshot, and corrected AUR install instructions: `atvv`
+  and `atvv-gui` are one split pkgbase, so `git clone
+  https://aur.archlinux.org/atvv.git` builds both and the documented
+  `atvv-gui.git` clone never existed. The annotated tag runs the release
+  workflow for x86_64/aarch64 binaries, the source archive, and checksums.
 - **Window height follows the board (fixed 2026-11-03)**: the window opened at a
   fixed 1040×760 and clipped the board on the profiles and locales that need
   more room. Measured board natural heights: RC003/English 572 px,
@@ -974,12 +982,13 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Rebuild the AUR `-git` packages.** The window-height fix and its regression
-test (`crates/atvv-gui/tests/window_fit.rs`) are committed; `docs/gui.md` and
-`docs/gui.zh-CN.md` describe the new sizing. `atvv-git`/`atvv-gui-git` are
-installed from commit `72835d4`, which predates the fix, so the installed
-`atvv-config` still opens at 760 px and scrolls on Chromecast/Chinese until the
-packages are rebuilt.
+**Tag and publish v0.3.2, then update the stable AUR `atvv`.** The workspace
+carries 0.3.2 with the two GUI sizing fixes, the README badges and board
+screenshot, and corrected install instructions. Push the tag `v0.3.2`, wait
+for the release workflow, then set the AUR `atvv` `pkgver` to 0.3.2 with the
+new source-archive checksum and push. `atvv-git`/`atvv-gui-git` stay installed
+from `72835d4` until the release is available; rebuilding them from the tag
+ships the same fixes.
 
 **v0.3.1 is published.** The release workflow and the AUR `0.3.1-1` update are
 complete; the audio-sync fix needs no further code change.

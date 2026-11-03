@@ -15,14 +15,16 @@ PipeWire。
 GUI 是可选的 `atvv-gui` AUR 软件包；守护进程软件包不依赖 GTK。
 
 ```sh
-git clone https://aur.archlinux.org/atvv-gui.git
-cd atvv-gui
+git clone https://aur.archlinux.org/atvv.git
+cd atvv
 makepkg -si
 systemctl --user enable --now atvvd
 atvv-config
 ```
 
-先安装 `atvv`；`atvv-gui` 依赖它。AUR 助手会解析该依赖。
+该仓库是一个拆分的 pkgbase：`makepkg -si` 会构建并安装 `atvv` 和 `atvv-gui`。
+AUR 上没有单独的 `atvv-gui` 仓库；`makepkg -si --pkg atvv` 只安装守护进程和
+CLI。`atvv-gui` 依赖 `atvv`，AUR 助手会解析该顺序。
 
 守护进程未运行时，窗口会打开只读的“守护进程不可用”页面，并提供“重试”按钮。
 守护进程保持无界面；`atvvctl` 仍然是可脚本化的接口。

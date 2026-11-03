@@ -16,15 +16,17 @@ The GUI is the optional `atvv-gui` AUR package; the daemon package does not
 depend on GTK.
 
 ```sh
-git clone https://aur.archlinux.org/atvv-gui.git
-cd atvv-gui
+git clone https://aur.archlinux.org/atvv.git
+cd atvv
 makepkg -si
 systemctl --user enable --now atvvd
 atvv-config
 ```
 
-Install `atvv` first; `atvv-gui` depends on it. An AUR helper resolves the
-dependency.
+The repository is one split pkgbase: `makepkg -si` builds and installs both
+`atvv` and `atvv-gui`. There is no separate `atvv-gui` AUR repository;
+`makepkg -si --pkg atvv` installs only the daemon and CLI. `atvv-gui` depends
+on `atvv`, so an AUR helper resolves the order.
 
 Without a running daemon the window opens a read-only *Daemon unavailable*
 page with a Retry button. The daemon stays headless; `atvvctl` remains the

@@ -2,11 +2,19 @@
 
 [English](README.md) | **简体中文**
 
+[![ci](https://img.shields.io/github/actions/workflow/status/YangtseSu/atvv-linux/ci.yml?branch=main&label=ci)](https://github.com/YangtseSu/atvv-linux/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/YangtseSu/atvv-linux?label=release)](https://github.com/YangtseSu/atvv-linux/releases)
+[![AUR](https://img.shields.io/aur/version/atvv?label=AUR)](https://aur.archlinux.org/packages/atvv)
+[![license](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-x86__64%20%7C%20aarch64-informational)](#安装arch)
+
 面向 Linux 的 ATVV v1.0 用户态栈：把 BLE 语音遥控器变成 PipeWire 麦克风，并提供
 evdev/uinput 按键映射和 D-Bus 控制接口。
 
 本项目不是内核驱动、BlueZ 插件或 PipeWire 模块。BlueZ 负责配对、GATT 和 HID；
 用户态守护进程负责 ATVV；PipeWire 负责音频图；evdev/uinput 负责输入重映射。
+
+![ATVV 遥控器映射面板](docs/gui.png)
 
 ## 状态
 
@@ -77,14 +85,11 @@ AUR 软件包从发布源码归档构建：
 git clone https://aur.archlinux.org/atvv.git
 cd atvv
 makepkg -si
-
-# 可选 GUI：
-git clone https://aur.archlinux.org/atvv-gui.git
-cd atvv-gui
-makepkg -si
 ```
 
-先安装 `atvv` 再安装 `atvv-gui`；AUR 助手会解析该依赖。GUI 应用是可选的；
+该仓库是一个拆分的 pkgbase：会构建 `atvv` 和可选的 `atvv-gui`，`makepkg -si`
+会安装两者。只安装守护进程和 CLI 用 `makepkg -si --pkg atvv`；AUR 上没有单独的
+`atvv-gui` 仓库。`atvv-gui` 依赖 `atvv`，AUR 助手会解析该顺序。GUI 应用是可选的；
 守护进程和 CLI 不依赖 GTK。
 
 先配对遥控器，再启用用户服务：

@@ -2,12 +2,20 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+[![ci](https://img.shields.io/github/actions/workflow/status/YangtseSu/atvv-linux/ci.yml?branch=main&label=ci)](https://github.com/YangtseSu/atvv-linux/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/YangtseSu/atvv-linux?label=release)](https://github.com/YangtseSu/atvv-linux/releases)
+[![AUR](https://img.shields.io/aur/version/atvv?label=AUR)](https://aur.archlinux.org/packages/atvv)
+[![license](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-x86__64%20%7C%20aarch64-informational)](#install-arch)
+
 ATVV v1.0 userspace stack for Linux: BLE voice remotes as a PipeWire
 microphone, with evdev/uinput button mapping and a D-Bus control surface.
 
 This is not a kernel driver, a BlueZ plugin, or a PipeWire module. BlueZ owns
 pairing, GATT, and HID; a userspace daemon speaks ATVV; PipeWire owns the audio
 graph; evdev/uinput owns input remapping.
+
+![ATVV Remote mapping board](docs/gui.png)
 
 ## Status
 
@@ -86,15 +94,13 @@ The AUR packages are built from the release source archive:
 git clone https://aur.archlinux.org/atvv.git
 cd atvv
 makepkg -si
-
-# optional GUI:
-git clone https://aur.archlinux.org/atvv-gui.git
-cd atvv-gui
-makepkg -si
 ```
 
-Install `atvv` before `atvv-gui`; an AUR helper resolves that dependency. The
-GUI app is optional; the daemon and CLI do not depend on GTK.
+The clone is one split pkgbase: it builds `atvv` and the optional `atvv-gui`,
+and `makepkg -si` installs both. Install only the daemon and CLI with
+`makepkg -si --pkg atvv`; there is no separate `atvv-gui` AUR repository.
+`atvv-gui` depends on `atvv`, so an AUR helper resolves that order. The GUI
+app is optional; the daemon and CLI do not depend on GTK.
 
 Pair a remote, then enable the user service:
 

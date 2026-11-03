@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 # Tracks the stable toolchain used to build; zbus 6 needs 1.89 and gtk4 0.11
 # needs 1.92, so the MSRV no longer holds dependency upgrades back.
