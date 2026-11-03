@@ -17,12 +17,10 @@ Updated: 2026-11-03
   `mutter --headless` Wayland display, so no test window appears on the
   desktop. The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at
   least as large as the window; the Wayland suite skips the pointer section.
-- Live state (2026-11-03): the AUR `-git` packages are installed
-  (`atvv-git`/`atvv-gui-git` `0.3.1.r2.g72835d4-2`) and `atvvd.service` runs
-  from them; that build predates both GUI sizing fixes, so the installed
-  `atvv-config` still opens at the fixed 760 px height. The stable
-  `atvv`/`atvv-gui` `0.3.2-1` packages are built in `~/aur/atvv` and replace
-  the `-git` pair (`conflicts`); installing them ships the fixes.
+- Live state (2026-11-03): `atvv`/`atvv-gui` 0.3.1-1 are installed; no `-git`
+  packages are installed. The AUR checkout `~/aur/atvv` is at 0.4.0-1 (commit
+  `7728278`) with both packages built, but the commit is not pushed and the
+  packages are not installed. `v0.4.0` is published on GitHub.
 
 ## Read first
 
@@ -53,12 +51,20 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
-- **v0.4.0 (prepared 2026-11-03)**: workspace version 0.4.0 over v0.3.2. The
-  release carries the optional recording-key press and release actions
-  (step 27), the headless `mutter` GUI test runner, the NFC tag research
-  record (step 28), and the detached-backend flake fix (`426d451`) that
-  v0.3.2 missed. The annotated tag runs the release workflow for
-  x86_64/aarch64 binaries, the source archive, and checksums.
+- **v0.4.0 (published 2026-11-03)**: workspace version 0.4.0 over v0.3.2;
+  the annotated tag `v0.4.0` (`4cfc925`, commit `0d44ee8`) published
+  [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.4.0)
+  with x86_64 (9,382,103 B; sha256
+  `f95bf6d7438c9c9791bed717a468acd170fd62adb5c52b96c9741e2979cd9b23`) and
+  aarch64 (8,856,744 B; sha256
+  `03ce7c0279f6e43a3c9503e7bfdad37c20025c43fa17dfacb95e9060bc4adb7e`)
+  binaries, the 2,672,640 B source archive (sha256
+  `ddb370e9a16c0b6c11ef92d257ed29013f9bdf53bd5899b26fdf9798b204e0e8`),
+  checksums, and generated notes. Release workflow run 41657350300 succeeded;
+  PR #3 (`dorny/paths-filter` v4) is included. The release carries the
+  recording-key edge actions (step 27), the headless GUI test runner, the NFC
+  research record (step 28), and the detached-backend flake fix (`426d451`).
+  Main CI run 41656865480 passed on the merge commit.
 - **Step 27 recording-key edges (complete, 2026-11-03)**: the optional
   `[recording] press` and `release` actions are validated in `atvv-config`
   (button grammar, `dictation:*` rejected, `exec` needs `allow_exec`), exposed
@@ -1045,11 +1051,15 @@ writable and not password-protected. No write was made. The UID-gated
 RC003-specific helper was shipped: a dedicated blank NTAG215 is the better
 trigger. Evidence: [`research/nfc-rc003.md`](research/nfc-rc003.md).
 
-**Tag and publish v0.4.0, then update the stable AUR `atvv`.** The workspace
-carries 0.4.0 with the recording-key edge actions, the headless GUI test
-runner, the NFC research record, and the detached-backend flake fix that
-v0.3.2 missed. Push the tag `v0.4.0`, wait for the release workflow, then set
-the AUR `atvv` `pkgver` to 0.4.0 with the new source-archive checksum.
+**Publish the AUR 0.4.0 update and install it.** `~/aur/atvv` carries
+`upgpkg: 0.4.0-1` (`7728278`) with the source checksum above;
+`atvv-0.4.0-1-x86_64.pkg.tar.zst` (7,072,612 B, sha256
+`e3d7459ed6e9223053993303cabf96014d6c09f62cd45183ccd8f11fd2ceca35`) and
+`atvv-gui-0.4.0-1-x86_64.pkg.tar.zst` (1,603,854 B, sha256
+`dfc1d052fc2b391e9db7122fb4666a2a38529549600b864744abbc6549f09c45`) are
+built. Push the AUR commit, then install both packages (operator password) and
+run `systemctl --user daemon-reload; systemctl --user restart atvvd`. The
+installed 0.3.1-1 pair stays active until then.
 
 **Detached-backend flake fix is in this release.** `426d451` makes
 `Backend::detached` emit no events, so `tests/ui.rs` no longer races the 2 s
