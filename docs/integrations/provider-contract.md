@@ -72,6 +72,11 @@ declared set; the provider emits one active key per press.
 - Do not emit all three simultaneously. Consumers may parse the extra keys as
   a chord or trigger duplicate actions.
 
+The optional `[recording]` press and release actions are local configuration on
+the provider. They do not change this contract: the declared set, the active
+key, the source metadata, and the one-key-per-press rule stay the same. A
+consumer never needs to know whether an edge action is configured.
+
 ### Discovery
 
 The source advertises the contract as PipeWire properties:

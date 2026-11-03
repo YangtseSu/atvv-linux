@@ -61,6 +61,15 @@ pub fn trigger_label(trigger: Trigger) -> &'static str {
     }
 }
 
+/// Normalize an optional raw document value: empty or `none` clears it.
+fn normalise_value(raw: Option<String>) -> Option<String> {
+    match raw.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) if value.eq_ignore_ascii_case("none") => None,
+        Some(value) => Some(value.to_string()),
+    }
+}
+
 /// Parse the protocol name used by `ButtonEvent`.
 #[must_use]
 pub fn trigger_from_name(name: &str) -> Option<Trigger> {
@@ -701,6 +710,37 @@ impl GuiModel {
         Ok(true)
     }
 
+    /// Apply the recording-key page atomically: output key and edge actions.
+    ///
+    /// `None`, an empty string, or `none` clears a field. Edge actions use the
+    /// button grammar without dictation. Validation runs on a copy, so a
+    /// rejected value leaves the document untouched.
+    pub fn set_recording_edges(
+        &mut self,
+        trigger: Option<String>,
+        press: Option<String>,
+        release: Option<String>,
+    ) -> Result<bool, String> {
+        let trigger = normalise_value(trigger);
+        let press = normalise_value(press);
+        let release = normalise_value(release);
+        if self.document.trigger_key == trigger
+            && self.document.recording.press == press
+            && self.document.recording.release == release
+        {
+            return Ok(false);
+        }
+        let mut next = self.document.clone();
+        next.trigger_key = trigger;
+        next.recording.press = press;
+        next.recording.release = release;
+        next.validate(&self.profile)
+            .map_err(|error| error.to_string())?;
+        self.document = next;
+        self.dirty = true;
+        Ok(true)
+    }
+
     /// Set the global `allow_exec` policy.
     pub fn set_allow_exec(&mut self, allow: bool) {
         if self.document.allow_exec != allow {
@@ -990,6 +1030,66 @@ mod tests {
 
         assert!(model.set_trigger_key(Some("none".into())).unwrap());
         assert_eq!(model.document.trigger_key, None);
+        assert!(model.validate().is_ok());
+    }
+
+    #[test]
+    fn recording_edges_validate_and_clear() {
+        let mut model = model();
+        assert!(!model.dirty);
+        assert!(
+            !model
+                .set_recording_edges(Some("DICTATE".into()), None, None)
+                .unwrap(),
+            "an unchanged page is not dirty"
+        );
+
+        assert!(
+            model
+                .set_recording_edges(
+                    Some("F23".into()),
+                    Some("key:KEY_F13".into()),
+                    Some("combo:ctrl+alt+v".into()),
+                )
+                .unwrap()
+        );
+        assert_eq!(model.document.trigger_key.as_deref(), Some("F23"));
+        assert_eq!(
+            model.document.recording.press.as_deref(),
+            Some("key:KEY_F13")
+        );
+        assert_eq!(
+            model.document.recording.release.as_deref(),
+            Some("combo:ctrl+alt+v")
+        );
+        assert!(model.validate().is_ok());
+
+        let error = model
+            .set_recording_edges(None, Some("dictation:start".into()), None)
+            .unwrap_err();
+        assert!(error.contains("dictation"), "{error}");
+        assert_eq!(
+            model.document.recording.press.as_deref(),
+            Some("key:KEY_F13"),
+            "a rejected edge leaves the whole page untouched"
+        );
+
+        let error = model
+            .set_recording_edges(None, Some("exec:true".into()), None)
+            .unwrap_err();
+        assert!(error.contains("allow_exec"), "{error}");
+        assert_eq!(
+            model.document.recording.press.as_deref(),
+            Some("key:KEY_F13")
+        );
+
+        assert!(
+            model
+                .set_recording_edges(None, Some("none".into()), Some(String::new()))
+                .unwrap()
+        );
+        assert_eq!(model.document.trigger_key, None);
+        assert!(model.document.recording.is_empty());
         assert!(model.validate().is_ok());
     }
 

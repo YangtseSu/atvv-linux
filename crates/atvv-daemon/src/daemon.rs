@@ -1161,15 +1161,24 @@ impl Daemon {
         let action = atvv_config::parse_checked_action(raw, self.config.allow_exec)
             .map_err(|error| error.to_string())?;
         self.trace(format!("run action {action}"));
+        self.dispatch_action(&action)
+    }
+
+    /// Execute one already-checked action through the running runtime.
+    ///
+    /// Key, chord, and pointer actions use the input runtime, `exec` enters
+    /// the serial command worker, and dictation drives the ATVV session. The
+    /// GUI and the recording-key edges both use this path.
+    fn dispatch_action(&mut self, action: &Action) -> Result<(), String> {
         match action {
             Action::None => Ok(()),
             Action::Key { .. } | Action::Combo { .. } | Action::Pointer(_) => self
                 .input
                 .as_ref()
                 .ok_or_else(|| "the input runtime is not available".to_string())?
-                .tap_action(&action),
+                .tap_action(action),
             Action::Exec { command } => {
-                self.run_exec(&command);
+                self.run_exec(command);
                 Ok(())
             }
             Action::Dictation(mode) => {
@@ -1706,6 +1715,19 @@ impl Daemon {
             }
         } else {
             self.request_voice(pressed);
+        }
+        let edge_action = if pressed {
+            self.config.recording.press.clone()
+        } else {
+            self.config.recording.release.clone()
+        };
+        if let Some(action) = edge_action {
+            self.trace(format!("recording edge action {action}"));
+            if let Err(error) = self.dispatch_action(&action) {
+                let message = format!("recording action: {error}");
+                self.last_error = Some(message);
+                self.trace(format!("recording action failed: {error}"));
+            }
         }
         if self.config.vinput == VinputMode::Dbus
             && let Some(vinput) = &mut self.vinput
@@ -2593,6 +2615,100 @@ mod tests {
         let _ = std::fs::remove_file(&marker);
         let _ = std::fs::remove_file(&config_path);
         let _ = handle;
+    }
+
+    #[test]
+    fn recording_edge_actions_run_once_per_edge_and_capture_suppresses_them() {
+        let (mut transport, mock) = MockTransport::new(MockConfig::default());
+        let connected = transport.poll(Duration::ZERO).unwrap().unwrap();
+        let signals = Arc::new(RecordingSink::default());
+        let mut config = DaemonConfig::new(RC003, mock_address(&transport));
+        config.config.input = false;
+        let path = config_path("recording-edges");
+        let _ = std::fs::remove_file(&path);
+        config.config_path = path.clone();
+        let (mut daemon, handle) = Daemon::new(
+            config,
+            Box::new(transport),
+            Box::new(CountingSink { samples: 0 }),
+            signals.clone(),
+            None,
+        );
+        daemon.on_transport_event(connected);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while daemon.session.state() != SessionState::Ready {
+            assert!(
+                Instant::now() < deadline,
+                "the mock session did not reach ready"
+            );
+            if let Some(event) = daemon.transport.poll(Duration::from_millis(100)).unwrap() {
+                daemon.on_transport_event(event);
+            }
+        }
+
+        let marker =
+            std::env::temp_dir().join(format!("atvv-daemon-recording-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let mut document = ConfigDocument::from_config(&Config::defaults(&RC003));
+        document.allow_exec = true;
+        document.recording.press = Some(format!("exec:printf press >> {}", marker.display()));
+        document.recording.release = Some(format!("exec:printf release >> {}", marker.display()));
+        daemon
+            .set_config(&serde_json::to_string(&document).unwrap())
+            .unwrap();
+
+        daemon.on_input_event(RemoteEvent::Voice { pressed: true });
+        assert_eq!(mock.command_count(0x0C), 1, "the microphone opens first");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while std::fs::read_to_string(&marker).unwrap_or_default() != "press" {
+            assert!(Instant::now() < deadline, "the press action did not run");
+            daemon.poll_exec();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        daemon.on_input_event(RemoteEvent::Voice { pressed: false });
+        assert_eq!(mock.command_count(0x0D), 1, "the microphone closes");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while std::fs::read_to_string(&marker).unwrap_or_default() != "pressrelease" {
+            assert!(Instant::now() < deadline, "the release action did not run");
+            daemon.poll_exec();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            std::fs::read_to_string(&marker).unwrap(),
+            "pressrelease",
+            "each edge runs its action exactly once"
+        );
+
+        // Capture reports both edges and executes neither action.
+        let cell = handle.capture();
+        capture::begin(&cell, None);
+        daemon.on_input_event(RemoteEvent::Voice { pressed: true });
+        daemon.on_input_event(RemoteEvent::Voice { pressed: false });
+        std::thread::sleep(Duration::from_millis(50));
+        daemon.poll_exec();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "pressrelease");
+        assert_eq!(mock.command_count(0x0C), 1, "capture must not open the mic");
+        assert_eq!(
+            mock.command_count(0x0D),
+            1,
+            "capture must not close the mic"
+        );
+        let voice_events = signals
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    DaemonEvent::ButtonEvent { button, .. } if button == "voice"
+                )
+            })
+            .count();
+        assert_eq!(voice_events, 2, "capture reports both voice edges");
+        let _ = std::fs::remove_file(&marker);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

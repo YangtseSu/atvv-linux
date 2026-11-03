@@ -168,6 +168,8 @@ enum MicCommand {
 }
 
 #[derive(Debug, Subcommand)]
+// Built once by clap at startup; the inline argument struct costs nothing.
+#[allow(clippy::large_enum_variant)]
 enum ConfigCommand {
     /// Print the active configuration.
     Get {
@@ -300,6 +302,12 @@ struct ConfigSet {
     /// Synthetic key or chord; `none` disables it.
     #[arg(long)]
     trigger_key: Option<String>,
+    /// Action on the recording-key press; `none` clears it.
+    #[arg(long)]
+    recording_press: Option<String>,
+    /// Action on the recording-key release; `none` clears it.
+    #[arg(long)]
+    recording_release: Option<String>,
     /// BlueZ adapter name saved for the next start.
     #[arg(long)]
     adapter: Option<String>,
@@ -1109,6 +1117,14 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
         };
         changed = true;
     }
+    if let Some(recording_press) = args.recording_press {
+        document.recording.press = recording_value(recording_press);
+        changed = true;
+    }
+    if let Some(recording_release) = args.recording_release {
+        document.recording.release = recording_value(recording_release);
+        changed = true;
+    }
     if let Some(adapter) = args.adapter {
         document.adapter = Some(adapter);
         changed = true;
@@ -1154,6 +1170,15 @@ fn set_config(client: &Client, args: ConfigSet) -> Result<(), String> {
         .map_err(|error| format!("cannot apply the configuration: {error}"))?;
     println!("applied");
     Ok(())
+}
+
+fn recording_value(raw: String) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() || raw.eq_ignore_ascii_case("none") {
+        None
+    } else {
+        Some(raw.to_string())
+    }
 }
 
 fn parse_vinput(value: &str) -> Result<VinputMode, String> {
@@ -1202,8 +1227,10 @@ fn default_action(
 
 fn render_config(document: &ConfigDocument) -> String {
     let trigger_key = document.trigger_key.as_deref().unwrap_or("none");
+    let press = document.recording.press.as_deref().unwrap_or("none");
+    let release = document.recording.release.as_deref().unwrap_or("none");
     let mut text = format!(
-        "schema:        {}\nprofile:       {}\ndevice:        {}\nadapter:       {}\ngain_db:       {}\ninput:         {}\nvinput:        {}\ntrigger_key:   {}\nallow_exec:    {}\nactive_layout: {}\ndevices:\n",
+        "schema:        {}\nprofile:       {}\ndevice:        {}\nadapter:       {}\ngain_db:       {}\ninput:         {}\nvinput:        {}\ntrigger_key:   {}\nrecording:     press={} release={}\nallow_exec:    {}\nactive_layout: {}\ndevices:\n",
         document.schema_version,
         document.profile,
         document.active_device.as_deref().unwrap_or("-"),
@@ -1212,6 +1239,8 @@ fn render_config(document: &ConfigDocument) -> String {
         document.input,
         document.vinput.name(),
         trigger_key,
+        press,
+        release,
         document.allow_exec,
         document.active_layout,
     );

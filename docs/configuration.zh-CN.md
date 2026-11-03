@@ -31,6 +31,10 @@ layout = "editor"                   # default 或某个用户布局 id
 profile = "google-chromecast"
 layout = "default"
 
+[recording]
+press = "key:KEY_F13"               # 可选的边缘操作；none 表示禁用
+release = "none"
+
 [layouts.editor]
 name = "Editor"
 description = "编辑器和浏览器快捷键"
@@ -57,6 +61,7 @@ long = "combo:ctrl+alt+v"
 | `vinput` | `trigger` | `trigger` 合成 `trigger_key`；`dbus` 调用 `org.fcitx.Vinput`；`off` 禁用集成。触发键与应用快捷键冲突时，`dbus` 是显式回退。修改 vinput 的 `[TriggerKey]` 后必须完全重启 fcitx5，`fcitx5-remote -r` 不够。 |
 | `trigger_key` | `DICTATE` | 单个按键或组合键，例如 `F18` 或 `ctrl+rightctrl`。`none` 禁用合成。 |
 | `allow_exec` | `false` | 任何 `exec:` 操作都需要它。 |
+| `[recording]` | 无 | 录音键按下和松开边缘的可选 `press`、`release` 操作。语法与按键操作相同，但不接受 `dictation:*`；见[录音键操作](#录音键操作)。 |
 | `[layouts.<id>]` | 无 | 用户布局：`name`、可选的 `description`、`[gesture]` 和 `[buttons.<button>]`。 |
 
 只有活动设备拥有 GATT 会话、PipeWire 源、HID 独占和映射板。
@@ -88,8 +93,8 @@ Input 是 `KEY_TV`，静音是 `KEY_MUTE`，YouTube 和 Netflix 使用摄像头�
 `omp` 为保留 id。最多允许 32 个用户布局；名称 1–40 个字符，描述最多 120 个字符。
 
 全局字段（`adapter`、`gain_db`、`input`、`preopen_mic`、`vinput`、
-`trigger_key`、`allow_exec`）不属于布局。切换布局永远不会改变 exec 策略、
-活动设备或录音键。`default` 不能被存储、重命名、删除或重置，也不会出现在
+`trigger_key`、`allow_exec`、`recording`）不属于布局。切换布局永远不会改变 exec
+策略、活动设备或录音键。`default` 不能被存储、重命名、删除或重置，也不会出现在
 `layouts` 中。切换布局时会同步更新活动设备的 `layout` 条目。
 
 ### 预打开麦克风
@@ -196,6 +201,33 @@ single = "pointer:click:right"
 超出 1–255 的指针单位、原始 `BTN_*` 按键、超出范围的增益或手势值，以及
 `allow_exec = false` 时的 `exec:` 操作。错误信息会指出按键、槽位和值。
 
+## 录音键操作
+
+实体录音键（RC003 上是 `KEY_F5`）不属于布局。它的按下和松开边缘打开、关闭 ATVV
+麦克风，并可在同一边缘运行两个可选操作：
+
+```toml
+[recording]
+press = "key:KEY_F13"
+release = "none"
+```
+
+操作语法与按键操作相同；`dictation:*` 会被拒绝，因为该键本身已经负责开始和停止
+听写。`none`、省略字段或整个 `[recording]` 表缺失都表示禁用该边缘。
+
+- 麦克风边缘先执行，操作随后执行。按下操作每次按下运行一次，松开操作每次松开
+  运行一次。
+- `key`、`combo` 和 `pointer` 操作是点按：按键或单击立即按下并释放。按住录音键
+  期间不会一直保持该操作。
+- `exec:` 遵循 [`exec:` 策略](#exec-策略)：需要 `allow_exec = true`，一次一条
+  命令，超时 5 秒，关闭 stdio。松开操作可能排在按下操作之后等待。
+- 测试模式会报告两个边缘，但不会运行任何操作。录音键对话框中的**运行一次**会
+  显式执行其中一个操作。
+- `trigger_key` 与这些操作相互独立。如果两者发出同一个键，两个都会发送；要只保留
+  操作，请设置 `trigger_key = "none"`。
+- 这些操作是本地配置。提供者契约（`atvv.recording_keys`、`active_key` 和源元数据）
+  保持不变。
+
 ## `exec:` 策略
 
 `exec:` 是通用逃生口，不是脚本语言。除非 `allow_exec = true`，否则它被禁用。
@@ -211,9 +243,11 @@ single = "pointer:click:right"
 `atvvctl config set` 通过 D-Bus 发送整个文档。守护进程在应用任何内容之前校验
 每个字段（包括每个已存储的布局），然后：
 
-1. 应用增益、输入、预打开模式、vinput 模式、触发键、手势时序和活动布局的操作映射；
+1. 应用增益、输入、预打开模式、vinput 模式、触发键、录音键操作、手势时序和活动
+   布局的操作映射；
 2. 当映射、时序、触发键或 vinput 模式变化时重启输入运行时，因为 uinput
-   按键注册依赖映射。重启失败会恢复之前的运行时并报告错误；
+   按键注册依赖映射。重启失败会恢复之前的运行时并报告错误；仅录音键操作变化
+   不会重启输入运行时；
 3. 原子地写入文件。写入失败会回滚运行时。
 
 无效文档不会触碰活动映射、运行时或文件。`atvvctl layout use` 通过同一路径应用
@@ -233,6 +267,7 @@ atvvctl config set --input false
 atvvctl config set --preopen-mic true
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
+atvvctl config set --recording-press key:KEY_F13 --recording-release none
 atvvctl layout list
 atvvctl layout show editor
 atvvctl layout use editor

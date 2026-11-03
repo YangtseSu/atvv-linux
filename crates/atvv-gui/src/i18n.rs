@@ -214,6 +214,11 @@ fn zh(text: &str) -> Option<&'static str> {
             "KEY_F5 被独占且固定，用于控制 ATVV 麦克风。"
         }
         "Output key" => "输出按键",
+        "On press" => "按下时",
+        "On release" => "松开时",
+        "Edge actions run once per press or release; the microphone edge always runs first." => {
+            "边缘操作在按下或松开时各运行一次；麦克风边缘始终先执行。"
+        }
         "Capture a key or chord for the output" => "捕获用于输出的按键或组合键",
         "Restore DICTATE" => "恢复为 DICTATE",
         "Reset to DICTATE" => "重置为 DICTATE",
@@ -333,7 +338,8 @@ fn zh(text: &str) -> Option<&'static str> {
         "Action failed: {error}" => "操作失败：{error}",
         "Selected {button} · {trigger}" => "已选择 {button} · {trigger}",
         "Recording key selected" => "已选择录音键",
-        "Microphone key (not remappable)" => "麦克风键（不可重映射）",
+        "Recording key updated" => "录音键已更新",
+        "Recording key reset" => "录音键已重置",
         "No action" => "无操作",
         "Waiting for a remote key…" => "等待遥控器按键…",
         "no configuration loaded" => "未加载配置",
@@ -358,6 +364,7 @@ fn zh(text: &str) -> Option<&'static str> {
         "Single" => "单击",
         "Double" => "双击",
         "Long" => "长按",
+        "Release" => "松开",
         "None" => "无",
         "Command…" => "命令…",
         "Start dictation" => "开始听写",

@@ -32,6 +32,10 @@ layout = "editor"                   # default or a user layout id
 profile = "google-chromecast"
 layout = "default"
 
+[recording]
+press = "key:KEY_F13"               # optional edge action; none disables
+release = "none"
+
 [layouts.editor]
 name = "Editor"
 description = "Editor and browser shortcuts"
@@ -58,6 +62,7 @@ long = "combo:ctrl+alt+v"
 | `vinput` | `trigger` | `trigger` synthesizes `trigger_key`; `dbus` calls `org.fcitx.Vinput`; `off` disables integration. `dbus` is the explicit fallback when the trigger key conflicts with an application binding. Editing vinput's `[TriggerKey]` requires a full fcitx5 restart, not `fcitx5-remote -r`. |
 | `trigger_key` | `DICTATE` | Single key or chord, for example `F18` or `ctrl+rightctrl`. `none` disables emission. |
 | `allow_exec` | `false` | Required for any `exec:` action. |
+| `[recording]` | none | Optional `press` and `release` actions on the recording-key edges. The grammar is the button grammar without `dictation:*`; see [Recording-key actions](#recording-key-actions). |
 | `[layouts.<id>]` | none | User layouts: `name`, optional `description`, `[gesture]`, and `[buttons.<button>]`. |
 
 Only the active device owns the GATT session, the PipeWire source, the HID
@@ -99,8 +104,8 @@ and `omp` are reserved. At most 32 user layouts are allowed; a name is 1–40
 characters and a description at most 120.
 
 Global fields (`adapter`, `gain_db`, `input`, `preopen_mic`, `vinput`,
-`trigger_key`, `allow_exec`) are not part of a layout. Switching a layout never
-changes the exec policy, the active device, or the recording key. `default`
+`trigger_key`, `allow_exec`, `recording`) are not part of a layout. Switching a
+layout never changes the exec policy, the active device, or the recording key. `default`
 cannot be stored, renamed, deleted, or reset, and it is not listed in `layouts`.
 The active device's `layout` entry is updated when a layout is switched.
 
@@ -224,6 +229,37 @@ duplicate chord key, a malformed action, pointer units outside 1–255, a raw
 `BTN_*` key, an out-of-range gain or gesture value, and an `exec:` action when
 `allow_exec = false`. Errors name the button, the slot, and the value.
 
+## Recording-key actions
+
+The physical recording key (`KEY_F5` on the RC003) is not part of a layout. Its
+press and release edges open and close the ATVV microphone, and two optional
+actions can run on the same edges:
+
+```toml
+[recording]
+press = "key:KEY_F13"
+release = "none"
+```
+
+The action grammar is the button grammar; `dictation:*` is rejected because the
+key already starts and stops dictation. `none`, an omitted field, or an absent
+`[recording]` table disables the edge.
+
+- The microphone edge runs first; the action follows. A press action runs once
+  per press and a release action once per release.
+- `key`, `combo`, and `pointer` actions are taps: the key or click is pressed
+  and released immediately. An action is not held while the recording key is
+  held.
+- `exec:` follows the [policy](#exec-policy): `allow_exec = true`, one command
+  at a time, 5-second timeout, closed stdio. A release action can wait behind a
+  press action.
+- Test mode reports both edges and runs neither action. **Run once** in the
+  recording-key dialog executes one action explicitly.
+- `trigger_key` and these actions are independent. If both emit the same key,
+  both are sent; set `trigger_key = "none"` to keep only the action.
+- These actions are local configuration. The provider contract
+  (`atvv.recording_keys`, `active_key`, and the source metadata) is unchanged.
+
 ## `exec:` policy
 
 `exec:` is a general escape hatch, not a scripting language. It is disabled
@@ -241,11 +277,12 @@ dispatched remote button runs it, and only when `allow_exec` is on.
 validates every field before applying anything, including every stored layout,
 then:
 
-1. applies gain, input, pre-open mode, vinput mode, trigger key, gesture
-   timing, and the active layout's action map;
+1. applies gain, input, pre-open mode, vinput mode, trigger key, recording-key
+   actions, gesture timing, and the active layout's action map;
 2. restarts the input runtime when the map, timing, trigger, or vinput mode
    changes, because the uinput key registration depends on the map. A failed
-   restart restores the previous runtime and reports the error;
+   restart restores the previous runtime and reports the error. Recording-key
+   actions alone never restart the input runtime;
 3. writes the file atomically. A failed write rolls the runtime back.
 
 An invalid document leaves the active map, the runtime, and the file
@@ -268,6 +305,7 @@ atvvctl config set --input false
 atvvctl config set --preopen-mic true
 atvvctl config set --vinput trigger --trigger-key DICTATE
 atvvctl config set --allow-exec
+atvvctl config set --recording-press key:KEY_F13 --recording-release none
 atvvctl layout list
 atvvctl layout show editor
 atvvctl layout use editor

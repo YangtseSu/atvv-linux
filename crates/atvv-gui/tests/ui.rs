@@ -481,6 +481,46 @@ fn window_smoke() {
         "the voice card shows the output key"
     );
 
+    // Press and release actions apply atomically with the output key and are
+    // displayed again when the dialog reopens.
+    window.board().voice_card().emit_clicked();
+    window.voice_press_row().set_text("key:KEY_F13");
+    window.voice_release_row().set_text("combo:ctrl+alt+v");
+    window.voice_update_button().emit_clicked();
+    pump(30);
+    let document = window.document().expect("document");
+    assert_eq!(document.recording.press.as_deref(), Some("key:KEY_F13"));
+    assert_eq!(
+        document.recording.release.as_deref(),
+        Some("combo:ctrl+alt+v")
+    );
+    window.board().voice_card().emit_clicked();
+    assert_eq!(window.voice_press_row().text(), "key:KEY_F13");
+    assert_eq!(window.voice_release_row().text(), "combo:ctrl+alt+v");
+
+    window.voice_press_row().set_text("dictation:start");
+    window.voice_update_button().emit_clicked();
+    pump(30);
+    assert!(
+        window.voice_editor().is_open(),
+        "invalid input keeps the dialog"
+    );
+    assert!(
+        window.voice_editor().error().text().contains("dictation"),
+        "{}",
+        window.voice_editor().error().text()
+    );
+    assert_eq!(
+        window.document().unwrap().recording.press.as_deref(),
+        Some("key:KEY_F13"),
+        "a rejected edge leaves the page untouched"
+    );
+
+    window.voice_press_row().set_text("none");
+    window.voice_update_button().emit_clicked();
+    pump(30);
+    assert_eq!(window.document().unwrap().recording.press, None);
+
     // The searchable picker lists canonical names and inserts the chosen key.
     window
         .board()
@@ -974,10 +1014,7 @@ fn window_smoke() {
         pressed: true,
     });
     assert_eq!(google.test_result_text(), "Voice · Single");
-    assert_eq!(
-        google.last_action_text(),
-        "→ Microphone key (not remappable)"
-    );
+    assert_eq!(google.last_action_text(), "→ None");
     assert!(
         google
             .diagram()
@@ -990,6 +1027,12 @@ fn window_smoke() {
         trigger: "single".to_string(),
         pressed: false,
     });
+    assert_eq!(
+        google.test_result_text(),
+        "Voice · Release",
+        "the release edge reaches the test bar"
+    );
+    assert_eq!(google.last_action_text(), "→ None");
     assert!(
         !google
             .diagram()

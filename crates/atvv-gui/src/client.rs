@@ -113,7 +113,7 @@ pub struct ButtonSignal {
 pub enum Request {
     Load,
     Status,
-    Save(ConfigDocument),
+    Save(Box<ConfigDocument>),
     SetLayout(String),
     BeginCapture,
     EndCapture,
@@ -126,7 +126,7 @@ pub enum Request {
 #[derive(Debug)]
 pub enum Event {
     Loaded {
-        document: ConfigDocument,
+        document: Box<ConfigDocument>,
         status: DaemonStatus,
     },
     LoadFailed(String),
@@ -277,7 +277,7 @@ impl Backend {
     }
 
     pub fn save(&self, document: ConfigDocument) {
-        let _ = self.requests.send(Request::Save(document));
+        let _ = self.requests.send(Request::Save(Box::new(document)));
     }
 
     pub fn set_layout(&self, id: String) {
@@ -349,7 +349,10 @@ fn worker(address: Option<&str>, requests: &Receiver<Request>, events: &Sender<E
         match request {
             Request::Load => match active.load() {
                 Ok((document, status)) => {
-                    let _ = events.send(Event::Loaded { document, status });
+                    let _ = events.send(Event::Loaded {
+                        document: Box::new(document),
+                        status,
+                    });
                 }
                 Err(error) => {
                     let _ = events.send(Event::LoadFailed(error));

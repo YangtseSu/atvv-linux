@@ -582,6 +582,16 @@ pub struct KnownDevice {
     pub layout: String,
 }
 
+/// `[recording]` table: optional actions on the recording-key edges.
+///
+/// The values use the button grammar; `none` clears an edge.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordingToml {
+    pub press: Option<String>,
+    pub release: Option<String>,
+}
+
 /// Raw `daemon.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -610,6 +620,9 @@ pub struct FileConfig {
     pub trigger_key: Option<String>,
     /// Allow `exec:` actions. Disabled by default.
     pub allow_exec: Option<bool>,
+    /// Actions on the recording-key edges.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recording: Option<RecordingToml>,
     /// The layout that drives the input runtime.
     pub active_layout: Option<String>,
     /// Named user layouts; `default` is synthesized and never stored.
@@ -620,6 +633,24 @@ pub struct FileConfig {
     /// Schema v1 per-button overrides; migrated into [`MIGRATED_LAYOUT`].
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub buttons: BTreeMap<String, ButtonToml>,
+}
+
+/// Validated actions on the recording-key edges.
+///
+/// `None` means the edge runs nothing. Dictation is rejected at validation:
+/// the physical recording key already owns the microphone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecordingActions {
+    pub press: Option<Action>,
+    pub release: Option<Action>,
+}
+
+impl RecordingActions {
+    /// Whether both edges are unset.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.press.is_none() && self.release.is_none()
+    }
 }
 
 /// Validated configuration with the active layout resolved.
@@ -639,6 +670,8 @@ pub struct Config {
     /// Key name; `None` disables synthetic trigger emission.
     pub trigger_key: Option<String>,
     pub allow_exec: bool,
+    /// Actions on the recording-key press and release edges.
+    pub recording: RecordingActions,
     /// Id of the layout that drives the runtime: `default` or a user layout.
     pub active_layout: String,
     /// Validated user layouts; the `default` template is not stored here.
@@ -664,6 +697,7 @@ impl Config {
             vinput: VinputMode::Trigger,
             trigger_key: Some(DEFAULT_TRIGGER_KEY.to_string()),
             allow_exec: false,
+            recording: RecordingActions::default(),
             active_layout: DEFAULT_LAYOUT.to_string(),
             layouts: BTreeMap::new(),
             gesture: profile.gesture_timing,
@@ -945,6 +979,47 @@ pub fn parse_checked_action(raw: &str, allow_exec: bool) -> Result<Action, Actio
     Ok(action)
 }
 
+/// Validate one action string for a recording-key edge.
+///
+/// `none` disables the edge. The rest of the button grammar applies, except
+/// `dictation:*`: the physical key already starts and stops the ATVV
+/// microphone, so a second dictation source would race it.
+pub fn parse_recording_action(
+    raw: &str,
+    allow_exec: bool,
+) -> Result<Option<Action>, ActionCheckError> {
+    let action = parse_checked_action(raw, allow_exec)?;
+    match action {
+        Action::None => Ok(None),
+        Action::Dictation(_) => Err(ActionCheckError::RecordingDictation),
+        action => Ok(Some(action)),
+    }
+}
+
+/// Validate the optional `[recording]` table.
+fn validate_recording(
+    recording: Option<&RecordingToml>,
+    allow_exec: bool,
+) -> Result<RecordingActions, ConfigError> {
+    let Some(recording) = recording else {
+        return Ok(RecordingActions::default());
+    };
+    let edge = |edge: &'static str, raw: &Option<String>| {
+        let Some(raw) = raw.as_deref() else {
+            return Ok(None);
+        };
+        parse_recording_action(raw, allow_exec).map_err(|source| ConfigError::RecordingAction {
+            edge,
+            value: raw.to_string(),
+            source,
+        })
+    };
+    Ok(RecordingActions {
+        press: edge("press", &recording.press)?,
+        release: edge("release", &recording.release)?,
+    })
+}
+
 /// Return the first key that appears twice in a chord.
 fn duplicate_chord_key(action: &Action) -> Option<String> {
     let Action::Combo { mods, key } = action else {
@@ -1170,6 +1245,7 @@ impl FileConfig {
             None => Some(DEFAULT_TRIGGER_KEY.to_string()),
         };
         let allow_exec = file.allow_exec.unwrap_or(false);
+        let recording = validate_recording(file.recording.as_ref(), allow_exec)?;
         let (map, gesture) = resolve_layout(active_profile, &active_layout, &layouts, allow_exec)?;
 
         Ok(Config {
@@ -1183,6 +1259,7 @@ impl FileConfig {
             vinput: file.vinput.unwrap_or_default(),
             trigger_key,
             allow_exec,
+            recording,
             active_layout,
             layouts,
             gesture,
@@ -1367,6 +1444,24 @@ pub fn save_device(
     write_file(path, &file)
 }
 
+/// Raw action strings for the recording-key edges in [`ConfigDocument`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordingDocument {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub press: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<String>,
+}
+
+impl RecordingDocument {
+    /// Whether both edges are unset.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.press.is_none() && self.release.is_none()
+    }
+}
+
 /// Stable JSON view of the editable configuration.
 ///
 /// `schema_version` versions this payload. `layouts` holds raw overrides for
@@ -1390,6 +1485,9 @@ pub struct ConfigDocument {
     pub vinput: VinputMode,
     pub trigger_key: Option<String>,
     pub allow_exec: bool,
+    /// Actions on the recording-key edges; absent means both are unset.
+    #[serde(default)]
+    pub recording: RecordingDocument,
     /// Id of the active layout: `default` or a key in [`Self::layouts`].
     pub active_layout: String,
     #[serde(default)]
@@ -1425,6 +1523,10 @@ impl ConfigDocument {
             vinput: config.vinput,
             trigger_key: config.trigger_key.clone(),
             allow_exec: config.allow_exec,
+            recording: RecordingDocument {
+                press: config.recording.press.as_ref().map(ToString::to_string),
+                release: config.recording.release.as_ref().map(ToString::to_string),
+            },
             active_layout: config.active_layout.clone(),
             layouts: config.layouts.clone(),
         }
@@ -1523,6 +1625,10 @@ impl ConfigDocument {
             vinput: (self.vinput != VinputMode::Trigger).then_some(self.vinput),
             trigger_key,
             allow_exec: self.allow_exec.then_some(true),
+            recording: (!self.recording.is_empty()).then(|| RecordingToml {
+                press: self.recording.press.clone(),
+                release: self.recording.release.clone(),
+            }),
             active_layout: self
                 .active_device
                 .is_none()
@@ -1565,6 +1671,10 @@ impl ConfigDocument {
             vinput: Some(self.vinput),
             trigger_key: self.trigger_key.clone(),
             allow_exec: Some(self.allow_exec),
+            recording: (!self.recording.is_empty()).then(|| RecordingToml {
+                press: self.recording.press.clone(),
+                release: self.recording.release.clone(),
+            }),
             active_layout: self
                 .active_device
                 .is_none()
@@ -1783,6 +1893,10 @@ pub enum ActionCheckError {
     ExecTooLong,
     #[error("duplicate key {0:?} in chord")]
     DuplicateChordKey(String),
+    #[error(
+        "the recording key already starts and stops dictation; use key, combo, pointer, or exec"
+    )]
+    RecordingDictation,
 }
 
 #[derive(Debug, Error)]
@@ -1823,6 +1937,13 @@ pub enum ConfigError {
     GainRange(i8),
     #[error("trigger_key {0:?} is not a known input key name (use `none` to disable)")]
     TriggerKey(String),
+    #[error("recording.{edge} = {value:?}: {source}")]
+    RecordingAction {
+        edge: &'static str,
+        value: String,
+        #[source]
+        source: ActionCheckError,
+    },
     #[error("{field} {value} is outside {min}..={max}")]
     GestureRange {
         field: &'static str,
@@ -2173,6 +2294,89 @@ mod tests {
         ));
         document.allow_exec = true;
         assert!(document.validate(&RC003).is_ok());
+    }
+
+    #[test]
+    fn recording_edges_default_to_none_and_round_trip() {
+        let path = path("recording");
+        let mut document = defaults();
+        assert!(document.recording.is_empty());
+        save_document(&path, &document, &RC003).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("[recording]"), "{text}");
+        let config = document.validate(&RC003).unwrap();
+        assert!(config.recording.is_empty());
+        let _ = std::fs::remove_file(&path);
+
+        document.allow_exec = true;
+        document.recording.press = Some("combo:ctrl+alt+v".to_string());
+        document.recording.release = Some("exec:printf done".to_string());
+        let json = serde_json::to_string(&document).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ConfigDocument>(&json).unwrap(),
+            document
+        );
+        let config = document.validate(&RC003).unwrap();
+        assert_eq!(
+            config.recording.press,
+            Some(Action::Combo {
+                mods: vec!["ctrl".into(), "alt".into()],
+                key: "v".into()
+            })
+        );
+        assert_eq!(
+            config.recording.release,
+            Some(Action::Exec {
+                command: "printf done".into()
+            })
+        );
+
+        save_document(&path, &document, &RC003).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[recording]"), "{text}");
+        assert!(text.contains("press = \"combo:ctrl+alt+v\""), "{text}");
+        assert!(text.contains("release = \"exec:printf done\""), "{text}");
+        let loaded = load(&path, &RC003).unwrap().config;
+        assert_eq!(loaded, config);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn recording_edges_reject_dictation_and_unpermitted_exec() {
+        let mut document = defaults();
+        document.recording.press = Some("dictation:start".to_string());
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::RecordingAction {
+                edge: "press",
+                source: ActionCheckError::RecordingDictation,
+                ..
+            })
+        ));
+
+        document.recording.press = Some("key:KEY_F13".to_string());
+        document.recording.release = Some("exec:true".to_string());
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::RecordingAction {
+                edge: "release",
+                source: ActionCheckError::ExecDisabled,
+                ..
+            })
+        ));
+
+        document.allow_exec = true;
+        assert!(document.validate(&RC003).is_ok());
+
+        document.recording.press = Some("key:not-a-key".to_string());
+        assert!(matches!(
+            document.validate(&RC003),
+            Err(ConfigError::RecordingAction {
+                edge: "press",
+                source: ActionCheckError::Grammar(_),
+                ..
+            })
+        ));
     }
 
     #[test]

@@ -333,6 +333,15 @@ enum CaptureMode {
     Learn,
 }
 
+/// Where a learned key or chord lands.
+#[derive(Clone, Copy)]
+enum LearnTarget {
+    Action,
+    Output,
+    Press,
+    Release,
+}
+
 /// One Device Information Service fact shown in the device dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HardwareField {
@@ -1556,7 +1565,7 @@ impl AppWindow {
         ui.editor.connect_cancel(move || this.editor.close());
         let this = Rc::clone(ui);
         ui.editor
-            .connect_learn_key(move || this.learn_key_for(false));
+            .connect_learn_key(move || this.learn_key_for(LearnTarget::Action));
         let this = Rc::clone(ui);
         ui.editor.connect_learn_remote(move || this.learn_remote());
         let this = Rc::clone(ui);
@@ -1572,7 +1581,19 @@ impl AppWindow {
             .connect_cancel(move || this.voice_editor.close());
         let this = Rc::clone(ui);
         ui.voice_editor
-            .connect_learn_key(move || this.learn_key_for(true));
+            .connect_learn_key(move || this.learn_key_for(LearnTarget::Output));
+        let this = Rc::clone(ui);
+        ui.voice_editor
+            .connect_learn_press(move || this.learn_key_for(LearnTarget::Press));
+        let this = Rc::clone(ui);
+        ui.voice_editor
+            .connect_learn_release(move || this.learn_key_for(LearnTarget::Release));
+        let this = Rc::clone(ui);
+        ui.voice_editor
+            .connect_run_press(move || this.run_voice_edge(true));
+        let this = Rc::clone(ui);
+        ui.voice_editor
+            .connect_run_release(move || this.run_voice_edge(false));
 
         let this = Rc::clone(ui);
         ui.microphone
@@ -1764,7 +1785,7 @@ impl AppWindow {
 
     fn handle_event(&self, event: Event) {
         match event {
-            Event::Loaded { document, status } => match GuiModel::new(document) {
+            Event::Loaded { document, status } => match GuiModel::new(*document) {
                 Ok(model) => {
                     *self.model.borrow_mut() = Some(model);
                     *self.status.borrow_mut() = Some(status);
@@ -1941,23 +1962,36 @@ impl AppWindow {
                         model.trigger = trigger;
                     }
                     self.pressed.set(trigger.map(|trigger| (button, trigger)));
-                    let action = if button == RemoteButton::Voice {
-                        None
+                }
+                // A release normally only clears the highlight; both
+                // recording-key edges have their own action, so they update
+                // the bar too. Capture never executes either action.
+                if event.pressed || button == RemoteButton::Voice {
+                    let (shown, action) = if button == RemoteButton::Voice {
+                        let raw = self.model.borrow().as_ref().and_then(|model| {
+                            if event.pressed {
+                                model.document.recording.press.clone()
+                            } else {
+                                model.document.recording.release.clone()
+                            }
+                        });
+                        (action_label(raw.as_deref()).text, None)
                     } else {
-                        self.model
+                        let action = self
+                            .model
                             .borrow()
                             .as_ref()
-                            .and_then(|model| model.action_for_event(button, &event.trigger))
+                            .and_then(|model| model.action_for_event(button, &event.trigger));
+                        (action_label(action.as_deref()).text, action)
                     };
-                    let shown = if button == RemoteButton::Voice {
-                        tr("Microphone key (not remappable)").to_string()
+                    let trigger = if event.pressed {
+                        trigger_from_name(&event.trigger).map_or_else(
+                            || event.trigger.clone(),
+                            |trigger| trigger_label(trigger).to_string(),
+                        )
                     } else {
-                        action_label(action.as_deref()).text
+                        tr("Release").to_string()
                     };
-                    let trigger = trigger.map_or_else(
-                        || event.trigger.clone(),
-                        |trigger| trigger_label(trigger).to_string(),
-                    );
                     let label = self.model.borrow().as_ref().map_or_else(
                         || button_label(button),
                         |model| button_label_for(&model.profile, button),
@@ -1968,12 +2002,14 @@ impl AppWindow {
                         shown,
                         action,
                     });
-                    self.refresh_board();
-                    self.refresh_test_bar();
-                    self.scroll_to_selection();
-                } else {
+                }
+                if !event.pressed {
                     self.pressed.set(None);
-                    self.refresh_board();
+                }
+                self.refresh_board();
+                self.refresh_test_bar();
+                if event.pressed {
+                    self.scroll_to_selection();
                 }
             }
             CaptureMode::Off => {}
@@ -2608,17 +2644,19 @@ impl AppWindow {
     }
 
     fn voice_update(&self) {
-        let raw = self.voice_editor.value();
+        let trigger = self.voice_editor.value();
+        let press = self.voice_editor.press_value();
+        let release = self.voice_editor.release_value();
         let result = self
             .model
             .borrow_mut()
             .as_mut()
             .ok_or_else(|| tr("no configuration loaded").to_string())
-            .and_then(|model| model.set_trigger_key(Some(raw)));
+            .and_then(|model| model.set_recording_edges(Some(trigger), Some(press), Some(release)));
         match result {
             Ok(_) => {
                 self.voice_editor.close();
-                self.toast(tr("Recording output key updated"));
+                self.toast(tr("Recording key updated"));
                 self.refresh_all();
             }
             Err(error) => self.voice_editor.show_error(&error),
@@ -2632,19 +2670,37 @@ impl AppWindow {
             .as_mut()
             .ok_or_else(|| tr("no configuration loaded").to_string())
             .and_then(|model| {
-                model.set_trigger_key(Some(atvv_config::DEFAULT_TRIGGER_KEY.to_string()))
+                model.set_recording_edges(
+                    Some(atvv_config::DEFAULT_TRIGGER_KEY.to_string()),
+                    None,
+                    None,
+                )
             });
         match result {
             Ok(_) => {
                 self.voice_editor.close();
-                self.toast(tr("Recording output key reset"));
+                self.toast(tr("Recording key reset"));
                 self.refresh_all();
             }
             Err(error) => self.voice_editor.show_error(&error),
         }
     }
 
-    fn learn_key_for(self: &Rc<Self>, voice: bool) {
+    /// Run one configured recording-edge action once through the daemon.
+    fn run_voice_edge(self: &Rc<Self>, press: bool) {
+        let action = if press {
+            self.voice_editor.press_value()
+        } else {
+            self.voice_editor.release_value()
+        };
+        let action = action.trim().to_string();
+        if action.is_empty() || action.eq_ignore_ascii_case("none") {
+            return;
+        }
+        self.run_action_text(action);
+    }
+
+    fn learn_key_for(self: &Rc<Self>, target: LearnTarget) {
         let dialog = gtk::Window::builder()
             .title(tr("Learn key"))
             .transient_for(&self.window)
@@ -2697,10 +2753,11 @@ impl AppWindow {
             );
             match learned {
                 Some(learned) => {
-                    if voice {
-                        this.voice_editor.set_value(&learned);
-                    } else {
-                        this.editor.set_learned(&learned);
+                    match target {
+                        LearnTarget::Action => this.editor.set_learned(&learned),
+                        LearnTarget::Output => this.voice_editor.set_value(&learned),
+                        LearnTarget::Press => this.voice_editor.set_edge(true, &learned),
+                        LearnTarget::Release => this.voice_editor.set_edge(false, &learned),
                     }
                     if let Some(dialog) = dialog_weak.upgrade() {
                         dialog.close();
@@ -2736,6 +2793,11 @@ impl AppWindow {
         let Some(action) = action else {
             return;
         };
+        self.run_action_text(action);
+    }
+
+    /// Send one action string through `RunAction`, confirming `exec:` first.
+    fn run_action_text(self: &Rc<Self>, action: String) {
         if action == "none" {
             return;
         }
@@ -3319,7 +3381,10 @@ impl AppWindow {
     /// Drive the loaded path, including the one-time auto-open decision.
     #[doc(hidden)]
     pub fn loaded_for_test(&self, document: ConfigDocument, status: DaemonStatus) {
-        self.handle_event(Event::Loaded { document, status });
+        self.handle_event(Event::Loaded {
+            document: Box::new(document),
+            status,
+        });
     }
 
     #[doc(hidden)]
@@ -3400,6 +3465,30 @@ impl AppWindow {
     #[must_use]
     pub fn voice_value_row(&self) -> &adw::EntryRow {
         self.voice_editor.value_row()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_press_row(&self) -> &adw::EntryRow {
+        self.voice_editor.press_row()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_release_row(&self) -> &adw::EntryRow {
+        self.voice_editor.release_row()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_run_press_button(&self) -> &gtk::Button {
+        self.voice_editor.run_press_button()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn voice_run_release_button(&self) -> &gtk::Button {
+        self.voice_editor.run_release_button()
     }
 
     #[doc(hidden)]

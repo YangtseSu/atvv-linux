@@ -156,8 +156,12 @@ There is no checker script; review these by hand.
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace --exclude atvv-gui
+scripts/gui-tests.sh
 ```
+
+The GUI suite runs on a private `mutter --headless` Wayland display; never run
+the GTK tests against the desktop session, because they open real windows.
 
 Smoke checks for M0:
 

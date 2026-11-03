@@ -265,13 +265,20 @@ the daemon document.
 
 The top-right microphone key is the physical recording key (`KEY_F5`). It is
 grabbed and fixed: it opens and closes the ATVV microphone and cannot be used
-as a normal action button. The recording-key dialog only edits the output key.
+as a normal action button. The recording-key dialog edits the output key and
+two optional edge actions.
 
 ![Recording key dialog](gui-recording-key.png)
 
 - **Output key** is the synthetic key emitted while the recording key is held.
   The default is `DICTATE`; use **Learn Key** to capture another key or chord
   (for example `F23`), or enter `none` to disable the synthetic key.
+- **On press** and **On release** run one action per edge. They use the button
+  grammar (`key:`, `combo:`, `exec:`, `pointer:`); `dictation:*` is rejected
+  because the key already owns the microphone. `none` disables an edge. The
+  keyboard button learns a key or chord, and the play button runs the action
+  once through the daemon; an `exec:` action asks for confirmation first. See
+  [configuration](configuration.md#recording-key-actions).
 - **Declared key…** lists the recording keys advertised by the running
   daemon's contract (`DICTATE`, `VOICECOMMAND`, `ASSISTANT`) plus
   **None (disable synthetic key)**. The list comes from
@@ -283,8 +290,9 @@ as a normal action button. The recording-key dialog only edits the output key.
   because those modes do not emit the synthetic key. Consumers must bind the
   same key; the provider contract's `active_key` reports the current value.
 - **Update** changes the document; **Apply** in the header persists it through
-  `SetConfig`. **Reset to DICTATE** restores the default. The physical F5 and
-  the ATVV microphone path are unchanged.
+  `SetConfig`. **Reset to DICTATE** restores the default output key and clears
+  both edge actions. The physical F5 and the ATVV microphone path are
+  unchanged.
 
 ## Test mode
 
@@ -294,9 +302,9 @@ the button, its gesture, and the resolved action, and **Run once** becomes
 available. Capture suppresses automatic key/chord emission, `exec`, dictation,
 the synthetic voice trigger, and voice-session start/stop, so pressing OK or a
 volume key does not activate the focused app or change system volume. The
-voice key is reported as fixed; it does not start the microphone in Test mode.
-Shell commands require a separate confirmation dialog with Cancel as the
-default response.
+voice key is reported on both edges with its configured edge action; Test mode
+never runs either action and does not start the microphone. Shell commands
+require a separate confirmation dialog with Cancel as the default response.
 
 Switching layouts keeps Test mode active but clears the last pressed result.
 Capture ends when Test is toggled off, **Cancel** is clicked in the banner, or

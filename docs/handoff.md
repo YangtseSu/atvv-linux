@@ -7,16 +7,16 @@ Updated: 2026-11-03
 - License: GPL-3.0-or-later
 - Git: `main` tracks `origin/main`; check `git status` for unpushed commits. Do not push without explicit approval.
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
-- Tests: `cargo test --workspace` → 272 passed, 9 ignored tests (five
-  kernel-uinput input tests, the real RC003 pointer test, one daemon live test,
-  the real-device GUI test, and a locale-detection test; the kernel tests pass
-  with `/dev/uinput` access, the pointer test also needs the RC003 and physical
-  presses, and the locale test runs under `LANG=zh_CN.UTF-8`). On 2026-11-02 the
-  suite and workspace clippy ran on this machine without `xvfb-run` because it
-  is not installed; the GTK window smoke test passed on the live GNOME session.
-  The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at least as
-  large as the window; it skips the pointer section otherwise. Run on
-  2026-11-03 against the live `wayland-0` session: 272 passed, 9 ignored.
+- Tests: `cargo test --workspace --exclude atvv-gui` → 217 passed, 7 ignored;
+  `scripts/gui-tests.sh` → 59 passed, 2 ignored. Total 276 passed, 9 ignored
+  (run 2026-11-03). The ignored tests are five kernel-uinput input tests, the
+  real RC003 pointer test, one daemon live test, the real-device GUI test, and
+  a locale-detection test; the kernel tests pass with `/dev/uinput` access, the
+  pointer test also needs the RC003 and physical presses, and the locale test
+  runs under `LANG=zh_CN.UTF-8`. The GUI suite runs on a private
+  `mutter --headless` Wayland display, so no test window appears on the
+  desktop. The GUI XTest suite still needs `GDK_BACKEND=x11` and an X screen at
+  least as large as the window; the Wayland suite skips the pointer section.
 - Live state (2026-11-03): the AUR `-git` packages are installed
   (`atvv-git`/`atvv-gui-git` `0.3.1.r2.g72835d4-2`) and `atvvd.service` runs
   from them; that build predates both GUI sizing fixes, so the installed
@@ -53,6 +53,21 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Step 27 recording-key edges (complete, 2026-11-03)**: the optional
+  `[recording] press` and `release` actions are validated in `atvv-config`
+  (button grammar, `dictation:*` rejected, `exec` needs `allow_exec`), exposed
+  by `atvvctl config set --recording-press/--recording-release` and `config
+  get`, dispatched by the daemon after each voice edge outside capture, and
+  edited by the GUI's recording-key page. Test mode shows both edges and runs
+  neither action. Verification: 217 passed / 7 ignored outside the GUI, 59
+  passed / 2 ignored in the headless GUI suite, fmt and clippy clean. Synthetic
+  only; no hardware claim. See `docs/plans/27-recording-key-press-release-actions.md`.
+- **Headless GUI tests (2026-11-03)**: `scripts/gui-tests.sh` starts a private
+  `mutter --headless` Wayland display (1280x1024 virtual monitor) and points
+  GTK at it, so the GUI suite no longer opens windows on the desktop session.
+  A plain `cargo test -p atvv-gui` still uses the desktop; use the script. The
+  XTest pointer clicks still need Xvfb/X11; the Wayland suite skips that
+  section.
 - **v0.3.2 (published 2026-11-03)**: workspace version 0.3.2 over v0.3.1;
   the annotated tag `v0.3.2` (`008ca78`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.3.2)
@@ -1011,7 +1026,9 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 **Install the stable packages.** Everything for the release is published:
 `v0.3.2` on GitHub, AUR `atvv`/`atvv-gui` `0.3.2-2`, and the built package
-files in `~/aur/atvv`:
+files in `~/aur/atvv`. Step 27 postdates the `v0.3.2` tag, so these packages
+do not contain the recording-key edge actions; they ship with the next
+release.
 
 ```sh
 sudo pacman -U ~/aur/atvv/atvv-0.3.2-2-x86_64.pkg.tar.zst \
@@ -1149,11 +1166,10 @@ cargo run -q -p atvv-cli -- doctor
 systemctl --user stop atvvd
 cargo test -p atvv-input --test real_pointer -- --ignored --nocapture
 systemctl --user start atvvd
-cargo test -p atvv-gui
+scripts/gui-tests.sh                                    # whole GUI suite, headless
+scripts/gui-tests.sh --test ui
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
-  cargo test -p atvv-gui --test ui                     # 36 slot + 13 hotspot clicks
-GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
-  cargo test -p atvv-gui --test narrow                 # 700x560 scroll-into-view
+  cargo test -p atvv-gui --test ui                     # adds the XTest pointer clicks
 GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x1024x24" \
   cargo test -p atvv-gui --test real_run -- --ignored  # live atvvd
 cargo run -q -p atvv-gui

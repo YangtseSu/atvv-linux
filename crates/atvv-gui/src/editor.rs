@@ -632,12 +632,18 @@ impl Default for ActionEditor {
     }
 }
 
-/// Editor for the recording-key output.
+/// Editor for the recording-key output and its edge actions.
 pub struct VoiceEditor {
     dialog: adw::Dialog,
     value_row: adw::EntryRow,
+    press_row: adw::EntryRow,
+    release_row: adw::EntryRow,
     declared_button: gtk::MenuButton,
     learn_key: gtk::Button,
+    learn_press: gtk::Button,
+    learn_release: gtk::Button,
+    run_press: gtk::Button,
+    run_release: gtk::Button,
     hint: gtk::Label,
     error: gtk::Label,
     reset: gtk::Button,
@@ -645,6 +651,23 @@ pub struct VoiceEditor {
     update: gtk::Button,
     keys: RefCell<Vec<String>>,
     open: Rc<Cell<bool>>,
+}
+
+/// One entry row with the per-edge Learn Key and Run once buttons.
+fn edge_row(title: &str) -> (adw::EntryRow, gtk::Button, gtk::Button) {
+    let row = adw::EntryRow::builder().title(title).build();
+    let learn = icon_button("input-keyboard-symbolic", tr("Learn Key"));
+    let run = icon_button("media-playback-start-symbolic", tr("Run once"));
+    row.add_suffix(&learn);
+    row.add_suffix(&run);
+    (row, learn, run)
+}
+
+fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
+    let button = gtk::Button::from_icon_name(icon);
+    button.add_css_class("flat");
+    button.set_tooltip_text(Some(tooltip));
+    button
 }
 
 impl VoiceEditor {
@@ -670,9 +693,16 @@ impl VoiceEditor {
         learn_key.set_tooltip_text(Some(tr("Capture a key or chord for the output")));
         value_row.add_suffix(&declared_button);
         value_row.add_suffix(&learn_key);
+        let (press_row, learn_press, run_press) = edge_row(tr("On press"));
+        let (release_row, learn_release, run_release) = edge_row(tr("On release"));
         group.add(&info);
         group.add(&value_row);
+        group.add(&press_row);
+        group.add(&release_row);
 
+        let edge_hint = dim_label(tr(
+            "Edge actions run once per press or release; the microphone edge always runs first.",
+        ));
         let hint = dim_label("");
         let error = error_label();
         let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -681,6 +711,7 @@ impl VoiceEditor {
         content.set_margin_start(12);
         content.set_margin_end(12);
         content.append(&group);
+        content.append(&edge_hint);
         content.append(&hint);
         content.append(&error);
 
@@ -713,8 +744,14 @@ impl VoiceEditor {
         let editor = Self {
             dialog,
             value_row,
+            press_row,
+            release_row,
             declared_button,
             learn_key,
+            learn_press,
+            learn_release,
+            run_press,
+            run_release,
             hint,
             error,
             reset,
@@ -751,8 +788,19 @@ impl VoiceEditor {
     pub fn load(&self, model: &GuiModel) {
         self.value_row
             .set_text(model.document.trigger_key.as_deref().unwrap_or("none"));
+        self.press_row
+            .set_text(model.document.recording.press.as_deref().unwrap_or("none"));
+        self.release_row.set_text(
+            model
+                .document
+                .recording
+                .release
+                .as_deref()
+                .unwrap_or("none"),
+        );
         self.reset.set_sensitive(
-            model.document.trigger_key.as_deref() != Some(atvv_config::DEFAULT_TRIGGER_KEY),
+            model.document.trigger_key.as_deref() != Some(atvv_config::DEFAULT_TRIGGER_KEY)
+                || !model.document.recording.is_empty(),
         );
         self.show_error("");
     }
@@ -763,9 +811,29 @@ impl VoiceEditor {
         self.show_error("");
     }
 
+    /// Fill one edge action without saving it.
+    pub fn set_edge(&self, press: bool, action: &str) {
+        if press {
+            self.press_row.set_text(action);
+        } else {
+            self.release_row.set_text(action);
+        }
+        self.show_error("");
+    }
+
     #[must_use]
     pub fn value(&self) -> String {
         self.value_row.text().to_string()
+    }
+
+    #[must_use]
+    pub fn press_value(&self) -> String {
+        self.press_row.text().to_string()
+    }
+
+    #[must_use]
+    pub fn release_value(&self) -> String {
+        self.release_row.text().to_string()
     }
 
     /// Rebuild the declared-key menu only when the contract list changes.
@@ -813,9 +881,45 @@ impl VoiceEditor {
         self.learn_key.connect_clicked(move |_| handler());
     }
 
+    pub fn connect_learn_press<F: Fn() + 'static>(&self, handler: F) {
+        self.learn_press.connect_clicked(move |_| handler());
+    }
+
+    pub fn connect_learn_release<F: Fn() + 'static>(&self, handler: F) {
+        self.learn_release.connect_clicked(move |_| handler());
+    }
+
+    pub fn connect_run_press<F: Fn() + 'static>(&self, handler: F) {
+        self.run_press.connect_clicked(move |_| handler());
+    }
+
+    pub fn connect_run_release<F: Fn() + 'static>(&self, handler: F) {
+        self.run_release.connect_clicked(move |_| handler());
+    }
+
     #[must_use]
     pub fn value_row(&self) -> &adw::EntryRow {
         &self.value_row
+    }
+
+    #[must_use]
+    pub fn press_row(&self) -> &adw::EntryRow {
+        &self.press_row
+    }
+
+    #[must_use]
+    pub fn release_row(&self) -> &adw::EntryRow {
+        &self.release_row
+    }
+
+    #[must_use]
+    pub fn run_press_button(&self) -> &gtk::Button {
+        &self.run_press
+    }
+
+    #[must_use]
+    pub fn run_release_button(&self) -> &gtk::Button {
+        &self.run_release
     }
 
     #[must_use]

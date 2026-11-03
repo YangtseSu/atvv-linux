@@ -176,7 +176,7 @@ fn worker_loads_saves_captures_and_uses_run_action() {
     backend.load();
     let (document, status) = loop {
         match next_event(&backend) {
-            Event::Loaded { document, status } => break (document, status),
+            Event::Loaded { document, status } => break (*document, status),
             Event::LoadFailed(error) => panic!("GetConfig failed: {error}"),
             _ => {}
         }
@@ -280,11 +280,24 @@ fn worker_loads_saves_captures_and_uses_run_action() {
     }
 
     changed.allow_exec = true;
+    changed.recording.press = Some("key:KEY_F13".into());
+    changed.recording.release = Some("exec:true".into());
     backend.save(changed);
     match next_event(&backend) {
         Event::Saved(Ok(())) => {}
         other => panic!("enabling exec failed: {other:?}"),
     }
+    let text = std::fs::read_to_string(&fixture.path).expect("config file");
+    assert!(text.contains("[recording]"), "{text}");
+    assert!(text.contains("press = \"key:KEY_F13\""), "{text}");
+    assert!(text.contains("release = \"exec:true\""), "{text}");
+    let saved = atvv_config::load(&fixture.path, &RC003).expect("saved config");
+    assert_eq!(
+        saved.config.recording.press,
+        Some(atvv_input::Action::Key {
+            name: "KEY_F13".into()
+        })
+    );
     backend.run_action("exec:true".into());
     match next_event(&backend) {
         Event::ActionRun(Ok(())) => {}
