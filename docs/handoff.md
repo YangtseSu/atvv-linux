@@ -19,9 +19,10 @@ Updated: 2026-11-03
   2026-11-03 against the live `wayland-0` session: 272 passed, 9 ignored.
 - Live state (2026-11-03): the AUR `-git` packages are installed
   (`atvv-git`/`atvv-gui-git` `0.3.1.r2.g72835d4-2`) and `atvvd.service` runs
-  from them. That build predates the window-height fix, so the installed
-  `atvv-config` still opens at the fixed 760 px height; rebuild the AUR
-  packages to ship it.
+  from them; that build predates both GUI sizing fixes, so the installed
+  `atvv-config` still opens at the fixed 760 px height. The stable
+  `atvv`/`atvv-gui` `0.3.2-1` packages are built in `~/aur/atvv` and replace
+  the `-git` pair (`conflicts`); installing them ships the fixes.
 
 ## Read first
 
@@ -52,14 +53,33 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
-- **v0.3.2 (prepared 2026-11-03)**: workspace version 0.3.2 over v0.3.1. The
+- **v0.3.2 (published 2026-11-03)**: workspace version 0.3.2 over v0.3.1;
+  the annotated tag `v0.3.2` (`008ca78`) published
+  [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.3.2)
+  with x86_64 (9,348,381 B) and aarch64 (8,823,608 B) binaries, the
+  2,621,440 B source archive, and checksums; release workflow run 41567472373
+  succeeded. Source sha256
+  `0da7663cfaa73a1d074c3a5b3ea3327cfa111f0bcac2ed464389e2c897ba3bf5`. The
   release carries the two GUI sizing fixes (the diagram takes the card
-  columns' height, the window grows to the board's height), the README badges
-  and the board screenshot, and corrected AUR install instructions: `atvv`
-  and `atvv-gui` are one split pkgbase, so `git clone
-  https://aur.archlinux.org/atvv.git` builds both and the documented
-  `atvv-gui.git` clone never existed. The annotated tag runs the release
-  workflow for x86_64/aarch64 binaries, the source archive, and checksums.
+  columns' height, the window grows to the board's height), README badges and
+  the board screenshot, and corrected AUR install instructions: `atvv` and
+  `atvv-gui` are one split pkgbase, so the documented `atvv-gui.git` clone
+  never existed. AUR `atvv` `0.3.2-1` is committed as `f4018f9` with
+  `atvv` 6,244,997 B and `atvv-gui` 1,476,717 B built in `~/aur/atvv`.
+- **Detached test backend (fixed 2026-11-03)**: `Backend::detached` started a
+  worker against an unreachable bus that answered every request with
+  `LoadFailed` or `Status(Err)`. The window's 2 s status poll then cleared the
+  `daemon_alive` flag a widget test had set through `set_status`, so
+  `tests/ui.rs` saw the checklist flip from `Ready` to `Missing` at
+  `Layer::Daemon` once the poll fired. `window_smoke` runs for about five
+  seconds across that boundary, so it failed on timing: the 0.3.2 main CI run
+  41567468926 failed while the identical tag run 41567472354 passed, and the
+  0.3.1 push run 41495210429 failed the same way. The detached backend now
+  owns a closed request channel and an event channel whose sender is dropped,
+  so it produces no events; reproduction showed `daemon=Ready` at 0.06 s and
+  0.5 s, then `Missing` from 1.0 s on. The fix is on `main` (`426d451`) after
+  the published tag, so `v0.3.2` still carries the flake; main CI run
+  41568713084 passed. `cargo test --workspace`: 272 passed, 9 ignored.
 - **Window height follows the board (fixed 2026-11-03)**: the window opened at a
   fixed 1040×760 and clipped the board on the profiles and locales that need
   more room. Measured board natural heights: RC003/English 572 px,
@@ -982,13 +1002,17 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
-**Tag and publish v0.3.2, then update the stable AUR `atvv`.** The workspace
-carries 0.3.2 with the two GUI sizing fixes, the README badges and board
-screenshot, and corrected install instructions. Push the tag `v0.3.2`, wait
-for the release workflow, then set the AUR `atvv` `pkgver` to 0.3.2 with the
-new source-archive checksum and push. `atvv-git`/`atvv-gui-git` stay installed
-from `72835d4` until the release is available; rebuilding them from the tag
-ships the same fixes.
+**Push the AUR `atvv` `0.3.2-1` update.** The recipe in `~/aur/atvv` carries
+`pkgver=0.3.2`, the published source-archive checksum, and a fresh `.SRCINFO`;
+`makepkg -f` built `atvv-0.3.2-1-x86_64.pkg.tar.zst` (6,244,997 B) and
+`atvv-gui-0.3.2-1-x86_64.pkg.tar.zst` (1,476,717 B) from the release archive.
+Install them with `pacman -U` (they replace the installed `-git` packages),
+start `atvvd.service`, and confirm the window opens at 1040×854 on the
+Chromecast profile under `zh_CN`.
+
+**Detached-backend flake fix is on `main` after the tag.** `426d451` makes
+`Backend::detached` emit no events, so `tests/ui.rs` no longer races the 2 s
+status poll. `v0.3.2` predates it; the next release carries it.
 
 **v0.3.1 is published.** The release workflow and the AUR `0.3.1-1` update are
 complete; the audio-sync fix needs no further code change.
