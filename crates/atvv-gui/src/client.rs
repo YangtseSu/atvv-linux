@@ -250,13 +250,22 @@ impl Backend {
         Self { requests, events }
     }
 
-    /// Start a worker that cannot reach a bus.
+    /// Start a backend with no worker and no events.
     ///
     /// Widget tests use this so a live `atvvd` on the session bus is never
-    /// asked to change its configuration.
+    /// asked to change its configuration, and so nothing feeds the window an
+    /// event the test did not stage. `Backend::start` on an unreachable bus
+    /// would emit `LoadFailed`/`Status(Err)` for every request, and the
+    /// window's 2 s status poll would then clear the `daemon_alive` flag that a
+    /// test set through `set_status`, which made the checklist flip from
+    /// `Ready` to `Missing` mid-test.
     #[must_use]
     pub fn detached() -> Self {
-        Self::start(Some("unix:path=/nonexistent-atvv-gui-test".to_string()))
+        // The request receiver is dropped, so queued requests go nowhere, and
+        // the event sender is dropped, so `try_recv` reports no event.
+        let (requests, _) = mpsc::channel();
+        let (_, events) = mpsc::channel();
+        Self { requests, events }
     }
 
     pub fn load(&self) {
