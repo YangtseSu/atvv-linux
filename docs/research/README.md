@@ -31,6 +31,9 @@ not a second plan and it does not override `docs/plans/`.
   models for named layouts and presets (Open Voice Bridge, mi-ao, vimo_remote,
   sayall-omarchy, remote-mic-app), the two-layer conclusion, and the RC003 NFC
   facts/unknowns.
+- [`nfc-rc003.md`](nfc-rc003.md) — the RC003 NFC tag read on 2026-11-03:
+  ACR122U reader and firmware, NTAG215 identity and UID, empty NDEF, lock
+  bytes, dump hash, and the UID-gated D-Bus check.
 - [`rc003-hardware-evidence.md`](rc003-hardware-evidence.md) — real RC003
   runs (2026-10-30): CAPS hex, start/stop bytes, audio, keepalive, reconnect,
   PipeWire behavior, the step 08 trigger/compositor run and the automated
@@ -77,7 +80,7 @@ not a second plan and it does not override `docs/plans/`.
 | 17 layout profiles | `layout-profiles-presets.md` §1–§3, `../configuration.md` §Schema |
 | 18 layout presets | `layout-profiles-presets.md` §2–§3, the step 17 file |
 | 21 multi-device | `chromecast-hardware-evidence.md`, `protocol-and-device.md` §7 |
-| B02 NFC | `layout-profiles-presets.md` §4, `rc003-hardware-evidence.md` |
+| 28 NFC | `layout-profiles-presets.md` §4, `nfc-rc003.md` |
 | Consumer UX / troubleshooting | `sayall-linux-comparison.md` §3, `../integrations/provider-contract.md` |
 
 ## Current deltas after the research snapshot

@@ -50,13 +50,9 @@ table, and the backlog table.
 
 ## Backlog (B series)
 
-The B series holds deferred work. It is not part of the numbered execution
-order until promoted. A backlog entry still carries a real exit criterion so
-it can be picked up without re-deriving the design.
-
-| # | Step | Status | Depends on | Exit, in one line |
-|---|------|--------|------------|-------------------|
-| B02 | [NFC tag investigation and optional trigger](B02-nfc-tag.md) | ⏸ backlog | — (needs an NFC reader) | the RC003 tag's IC, UID, NDEF, and lock state are recorded, and a read-only trigger is demonstrated or the rewrite path is restored exactly |
+No deferred entries. The last one, B02, was promoted to step 28 on 2026-11-03.
+A new backlog entry still carries a real exit criterion so it can be picked up
+without re-deriving the design.
 
 ## Scope
 
@@ -86,6 +82,7 @@ non-ATVV transports, kernel/BlueZ/PipeWire patches, macOS/Windows.
 | N — ATVV v1.0 conformance | 25 | **done**: 25 closed the `MIC_OPEN_ERROR`/`AUDIO_SYNC` gaps, rebuilt the resampler on a valid mid-session codec change, and added sequence-gap diagnostics |
 | O — Microphone latency | 26 | **done**: opt-in `preopen_mic` with an armed session and a recorded RC003 A/B |
 | P — Recording-key edges | 27 | **done**: optional press and release actions on the recording key, local to the provider |
+| Q — NFC | 28 | **in progress**: the RC003 tag is read (NTAG215, empty NDEF); the read-only trigger decision is open |
 
 M0 is steps 01–06. Step 07 (hardware bring-up) is complete with a real RC003;
 step 08 is complete and verified; step 09 is complete. Step 10 is blocked on
@@ -98,7 +95,9 @@ the read-only first-run checklist, the bilingual recovery page, and the README
 known-limitations sections; step 25 is complete with the three ATVV v1.0
 conformance fixes; step 26 is complete with the RC003 keep-open A/B and the
 opt-in `preopen_mic` setting; step 27 is complete with the optional
-recording-key press and release actions and their synthetic-only verification.
+recording-key press and release actions and their synthetic-only verification;
+step 28 is in progress: the RC003 tag is an NTAG215 with an empty NDEF message,
+and the read-only trigger decision is open.
 
 ## Step files
 
@@ -110,6 +109,7 @@ verified; they are not reopened. Live work is listed first.
 | # | Phase | Step | Status | Depends on | Exit, in one line |
 |---|-------|------|--------|------------|-------------------|
 | 10 | D | [vinput-zero-config](10-vinput-zero-config.md) | ⛔ blocked | 08 | a consumer auto-binds the declared keys with no local config |
+| 28 | Q | [nfc-tag](28-nfc-tag.md) | 🚧 in-progress | — (reader attached) | the RC003 tag is read and the read-only trigger is either demonstrated once per presentation or closed |
 
 ### Completed steps
 

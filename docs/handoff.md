@@ -714,11 +714,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
   `concurrency quota exceeded` was caused by an active proxy; switching the
   proxy node fixed recognition. The D-Bus fallback remains documented for
   trigger-key conflicts, not as a workaround for this machine.
-- **B02 NFC tag (backlog)**: characterize the RC003's passive NFC tag (IC,
-  UID, NDEF, lock state) with an external libnfc reader; prefer a read-only
-  UID trigger and only test a rewrite after a verified dump and restore. NFC
-  stays out of the daemon core. Needs an NFC reader; see
-  `docs/plans/B02-nfc-tag.md`.
+- **NFC tag (step 28, in progress)**: the RC003 tag is an NTAG215 with UID
+  `1D A4 2A 0B B8 00 00`, an empty NDEF message, and clear lock bytes. No
+  write was made; the read-only UID trigger decision is open. NFC stays out
+  of the daemon core. See `docs/plans/28-nfc-tag.md` and
+  `docs/research/nfc-rc003.md`.
 
 Do not claim unverified hardware behavior (pairing gesture, adapter
 power-cycle, ASR intelligibility, a root-installed unit after reboot). Step 07
@@ -1024,6 +1024,13 @@ udevadm verify packaging/udev/70-atvv-linux.rules
 
 ## Next step
 
+**NFC (step 28) is in progress.** The attached ACR122U read the RC003 tag:
+NTAG215, UID `1D A4 2A 0B B8 00 00`, empty NDEF (`03 00 FE`), clear lock
+bytes, writable and not password-protected. No write was made. The UID-gated
+`atvvctl mic start/stop` check passed on the connected RC003; the
+one-action-per-presentation helper decision is open. Evidence:
+[`research/nfc-rc003.md`](research/nfc-rc003.md).
+
 **Install the stable packages.** Everything for the release is published:
 `v0.3.2` on GitHub, AUR `atvv`/`atvv-gui` `0.3.2-2`, and the built package
 files in `~/aur/atvv`. Step 27 postdates the `v0.3.2` tag, so these packages
@@ -1118,7 +1125,8 @@ The plan is in `docs/plans/26-preopen-mic.md` and the evidence in
 `docs/research/rc003-hardware-evidence.md`.
 
 **All numbered steps are complete except step 10, which is blocked on
-upstream.** Step 26 executed the keep-open experiment on the RC003 and set the
+upstream, and step 28, which is in progress after the NFC tag read.** Step 26
+executed the keep-open experiment on the RC003 and set the
 opt-in `preopen_mic` default to `false`. The immediate action is to watch
 upstream vinput releases; when one ships its own auto-selection/declared-key
 binding, rebuild vinput and record the zero-config RC003 run. Do not reopen the
@@ -1181,6 +1189,10 @@ cargo run -q -p atvv-cli -- record --wav /tmp/rc003.wav --seconds 10
 cargo run -q -p atvv-cli -- completions bash
 cargo run -q -p atvv-cli -- manpages /tmp/atvv-man
 cargo test -p atvv-input hold_and_release_reach_the_kernel -- --ignored
+nfc-poll
+nfc-list -t 1 -v
+nfc-mfultralight r /tmp/rc003-nfc.mfd
+pcsc_scan
 ```
 
 ## Rules

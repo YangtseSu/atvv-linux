@@ -138,32 +138,32 @@ ATVV maps the same idea onto its existing action grammar
    switching remain out of scope.
 8. **NFC is not part of the core.** No reference project implements the
    RC003 NFC tag. Any use requires an external reader and a separate
-   investigation (B02); the daemon must not gain an NFC dependency.
+   investigation (step 28); the daemon must not gain an NFC dependency.
 
-## 4. NFC facts and unknowns
+## 4. NFC facts and measured tag
 
 Verified behavior:
 
-- The RC003's NFC is a **passive tag** used for Xiaomi's phone tap-to-cast:
+- The RC003's NFC is a **passive tag** used by Xiaomi's phone tap-to-cast:
   the phone reads the tag and starts casting to the paired Xiaomi TV/box
   ([Notebookcheck](https://www.notebookcheck.net/Xiaomi-Bluetooth-Remote-2-Pro-debuts-with-NFC-screen-cast-and-USB-C-charging.1266620.0.html),
   [IT之家](https://www.ithome.com/0/935/995.htm)).
 - BlueZ exposes no NFC service for the remote. The NFC path is independent of
   BLE/ATVV.
 - The reference projects above contain no NFC handling.
-- This workstation has no NFC reader (`/dev/nfc*` absent, no USB reader).
-
-Unknown until a real tag is measured:
-
-- Tag IC and memory size (NTAG21x, MIFARE Ultralight, or another family).
-- Tag UID and NDEF payload.
-- Static/dynamic lock bits, password protection, and whether the tag is
-  writable at all.
-- Whether a rewritten NDEF changes the phone behavior and whether the
-  original payload can be restored.
+- Measured on 2026-11-03 with an ACS ACR122U: the tag is an **NTAG215**,
+  135 pages, 504 bytes of user memory, UID `1D A4 2A 0B B8 00 00`, capability
+  container `E1 10 3E 00`, and an **empty NDEF message** (`03 00 FE`). User
+  pages 5–129 are zero. Static and dynamic lock bytes are clear, AUTH0 is
+  `0xFF`, and PWD/PACK are unset, so the tag is writable and not
+  password-protected. No write was made. The dump hash, commands, and memory
+  map are in [`nfc-rc003.md`](nfc-rc003.md).
+- Because the NDEF message is empty, the cast feature does not consume an NDEF
+  payload in this state. A read-only UID trigger is the viable path; the tag
+  does not need a rewrite. No NFC code is in the daemon.
 
 Linux tooling: `libnfc` with a PN532 or ACR122U reader (`nfc-list`,
-`nfc-mfultralight`, `nfc-ndef`) is the least invasive path; `neard` is an
+`nfc-poll`, `nfc-mfultralight`) is the least invasive path; `neard` is an
 alternative D-Bus daemon with a smaller device list. Both are userspace only.
 
 ## 5. Preset decision update (2026-11-02)
