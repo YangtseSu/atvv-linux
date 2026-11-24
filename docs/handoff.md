@@ -1,6 +1,6 @@
 # Handoff
 
-Updated: 2026-11-03
+Updated: 2026-11-24
 
 ## Project
 
@@ -9,7 +9,7 @@ Updated: 2026-11-03
 - Latest commit: run `git log -1 --oneline` (do not hard-code a hash that this file would invalidate).
 - Tests: `cargo test --workspace --exclude atvv-gui` → 217 passed, 7 ignored;
   `scripts/gui-tests.sh` → 59 passed, 2 ignored. Total 276 passed, 9 ignored
-  (run 2026-11-03). The ignored tests are five kernel-uinput input tests, the
+  (run 2026-11-24). The ignored tests are five kernel-uinput input tests, the
   real RC003 pointer test, one daemon live test, the real-device GUI test, and
   a locale-detection test; the kernel tests pass with `/dev/uinput` access, the
   pointer test also needs the RC003 and physical presses, and the locale test
@@ -51,6 +51,11 @@ per-session copies; `docs/plans/` remains the canonical plan.
 
 ## Completed
 
+- **Dependabot backlog merged (2026-11-24)**: PRs #5, #7, #8, #10, and #11
+  updated only `Cargo.lock`: toml 1.2.0, clap_mangen 0.3.4, clap_complete
+  4.6.12, zbus 6.5.0, and clap 4.6.9. Verification on the merged tree: fmt and
+  clippy clean, 217 passed / 7 ignored outside the GUI, 59 passed / 2 ignored
+  in the headless GUI suite.
 - **v0.4.0 (published 2026-11-03)**: workspace version 0.4.0 over v0.3.2;
   the annotated tag `v0.4.0` (`4cfc925`, commit `0d44ee8`) published
   [the release](https://github.com/YangtseSu/atvv-linux/releases/tag/v0.4.0)
